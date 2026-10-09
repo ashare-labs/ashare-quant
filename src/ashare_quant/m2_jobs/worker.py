@@ -1,0 +1,171 @@
+"""One native process at a time, fenced leases and retained atomic checkpoints."""
+
+import json
+import subprocess
+import time
+
+from ashare_quant.contracts import DomainError
+
+from .files import lock, regular
+from .publication import publish
+
+
+def stop(process):
+    if process is not None and process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
+    """Internal fault/stage arguments are test-only and have no HTTP/CLI input."""
+    jobs.guard()
+    ids = [job_id] if job_id else jobs.repo.candidates()
+    if not ids:
+        return None
+    try:
+        with lock(jobs.root / "worker.lock") as serial:
+            for candidate in ids:
+                try:
+                    with lock(jobs.directory(candidate) / "host-writer.lock") as writer:
+                        row = jobs.repo.row(candidate)
+                        try:
+                            manifest = jobs.check(row, execution=True)
+                        except DomainError as exc:
+                            refused = jobs.repo.claim(candidate)
+                            if refused:
+                                jobs.repo.finish(
+                                    candidate,
+                                    refused["lease_token"],
+                                    error={"code": exc.code, "message": str(exc)},
+                                )
+                                return candidate
+                            raise
+                        claimed = jobs.repo.claim(candidate)
+                        if claimed is None:
+                            continue
+                        _work(
+                            jobs,
+                            claimed,
+                            manifest,
+                            (serial.fileno(), writer.fileno()),
+                            _fault,
+                            _stage,
+                        )
+                        return candidate
+                except DomainError as exc:
+                    if exc.code == "M2_JOB_WRITER_BUSY" and job_id is None:
+                        continue
+                    raise
+    except DomainError as exc:
+        if exc.code == "M2_JOB_WRITER_BUSY" and job_id is None:
+            return None
+        raise
+    return None
+
+
+def _work(jobs, row, manifest, lock_fds, fault, stage):
+    job_id, token = row["job_id"], row["lease_token"]
+    root = jobs.directory(job_id)
+    invocation = "attempt-" + str(row["attempt_count"])
+    process, proof, reference, error = None, None, None, None
+    interrupted = False
+
+    def notify(name):
+        if stage:
+            stage(name, jobs, row, process)
+
+    try:
+        notify("claimed")
+        cancelled = jobs.repo.heartbeat(job_id, token)
+        if not cancelled:
+            command = jobs.executor.command(
+                "run",
+                root,
+                manifest.request.window_id,
+                invocation,
+                manifest.session_file_sha256,
+                fault=fault,
+                control={"database": str(jobs.repo.store.path), "job_id": job_id, "token": token},
+            )
+            jobs.repo.starting(job_id, token)
+            with (root / (invocation + ".process.log")).open("wb") as log:
+                process = subprocess.Popen(
+                    command,
+                    env=jobs.executor.environment(),
+                    cwd=root,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    pass_fds=lock_fds,
+                )
+                jobs.repo.child_started(job_id, token, process.pid)
+                notify("spawned")
+                started, heartbeat = time.monotonic(), 0
+                while process.poll() is None:
+                    notify("poll")
+                    if time.monotonic() - heartbeat >= 0.25:
+                        if jobs.repo.heartbeat(job_id, token):
+                            stop(process)
+                            cancelled = True
+                            break
+                        heartbeat = time.monotonic()
+                    if time.monotonic() - started > 120:
+                        stop(process)
+                        raise DomainError(
+                            "M2_JOB_EXECUTION_TIMEOUT",
+                            "Bounded native child exceeded its execution timeout",
+                        )
+                    time.sleep(0.03)
+            notify("child_exited")
+            if process.returncode == 0:
+                proof = json.loads(regular(root / (invocation + ".proof.json")))
+            elif not cancelled:
+                error = {
+                    "code": "M2_JOB_NATIVE_STOPPED",
+                    "returncode": process.returncode,
+                    "message": "Native attempt stopped; only the last committed checkpoint may resume",
+                }
+        jobs.repo.heartbeat(job_id, token)
+        if proof is None:
+            proof = jobs.executor.immediate(
+                "inspect",
+                root,
+                manifest.request.window_id,
+                invocation + "-inspect",
+                manifest.session_file_sha256,
+                lock_fds=lock_fds,
+            )
+        notify("inspected")
+        jobs.guard()
+        cancelled = jobs.repo.heartbeat(job_id, token)
+        if not cancelled and error is None and proof["complete"]:
+            notify("before_publish")
+            reference = publish(
+                root, manifest, invocation, row["attempt_count"], jobs.repo.logs(job_id)
+            )
+            notify("after_publish")
+            jobs.guard()
+        elif not cancelled and error is None:
+            error = {
+                "code": "M2_JOB_INCOMPLETE",
+                "message": "Native execution did not commit a complete receipt",
+            }
+    except (Exception, KeyboardInterrupt) as exc:
+        interrupted = isinstance(exc, KeyboardInterrupt)
+        stop(process)
+        error = {
+            "code": getattr(exc, "code", "M2_JOB_WORKER_FAILED"),
+            "type": type(exc).__name__,
+            "message": str(exc)[:500],
+        }
+        reference = None
+    finally:
+        stop(process)
+    # Conditional UPDATE under an immediate transaction resolves cancellation
+    # versus publication. A stale worker can never turn the row into success.
+    jobs.repo.finish(job_id, token, proof=proof, result=reference, error=error)
+    if interrupted:
+        raise KeyboardInterrupt

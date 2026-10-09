@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ashare-quant"
+version = "0.4.0.dev15+sourcepreview1"
+description = "A宽 dev15 source preview: local control plane and synthetic fixture demo"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.141.1", "pydantic==2.13.5", "uvicorn==0.52.4",
+  "ashare-data @ git+https://github.com/ashare-labs/ashare-data.git@a4086b188c3023fded59731ba154fd44ee7cde37", "numpy==2.5.3",
+  "jsonpickle==4.1.3", "simplejson==4.2.0", "logbook==1.10.1",
+]
+
+[project.optional-dependencies]
+# Read docs/licensing.md before installing. This does not enable real M2 research.
+native = ["rqalpha==6.4.1"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ashare_quant", "src/rqprobe"]
+
+[project.scripts]
+ashare-quant = "ashare_quant.cli:main"
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "httpx==0.28.1", "ruff==0.16.6", "packaging==26.3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["src/rqprobe"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

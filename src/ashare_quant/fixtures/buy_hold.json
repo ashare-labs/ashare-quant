@@ -1,0 +1,95 @@
+[
+  {
+    "logical_at": "2026-09-28T09:30:00+08:00",
+    "trading_day": "2026-09-28",
+    "kind": "open",
+    "account": {
+      "cash": "10000.00",
+      "frozen_cash": "0.00",
+      "equity": "10000.00",
+      "positions": []
+    },
+    "message": "Synthetic session starts",
+    "checkpoint": {},
+    "sequence": 1
+  },
+  {
+    "logical_at": "2026-09-28T09:31:00+08:00",
+    "trading_day": "2026-09-28",
+    "kind": "fill",
+    "account": {
+      "cash": "9000.00",
+      "frozen_cash": "0.00",
+      "equity": "10000.00",
+      "positions": [
+        {
+          "security": "600000.XSHG",
+          "quantity": 100,
+          "sellable": 0
+        }
+      ]
+    },
+    "message": "Scripted buy 100 at 10",
+    "checkpoint": {},
+    "order": {
+      "order_id": "buy-1",
+      "security": "600000.XSHG",
+      "side": "buy",
+      "quantity": 100,
+      "filled": 100,
+      "status": "filled",
+      "limit_price": "10.00",
+      "reason": null
+    },
+    "fill": {
+      "fill_id": "fill-1",
+      "order_id": "buy-1",
+      "security": "600000.XSHG",
+      "side": "buy",
+      "quantity": 100,
+      "price": "10.00",
+      "fee": "0.00"
+    },
+    "sequence": 2
+  },
+  {
+    "logical_at": "2026-09-28T15:00:00+08:00",
+    "trading_day": "2026-09-28",
+    "kind": "close",
+    "account": {
+      "cash": "9000.00",
+      "frozen_cash": "0.00",
+      "equity": "10000.00",
+      "positions": [
+        {
+          "security": "600000.XSHG",
+          "quantity": 100,
+          "sellable": 0
+        }
+      ]
+    },
+    "message": "Synthetic close; same-day shares not sellable",
+    "checkpoint": {},
+    "sequence": 3
+  },
+  {
+    "logical_at": "2026-09-29T15:00:00+08:00",
+    "trading_day": "2026-09-29",
+    "kind": "close",
+    "account": {
+      "cash": "9000.00",
+      "frozen_cash": "0.00",
+      "equity": "10100.00",
+      "positions": [
+        {
+          "security": "600000.XSHG",
+          "quantity": 100,
+          "sellable": 100
+        }
+      ]
+    },
+    "message": "Scripted mark 11 on next day",
+    "checkpoint": {},
+    "sequence": 4
+  }
+]

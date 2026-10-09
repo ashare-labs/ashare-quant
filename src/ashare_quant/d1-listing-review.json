@@ -1,0 +1,180 @@
+{
+  "schema": "independent-br1-bounded-listing-review-v1",
+  "review_time_utc": "2026-10-08T22:56:00.906251+00:00",
+  "outcome": "PASS_WITH_FIXED_SCOPE",
+  "scope": "Owner public bounded A-NORMAL listing predicates and revalidation contract only",
+  "permitted_next_step": "Adopt these exact owner pins for subsequent production adapter implementation and independent review",
+  "version": "0.6.0.dev3",
+  "commit": "281908d655762fabbaa3e8b27d054a3770f95c97",
+  "tree": "71a44f284de83630b404e3976659b0282f95fdc1",
+  "parent": "ebfaf0c5767aa4e4f97a9781ede66759c29b2316",
+  "wheel_sha256": "617febec1745ec2ca53cd4bdffef6ac5c593020f8ee1fdb6eedc2e0229eb4421",
+  "public_manifest_sha256": "50aaf0e1a803a76885bf83c436d460b1bf619214a3af52973b2581291b0cc11e",
+  "listing_contract_sha256": "d496e9d95d4a32e41c49bfe646578f67a7f818d49171f6ccf43615ee2bb04628",
+  "listing_policy_sha256": "4e66bfe529a8e82178b48ad85c00840c73c4b5ee9df4e74e3227de6bea7747eb",
+  "br1_dataset_id": "ee6fed08fbda52908604ba61bbf8ab3263b2f29915becc01e286a6f3e573c8f1",
+  "br1_profile_sha256": "ded0d9dc2994aa70a8fa031a42987381937981445338c80671188857e6183cbd",
+  "strict_dataset_id": "4b75c097def48a69dd2042a7df70d835f1e29c7d1507be5c7cd4c6894bac8078",
+  "price_dataset_id": "31bc25c99e00c8b5c43f8d77daeae9ae9bc41116f40802b0aad10567e6259973",
+  "facts_component_id": "ad47005ce776b041ec2bd2ae116f6a2bed2bdc360f1533293c6a1881f681e391",
+  "official_manifest_sha256": "499cc2b4e2985f6597f1d8923fbf1878fcb148f4a0764835607cb3919b040d82",
+  "owner_versions": {
+    "strict_component": "0.6.0.dev1",
+    "br1_component": "0.6.0.dev2",
+    "listing_contract": "0.6.0.dev3"
+  },
+  "security": "600000.XSHG",
+  "allowed_requests": [
+    [
+      "warmup",
+      "2020-01-02",
+      "2020-01-02"
+    ],
+    [
+      "current",
+      "2020-01-03",
+      "2020-01-03"
+    ],
+    [
+      "current",
+      "2020-01-06",
+      "2020-01-06"
+    ],
+    [
+      "settlement_successor",
+      "2020-01-03",
+      "2020-01-06"
+    ],
+    [
+      "settlement_successor",
+      "2020-01-06",
+      "2020-01-07"
+    ]
+  ],
+  "query_dates": [
+    "2020-01-02",
+    "2020-01-03",
+    "2020-01-06",
+    "2020-01-07"
+  ],
+  "event_dates": [
+    "2020-01-03",
+    "2020-01-06"
+  ],
+  "explicit_mode": "conditional_research",
+  "assumption_ids": [
+    "A-NORMAL"
+  ],
+  "evidence_status": "derived_under_declared_assumptions",
+  "source_evidence_status": "bounded_corroborated_review",
+  "absolute_delisting_date": null,
+  "absolute_date_status": "unknown",
+  "historical_pit": false,
+  "execution_permission": false,
+  "strict_unknown_facts": [
+    "instrument",
+    "price_limits",
+    "event_absence",
+    "adjusted_prev_close"
+  ],
+  "context_sha256_semantics": "Opaque caller-declared digest; equality/mismatch checked, contents and actual native runtime authority NOT verified",
+  "old_context_replay_limitation_confirmed": true,
+  "production_backend_adapter_review": "NOT_PERFORMED",
+  "native_runtime_guards": "NOT_VERIFIED",
+  "native_experiment": "FAIL_UNCHANGED_NOT_RERUN",
+  "native_checkpoint_recovery": "NOT_RUN",
+  "strict_30_execution_acceptance": "NOT_RUN",
+  "sentinel_exported_by_public_api": false,
+  "network_requests": 0,
+  "regression": {
+    "source": {
+      "tests": 1509,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "wheel": {
+      "tests": 1509,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "old_public_regression": {
+    "source": {
+      "passed": 190,
+      "failed": 0
+    },
+    "wheel": {
+      "passed": 190,
+      "failed": 0
+    }
+  },
+  "new_independent_checks": {
+    "source": {
+      "passed": 134,
+      "failed": 0,
+      "kinds": {
+        "harness": 1,
+        "real_frozen_public_api": 104,
+        "explicit_design_limitation": 1,
+        "tampered_isolated_bytes": 8,
+        "synthetic_counterfactual": 20
+      }
+    },
+    "wheel": {
+      "passed": 134,
+      "failed": 0,
+      "kinds": {
+        "harness": 1,
+        "real_frozen_public_api": 104,
+        "explicit_design_limitation": 1,
+        "tampered_isolated_bytes": 8,
+        "synthetic_counterfactual": 20
+      }
+    }
+  },
+  "date_role_matrix": {
+    "combinations": 243,
+    "accepted": [
+      [
+        "warmup",
+        "2020-01-02",
+        "2020-01-02"
+      ],
+      [
+        "current",
+        "2020-01-03",
+        "2020-01-03"
+      ],
+      [
+        "current",
+        "2020-01-06",
+        "2020-01-06"
+      ],
+      [
+        "settlement_successor",
+        "2020-01-03",
+        "2020-01-06"
+      ],
+      [
+        "settlement_successor",
+        "2020-01-06",
+        "2020-01-07"
+      ]
+    ],
+    "rejected_by_code": {
+      "BR1_LISTING_SCOPE": 195,
+      "BR1_LISTING_ROLE": 30,
+      "BR1_LISTING_SUCCESSOR": 13
+    }
+  },
+  "review_artifacts": {
+    "报告_dev3有界上市状态独立验收.md": "d8732fceaf0adf3a76c0f9a82a624a99ff9c26c4c9381bb5745acc9913f582aa",
+    "consume_listing_example.py": "1cf7dbc10d979b8fb55778e9c4f92be0505f0f1f0d46b55cde2fbb487c406d0a",
+    "independent_listing.py": "7b1e690c80535559062bee1cf5374bbc44021baf3ade21c6760f1e1766aaabfa",
+    "acceptance_cases.csv": "2923703604dfa904f513012ad2f693668184210461c39c73b528db9c876d3ae6",
+    "evidence/final_verification.json": "21718e2fe4891009cf9b0cabf0cb4024796a19d5ba4a7f8efa94f0428412ec04",
+    "evidence/consumption_source.json": "a13a1e1ff48f39743317f2fc3a92e1715e91a706c11674173f9734c2248684f3"
+  }
+}

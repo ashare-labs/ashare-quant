@@ -1,0 +1,237 @@
+{
+  "buy_hold": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "Buy 100 shares at first synthetic price 10; hold through next close at 11.",
+    "parameters": {
+      "initial_cash": "10000.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00"
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "10000 - 100*10 = 9000 cash; 9000 + 100*11 = 10100 equity",
+    "expected": {
+      "cash": "9000.00",
+      "equity": "10100.00",
+      "quantity": 100,
+      "sellable": 100,
+      "fill_count": 1,
+      "rejection_reasons": [],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only"
+  },
+  "restart": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "Same as buy_hold; crash after sequence 2, then resume.",
+    "parameters": {
+      "initial_cash": "10000.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00",
+      "crash_after_sequence": 2
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "One buy only; 9000 cash, 100 shares, 10100 final equity",
+    "expected": {
+      "cash": "9000.00",
+      "equity": "10100.00",
+      "quantity": 100,
+      "sellable": 100,
+      "fill_count": 1,
+      "rejection_reasons": [],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only"
+  },
+  "insufficient_cash": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "500 initial cash; request 100 shares at 10, reject whole order.",
+    "parameters": {
+      "initial_cash": "500.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00"
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "500 < 100*10; cash stays 500; no fill",
+    "expected": {
+      "cash": "500.00",
+      "equity": "500.00",
+      "quantity": 0,
+      "sellable": 0,
+      "fill_count": 0,
+      "rejection_reasons": [
+        "INSUFFICIENT_CASH"
+      ],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only"
+  },
+  "t_plus_one": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "Buy 100 at 10; same-day sell rejected; next-day sell at 11 succeeds.",
+    "parameters": {
+      "initial_cash": "10000.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00"
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "10000 - 100*10 + 100*11 = 10100; same-day rejection has no cash effect",
+    "expected": {
+      "cash": "10100.00",
+      "equity": "10100.00",
+      "quantity": 0,
+      "sellable": 0,
+      "fill_count": 2,
+      "rejection_reasons": [
+        "T_PLUS_ONE"
+      ],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only"
+  },
+  "partial_fill": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "Request 300 shares at 10; available synthetic liquidity 100; day remainder expires.",
+    "parameters": {
+      "initial_cash": "10000.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00",
+      "requested_quantity": 300,
+      "available_fill_quantity": 100
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "10000 - 100*10 = 9000 cash, of which 2000 reserved until expiry; final reserved 0",
+    "expected": {
+      "cash": "9000.00",
+      "equity": "10000.00",
+      "quantity": 100,
+      "sellable": 100,
+      "fill_count": 1,
+      "rejection_reasons": [],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only"
+  },
+  "cross_day": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "Buy 100 at 10 on day 1; sell 100 at 9 on day 2.",
+    "parameters": {
+      "initial_cash": "10000.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00"
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "10000 - 100*10 + 100*9 = 9900",
+    "expected": {
+      "cash": "9900.00",
+      "equity": "9900.00",
+      "quantity": 0,
+      "sellable": 0,
+      "fill_count": 2,
+      "rejection_reasons": [],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only"
+  },
+  "corporate_action": {
+    "schema_version": 1,
+    "evidence_kind": "synthetic",
+    "description": "Hold 100 on record date; raw price 10 -> 9 ex date; 1 yuan/share credited only on pay date.",
+    "parameters": {
+      "initial_cash": "10000.00",
+      "security": "600000.XSHG",
+      "quantity": 100,
+      "fee_rate": "0.00",
+      "tax_rate": "0.00"
+    },
+    "assumptions": [
+      "Declared synthetic trading sessions, never proof of real calendar or security status",
+      "Integer shares; specified prices and liquidity; no slippage",
+      "Zero fees and taxes are synthetic inputs, not current market charges",
+      "Cash includes frozen_cash; free_cash = cash - frozen_cash"
+    ],
+    "manual_arithmetic": "9000 + 100*1 = 9100 cash; 9100 + 100*9 = 10000 equity",
+    "expected": {
+      "cash": "9100.00",
+      "equity": "10000.00",
+      "quantity": 100,
+      "sellable": 100,
+      "fill_count": 1,
+      "rejection_reasons": [],
+      "frozen_cash": "0.00"
+    },
+    "real_engine_validation": "NOT_RUN",
+    "real_market_validation": "NOT_RUN",
+    "transport_fixture": "scripted projection replay only",
+    "company_action_fact": {
+      "action_id": "dividend-1",
+      "dataset_id": "synthetic:corporate_action:v1",
+      "security": "600000.XSHG",
+      "available_at": "2026-09-28T08:00:00+08:00",
+      "record_date": "2026-09-28",
+      "ex_date": "2026-09-29",
+      "pay_date": "2026-09-30",
+      "cash_per_share": "1.00",
+      "source_reference": "synthetic manual declaration; production facts must come from A数达"
+    }
+  }
+}
