@@ -31,4 +31,17 @@ PYTHONPATH=src .venv/bin/python -B -m ashare_quant.daily_portfolio \
 
 该脚本只生成明确标记的合成星期与价格，实际跑三策略、原样重跑、完成后重入、四个 SIGKILL 恢复点、最小佣金、共享现金拒单和未来价格扰动；合成结果不计真实策略或 JQ 验收。真正的验收还需要 AD 真实来源包、固定三窗口、旧原题回归及独立参考。
 
-前端消费契约：显示输入来源、窗口和策略身份，以及真实/合成、历史 PIT 未认证、JQ 未采集、数据缺口；分别展示 signal.targets 和实际 positions。订单必须能追到 decision 日期、trade.order_id、费用、拒单及现金前后。权益曲线读取 equity.csv 或 result.accounts，末日与 final_account 对账；有 receivable 时独立列示。恢复运行复用同一 identity 和订单/成交 ID，不能重复累计。前端尚无本入口注册，不得用旧单股 UI 冒称支持多股。
+参考脚本为 [jq_reference.py](../examples/daily_portfolio/jq_reference.py)，默认等权和 2020 固定窗口。只按 manifest 切换 STRATEGY/WINDOW，同时在平台界面逐次核对日期、日频和初资。聚宽运行时的日频标识为 `day`，行情查询仍使用 `daily`；脚本记录实际返回的标识并拒绝分钟频率。每个组合使用独立文件名，完整事件通过平台支持的 `write_file` 输出。浏览器日志可能无法完整读取长记录，必须核对原生 JSONL 连续序号、每日回调覆盖和终态事件；可取得原生导出摘要时逐字节校验。免费时长与积分余额须现场检查，不以付费导出补齐缺失证据。
+
+使用以下只读入口比较已保存参考和本机结果，不会采集数据、修改输入或建立第二份账户账本：
+
+```sh
+PYTHONPATH=src .venv/bin/python -B scripts/compare_daily_portfolio_jq.py \
+  --reference /private/jq/events.jsonl --aq-result /private/aq/result.json \
+  --owner-input /private/ad-export.json --manifest examples/daily_portfolio/manifest.json \
+  --output /private/comparison.json
+```
+
+报告分开列示：用 JQ 历史输入及其前日权益复算的纯信号检查；JQ 与独立 AD 来源在实际观察字段上的差异；目标、去重成交、费用、现金/权益、数量、可售、成本和持仓估值。现金残差另列，不能自动改写为股息或税。报告生成成功不表示经济一致，必须阅读各差异列表。参考对齐也不证明历史状态、源端当时可得性或未观察字段已齐备。账户引用只保存在用户私有证据目录，不进入公开仓库。
+
+前端消费契约：显示输入来源、窗口和策略身份，以及真实/合成、历史 PIT 未认证、实际参考验收状态和数据缺口；分别展示 signal.targets 和实际 positions。订单必须能追到 decision 日期、trade.order_id、费用、拒单及现金前后。权益曲线读取 equity.csv 或 result.accounts，末日与 final_account 对账；有 receivable 时独立列示。收益率应按同一已提交权益计算，不能把平台回调内可能尚未更新的 `returns` 属性当成同一时点的权益。恢复运行复用同一 identity 和订单/成交 ID，不能重复累计。前端尚无本入口注册，不得用旧单股 UI 冒称支持多股。
