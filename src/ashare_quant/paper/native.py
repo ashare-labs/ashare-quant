@@ -46,7 +46,16 @@ from rqprobe.guards import block_rqdata_apis
 
 from .account import install
 from .contracts import CloseInput, Decision, SessionConfig
-from .risk import close_gate, decision_gate, indexed, order_admission, pretrade, reconcile, require
+from .risk import (
+    close_gate,
+    decision_gate,
+    indexed,
+    order_admission,
+    pretrade,
+    reconcile,
+    reconcile_opening,
+    require,
+)
 
 runtime = {}
 __config__ = {"priority": 1000}
@@ -232,6 +241,31 @@ class DaySource(AbstractDataSource):
         return [self.before[sid].is_st] * len(dates)
 
     def get_dividend(self, instrument):
+        events = [a for a in self.decision.cash_dividends if a.security == instrument.order_book_id]
+        if events:
+
+            def integer(d):
+                return int(d.strftime("%Y%m%d"))
+
+            return np.array(
+                [
+                    (
+                        integer(a.record_date),
+                        integer(a.ex_date),
+                        integer(a.pay_date),
+                        float(a.cash_per_share) * 10,
+                        10,
+                    )
+                    for a in events
+                ],
+                dtype=[
+                    ("book_closure_date", "i8"),
+                    ("ex_dividend_date", "i8"),
+                    ("payable_date", "i8"),
+                    ("dividend_cash_before_tax", "f8"),
+                    ("round_lot", "i8"),
+                ],
+            )
         row = self.before[instrument.order_book_id]
         require(
             row.actions_known_absent or row.action_effect == "zero_entitlement",
@@ -239,12 +273,13 @@ class DaySource(AbstractDataSource):
         )
         return None
 
-    get_split = get_dividend
+    def get_split(self, instrument):
+        return None  # This policy admits cash-only actions, never share transformations.
 
     def get_share_transformation(self, sid):
         require(
             self.before[sid].actions_known_absent
-            or self.before[sid].action_effect == "zero_entitlement",
+            or self.before[sid].action_effect in {"zero_entitlement", "native_cash_dividend"},
             "PAPER_ACTIONS_UNKNOWN",
         )
         return None
@@ -312,6 +347,7 @@ def snapshot(env, universe):
             "price": str(p.last_price),
             "market_value": str(p.market_value),
             "average_cost": str(p.avg_price),
+            "dividend_receivable": str(p.dividend_receivable),
         }
     return {
         "total_cash": str(account.total_cash),
@@ -377,6 +413,8 @@ class PaperMod(AbstractMod):
             "trades": [],
             "orders": {},
             "before": None,
+            "opening_before": None,
+            "opening_reconciliation": None,
             "risk": None,
             "submitted": False,
             "submissions": [],
@@ -395,6 +433,7 @@ class PaperMod(AbstractMod):
         install(env)
         block_rqdata_apis()
         env.add_frontend_validator(IntentGuard(self))
+        env.event_bus.prepend_listener(EVENT.PRE_BEFORE_TRADING, self.before_actions)
         for event in (
             EVENT.POST_BEFORE_TRADING,
             EVENT.POST_OPEN_AUCTION,
@@ -418,6 +457,9 @@ class PaperMod(AbstractMod):
         self.env.portfolio.stock_account.fast_forward(
             orders=list(self.env.broker.get_open_orders())
         )
+
+    def before_actions(self, _):
+        self.state["opening_before"] = snapshot(self.env, self.session.universe)
 
     def cancel_unfilled(self, _):
         # End-of-session remainder cancellation precedes valuation BAR matching.
@@ -445,6 +487,11 @@ class PaperMod(AbstractMod):
     def observe(self, event):
         if event.event_type == EVENT.POST_BEFORE_TRADING:
             self.state["before"] = snapshot(self.env, self.session.universe)
+            self.state["opening_reconciliation"] = reconcile_opening(
+                self.state["opening_before"], self.state["before"], self.decision
+            )
+            if self.decision.cash_dividends:
+                fault("inside_native_dividend")
             try:
                 self.state["risk"] = pretrade(self.session, self.decision, self.state["before"])
             except Exception as exc:

@@ -21,7 +21,7 @@ from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular,
 from ashare_quant.runtime import runtime_fingerprint
 
 from .contracts import CloseInput, Decision, SessionConfig
-from .risk import close_gate, decision_gate, reconcile, require
+from .risk import close_gate, decision_gate, reconcile, reconcile_opening, require
 
 LEASE_SECONDS = 15
 
@@ -61,6 +61,7 @@ def read_checkpoint(path, identity, expected_sha=None):
 def completed_proof(payload, row, parent, base_cursor):
     from decimal import Decimal
 
+    from jsonpickle.ext import numpy as jsonpickle_numpy
     from rqalpha.const import POSITION_DIRECTION
 
     receipt = payload["receipt"]
@@ -82,6 +83,7 @@ def completed_proof(payload, row, parent, base_cursor):
         and executor["count"] == receipt["settlement_count"] == base_cursor // 4 + 1,
         "PAPER_NATIVE_CURSOR_OR_SETTLEMENT",
     )
+    jsonpickle_numpy.register_handlers()
     portfolio = jsonpickle.decode(payload["states"]["portfolio"].decode(), keys=False)
     account = portfolio["accounts"]["STOCK"]["native"]
     reported = receipt["account"]
@@ -101,8 +103,29 @@ def completed_proof(payload, row, parent, base_cursor):
             and native["quantity"] - native["non_closable"] == pos["sellable"],
             "PAPER_NATIVE_POSITION_PROJECTION",
         )
+        require(
+            abs(
+                sum(Decimal(str(amount)) for _, amount in native["dividend_receivable"])
+                - Decimal(pos["dividend_receivable"])
+            )
+            <= Decimal("0.000001"),
+            "PAPER_NATIVE_RECEIVABLE_PROJECTION",
+        )
+        require(
+            Decimal(str(native["avg_price"])) == Decimal(pos["average_cost"]),
+            "PAPER_NATIVE_COST_PROJECTION",
+        )
     require(set(account["positions"]) <= set(reported["positions"]), "PAPER_NATIVE_POSITION_SCOPE")
     reconcile(receipt["before"], reported, receipt["trades"])
+    require(
+        receipt["opening_reconciliation"]
+        == reconcile_opening(
+            receipt["opening_before"],
+            receipt["before"],
+            Decision.model_validate(json.loads(row["decision"])),
+        ),
+        "PAPER_ACTION_PROOF_CONFLICT",
+    )
     return receipt
 
 
@@ -126,6 +149,9 @@ class PaperService:
                 CREATE TABLE IF NOT EXISTS paper_events(
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
                     day TEXT, at REAL NOT NULL, kind TEXT NOT NULL, details TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS paper_deliveries(
+                    session_id TEXT NOT NULL, day TEXT NOT NULL, packet_sha256 TEXT NOT NULL,
+                    received_at TEXT NOT NULL, PRIMARY KEY(session_id,day));
             """)
 
     @contextmanager
@@ -228,6 +254,14 @@ class PaperService:
                     canonical(expected) == canonical(decision), "PAPER_STRATEGY_RECEIPT_CHANGED"
                 )
             decision_gate(config, decision)
+            for action in decision.cash_dividends:
+                record = self.report(sid, action.record_date.isoformat())
+                require(
+                    record["checkpoint_sha256"] == action.record_checkpoint
+                    and record["native"]["account"]["positions"][action.security]["quantity"]
+                    == action.record_quantity,
+                    "PAPER_ACTION_RECORD_PROOF",
+                )
             encoded = canonical(decision).decode()
             with self.db() as db:
                 old = db.execute(
@@ -592,6 +626,7 @@ class PaperService:
                 if not complete:
                     paths = [
                         str(Path(__file__).resolve().parents[2]),
+                        str(metadata.distribution("ashare-data").locate_file("")),
                         str(metadata.distribution("rqalpha").locate_file("")),
                     ]
                     boot = "import json,sys;p,a=json.loads(sys.argv[1]);sys.path[:0]=p;sys.argv=['paper-native',a];from ashare_quant.paper.native import main;main()"

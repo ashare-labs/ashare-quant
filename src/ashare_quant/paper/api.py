@@ -61,6 +61,8 @@ def create_app(root):
             "native_continuation": True,
             "data_modes": ["synthetic_fixture", "historical_research"],
             "historical_replay_enabled": True,
+            "ad_daily_delivery_enabled": True,
+            "cash_dividend_policy": "explicit_gross_zero_withholding_payment_date_0900",
             "historical_pit_verified": False,
             "execution_permission": False,
             "source_sha256": service_source(),
@@ -69,12 +71,9 @@ def create_app(root):
             "broker_enabled": False,
             "strategy_execution": "pinned_shared_daily_signals",
             "awaiting": [
-                "AD_execution_bundle",
-                "final_strategy_reference_handoff",
-                "corporate_action_continuation",
-                "frozen_real_risk_policy",
-                "real_end_to_end",
-                "quant_web_acceptance",
+                "AD_w2024_four_XSHG_state_cells_in_current_pinned_supplement",
+                "source_qualified_live_or_historical_delivery_timestamps",
+                "independent_quant_web_human_acceptance",
             ],
         }
 
@@ -104,6 +103,10 @@ def create_app(root):
         _, config = service.session(sid)
         binding, _ = load(service, sid, config)
         directory = service.root / sid / "replay"
+        if binding["schema"] == "paper-execution-binding.v1":
+            from .execution import fork as execution_fork
+
+            return execution_fork(service, sid, body.account_id, body.risk.model_dump(mode="json"))
         return bind(
             service,
             directory / "manifest.json",
@@ -113,7 +116,18 @@ def create_app(root):
             body.account_id,
             accept_model=binding["accept_owner_state_model"],
             risk=body.risk.model_dump(mode="json"),
+            cash_dividend_policy=config.cash_dividend_policy,
         )
+
+    @app.post("/api/v1/paper/sessions/{sid}/ingest")
+    def ingest(sid: str, body: AdvanceAction):
+        from .execution import ingest as append
+
+        try:
+            return append(service, sid, body.day.isoformat(), body.expected_parent)
+        except DomainError as exc:
+            service.alert(sid, body.day.isoformat(), exc)
+            raise
 
     @app.post("/api/v1/paper/sessions", status_code=201)
     def create(body: SessionConfig):

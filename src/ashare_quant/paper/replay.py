@@ -30,7 +30,16 @@ def strategy_version(manifest, strategy):
 
 
 def bind(
-    service, manifest_path, input_path, strategy, window, account, *, accept_model=False, risk=None
+    service,
+    manifest_path,
+    input_path,
+    strategy,
+    window,
+    account,
+    *,
+    accept_model=False,
+    risk=None,
+    cash_dividend_policy="reject",
 ):
     """Freeze copies and config. Repeating an identical import is safe."""
     manifest_raw, input_raw = regular(Path(manifest_path)), regular(Path(input_path))
@@ -61,6 +70,7 @@ def bind(
         "window": scope,
         "accept_owner_state_model": accept_model,
         "real_market_data": doc["real_market_data"],
+        "cash_dividend_policy": cash_dividend_policy,
     }
     execution = manifest["execution"]
     require(
@@ -86,6 +96,7 @@ def bind(
         minimum_commission=fees["minimum_commission"],
         sell_tax_rate=fees["sell_tax_rate"],
         risk=RiskPolicy.model_validate(risk or {}),
+        cash_dividend_policy=cash_dividend_policy,
     )
     session = service.create(config)
     root = service.root / session["id"] / "replay"
@@ -118,6 +129,20 @@ def load(service, sid, config):
     )
     binding = json.loads(regular(root / "binding.json"))
     require(digest(binding) == config.replay_binding_sha256, "PAPER_REPLAY_BINDING_CHANGED")
+    if binding["schema"] == "paper-execution-binding.v1":
+        from .execution import ExecutionInputs
+
+        manifest_raw = regular(root / "manifest.json")
+        require(
+            sha(manifest_raw) == binding["manifest_sha256"] == config.scenario_manifest_sha256,
+            "PAPER_REPLAY_INPUT_CHANGED",
+        )
+        require(
+            strategy_version(json.loads(manifest_raw), config.strategy_id)
+            == config.strategy_version,
+            "PAPER_STRATEGY_IDENTITY",
+        )
+        return binding, ExecutionInputs(service, sid, binding)
     manifest_raw, input_raw = regular(root / "manifest.json"), regular(root / "input.json")
     require(
         sha(manifest_raw) == binding["manifest_sha256"] == config.scenario_manifest_sha256
@@ -134,7 +159,7 @@ def load(service, sid, config):
 
 def provenance(binding, inputs):
     doc = inputs.document
-    return {
+    result = {
         "binding": binding,
         "producer": doc["producer"],
         "source_refs": doc["source_refs"],
@@ -147,12 +172,26 @@ def provenance(binding, inputs):
         "execution_permission": False,
         "preflight": inputs.preflight(),
     }
+    if hasattr(inputs, "deliveries"):
+        received = inputs.deliveries()
+        result["delivery"] = {
+            "mode": "sealed_historical_source_increment",
+            "received": received,
+            "next_input_day": inputs.days[len(received)]
+            if len(received) < len(inputs.days)
+            else None,
+            "source_sha256": binding["source_sha256"],
+            "ad_admission": inputs.registry["description"]["admission"],
+        }
+    return result
 
 
 def build(service, sid, day, parent):
     _, config = service.session(sid)
     binding, inputs = load(service, sid, config)
     require(day in inputs.days, "PAPER_REPLAY_DATE_OUT_OF_SCOPE")
+    if hasattr(inputs, "select"):
+        inputs.select(day)
     require(
         not inputs.gaps,
         "PAPER_REPLAY_DATA_MISSING",
@@ -160,10 +199,44 @@ def build(service, sid, day, parent):
     )
     # Record-day trading needs no posting. At the posting date an immutable
     # record-day native account can prove zero entitlement; no action is invented.
-    action_checks = []
+    action_checks, cash_dividends = [], []
     zero_entitlement = set()
     for event in inputs.actions:
         dates = [v for k, v in event.items() if k.endswith("_date") and isinstance(v, str)]
+        if config.cash_dividend_policy == "gross_zero_withholding_0900":
+            require(event["kind"] == "cash_dividend", "PAPER_ACTION_TIMING_UNSUPPORTED")
+            if not event["ex_date"] <= day <= event["pay_date"]:
+                continue
+            record = service.report(sid, event["record_date"])
+            cash_dividends.append(
+                {
+                    **{
+                        k: event[k]
+                        for k in (
+                            "security",
+                            "record_date",
+                            "ex_date",
+                            "pay_date",
+                            "cash_per_share",
+                        )
+                    },
+                    "record_quantity": record["native"]["account"]["positions"][event["security"]][
+                        "quantity"
+                    ],
+                    "record_checkpoint": record["checkpoint_sha256"],
+                    "source_event": event.get("source_event", event),
+                    "model_cash_available_at": event["pay_date"] + "T09:00:00+08:00",
+                }
+            )
+            action_checks.append(
+                {
+                    **cash_dividends[-1],
+                    "effect": "native_cash_dividend",
+                    "withholding_rate": "0",
+                    "policy": config.cash_dividend_policy,
+                }
+            )
+            continue
         if config.risk.profile == "conservative_v1":
             require(
                 not min(dates) <= day <= max(dates),
@@ -236,6 +309,15 @@ def build(service, sid, day, parent):
         "signal": signal,
         "provenance": provenance(binding, inputs),
         "action_checks": action_checks,
+        "input_delivery": (
+            {
+                "packet_sha256": inputs.sha256,
+                "admission": inputs.packet["admission"],
+                "reads": inputs.packet["reads"],
+            }
+            if hasattr(inputs, "packet")
+            else None
+        ),
     }
     historical = config.data_mode == "historical_research"
     mode = {
@@ -256,14 +338,21 @@ def build(service, sid, day, parent):
                 complete=True,
                 source_watermark=prior,
                 selected_watermark=prior,
-                eligible=True,
+                eligible=row["eligible"] if hasattr(inputs, "packet") else True,
                 suspended=row["suspended"],
-                is_st=False,
+                is_st=row["is_st"] if hasattr(inputs, "packet") else False,
                 lower_limit=str(row["lower_limit"]),
                 upper_limit=str(row["upper_limit"]),
                 rule_version="explicit-owner-research-model" if historical else "synthetic-rules",
-                actions_known_absent=security not in zero_entitlement,
-                action_effect="zero_entitlement" if security in zero_entitlement else "none",
+                actions_known_absent=security not in zero_entitlement
+                and not any(a["security"] == security for a in cash_dividends),
+                action_effect=(
+                    "native_cash_dividend"
+                    if any(a["security"] == security for a in cash_dividends)
+                    else "zero_entitlement"
+                    if security in zero_entitlement
+                    else "none"
+                ),
                 facts_available_at=day + "T09:00:00+08:00",
             )
         )
@@ -279,6 +368,7 @@ def build(service, sid, day, parent):
         strategy_version=config.strategy_version,
         strategy_receipt_sha256=digest(receipt),
         strategy_receipt=receipt,
+        cash_dividends=cash_dividends,
         data_manifest_sha256=inputs.sha256,
         rows=rows,
         targets=signal["targets"],

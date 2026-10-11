@@ -39,6 +39,18 @@ def indexed(rows, universe):
 
 
 def decision_gate(config, decision):
+    events = {a.security: a for a in decision.cash_dividends}
+    require(len(events) == len(decision.cash_dividends), "PAPER_ACTION_DUPLICATE")
+    for a in events.values():
+        require(
+            config.cash_dividend_policy == "gross_zero_withholding_0900"
+            and a.security in config.universe
+            and a.record_date < a.ex_date <= decision.trading_date <= a.pay_date
+            and (decision.trading_date != a.ex_date or a.record_date == decision.previous_open)
+            and a.model_cash_available_at.isoformat() == str(a.pay_date) + "T09:00:00+08:00"
+            and D(a.cash_per_share) > 0,
+            "PAPER_ACTION_POLICY_MISMATCH",
+        )
     evidence_gate(config, decision)
     if config.strategy_id:
         require(
@@ -87,7 +99,10 @@ def decision_gate(config, decision):
             "PAPER_TRADING_RULES_UNKNOWN",
         )
         require(
-            row.actions_known_absent or row.action_effect == "zero_entitlement",
+            row.actions_known_absent
+            or row.action_effect == "zero_entitlement"
+            or row.action_effect == "native_cash_dividend"
+            and row.security in events,
             "PAPER_ACTION_COVERAGE_UNSUPPORTED",
         )
 
@@ -318,6 +333,67 @@ def _reconcile(before, after, trades):
             pos["quantity"] == quantities.get(sid, 0) and 0 <= pos["sellable"] <= pos["quantity"],
             "PAPER_POSITION_RECONCILIATION",
         )
-        value += D(pos["market_value"])
+        require(
+            D(pos.get("dividend_receivable", "0"))
+            == D(before["positions"][sid].get("dividend_receivable", "0")),
+            "PAPER_INTRADAY_RECEIVABLE_CHANGED",
+        )
+        value += D(pos["market_value"]) + D(pos.get("dividend_receivable", "0"))
     require(abs(D(after["nav"]) - value) <= D("0.000001"), "PAPER_NAV_RECONCILIATION")
     return {"status": "passed", "cash_residual": str(residual), "fill_count": len(trades)}
+
+
+def reconcile_opening(before, after, decision):
+    """Read-only dividend audit against native positions; no posting authority."""
+    with localcontext(prec=50):
+        cash_delta, receipts = D(0), []
+        for sid, pos in before["positions"].items():
+            events = [a for a in decision.cash_dividends if a.security == sid]
+            earned = paid = D(0)
+            for a in events:
+                amount = D(a.cash_per_share) * a.record_quantity
+                if a.ex_date == decision.trading_date:
+                    require(pos["quantity"] == a.record_quantity, "PAPER_ACTION_RECORD_QUANTITY")
+                    earned += amount
+                    if pos["quantity"]:
+                        require(
+                            abs(
+                                D(after["positions"][sid]["average_cost"])
+                                - (D(pos["average_cost"]) - D(a.cash_per_share))
+                            )
+                            <= D("0.000001"),
+                            "PAPER_ACTION_COST_RECONCILIATION",
+                        )
+                if a.pay_date == decision.trading_date:
+                    paid += amount
+                receipts.append(
+                    {
+                        **a.model_dump(mode="json"),
+                        "gross_entitlement": str(amount),
+                        "receivable_added": str(
+                            amount if a.ex_date == decision.trading_date else 0
+                        ),
+                        "cash_paid": str(amount if a.pay_date == decision.trading_date else 0),
+                        "withholding": "0",
+                        "classification": "read_only_reconciliation_of_native_posting",
+                    }
+                )
+            actual = after["positions"][sid]
+            require(actual["quantity"] == pos["quantity"], "PAPER_ACTION_POSITION_RECONCILIATION")
+            require(
+                abs(
+                    D(actual.get("dividend_receivable", "0"))
+                    - (D(pos.get("dividend_receivable", "0")) + earned - paid)
+                )
+                <= D("0.000001"),
+                "PAPER_ACTION_RECEIVABLE_RECONCILIATION",
+            )
+            cash_delta += paid
+        residual = D(after["total_cash"]) - D(before["total_cash"]) - cash_delta
+        require(abs(residual) <= D("0.000001"), "PAPER_ACTION_CASH_RECONCILIATION")
+        return {
+            "status": "passed",
+            "cash_delta": str(cash_delta),
+            "residual": str(residual),
+            "actions": receipts,
+        }

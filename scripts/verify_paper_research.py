@@ -19,6 +19,16 @@ def main():
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--owner-input-dir", required=True, type=Path)
     p.add_argument("--reference-dir", required=True, type=Path)
+    p.add_argument(
+        "--cash-dividend-policy",
+        choices=("reject", "gross_zero_withholding_0900"),
+        default="reject",
+    )
+    p.add_argument(
+        "--execution-source",
+        type=Path,
+        help="Sealed AD v12 root; uses per-day admission/append, never legacy state fallback",
+    )
     args = p.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -32,16 +42,43 @@ def main():
         window, strategy = case
         name = window["id"] + "-" + strategy
         service = PaperService(out / name / "store")
-        sid = bind(
-            service,
-            manifest,
-            args.owner_input_dir / (window["id"] + "-model.json"),
-            strategy,
-            window["id"],
-            "policy-v1-" + name,
-            accept_model=True,
-            risk=risk,
-        )["session_id"]
+        if args.execution_source:
+            from ashare_quant.paper.execution import bind as bind_execution
+            from ashare_quant.paper.execution import ingest
+
+            fixed = args.execution_source.resolve()
+            contract = json.loads((fixed / "consumer.json").read_text())
+            delivery = bind_execution(
+                service,
+                manifest,
+                fixed / "research/binding.json",
+                contract["research_sha"],
+                fixed / "execution/binding.json",
+                contract["execution_sha"],
+                fixed / contract["wheel"],
+                contract["wheel_sha"],
+                contract["ad_commit"],
+                strategy,
+                window["id"],
+                "ad-v12-" + name,
+                accepted_assumptions=contract["accepted_assumptions"],
+                accept_listing_continuity=contract["accept_listing_continuity"],
+                cash_credit_policy=contract["cash_credit_policy"],
+                risk=risk,
+            )
+            sid = delivery["session_id"]
+        else:
+            sid = bind(
+                service,
+                manifest,
+                args.owner_input_dir / (window["id"] + "-model.json"),
+                strategy,
+                window["id"],
+                "policy-v1-" + name,
+                accept_model=True,
+                risk=risk,
+                cash_dividend_policy=args.cash_dividend_policy,
+            )["session_id"]
         reference = json.loads((args.reference_dir / name / "result.json").read_text())
         accounts = {a["date"]: a for a in reference["accounts"]}
         decisions = {d["date"]: d for d in reference["decisions"]}
@@ -60,6 +97,10 @@ def main():
         seen = set()
         for day in service.view(sid)["replay"]["days"]:
             try:
+                if args.execution_source:
+                    packet = ingest(service, sid, day, parent)
+                    duplicate = ingest(service, sid, day, parent)
+                    assert packet["packet_sha256"] == duplicate["packet_sha256"]
                 r = advance(service, sid, day, parent)
             except DomainError as exc:
                 assert service.status(sid)["session"]["head"] == parent
@@ -95,6 +136,16 @@ def main():
                     or pos["sellable"] != ref["sellable"]
                     or abs(Decimal(pos["market_value"]) - Decimal(ref["value"]))
                     > Decimal("0.000001")
+                    or abs(
+                        Decimal(pos.get("dividend_receivable", "0"))
+                        - Decimal(ref.get("dividend_receivable", "0"))
+                    )
+                    > Decimal("0.000001")
+                    or (
+                        ref["quantity"]
+                        and abs(Decimal(pos["average_cost"]) - Decimal(ref["average_price"]))
+                        > Decimal("0.000001")
+                    )
                 ):
                     item["differences"].append(
                         {
@@ -132,6 +183,7 @@ def main():
                     "cash": actual["total_cash"],
                     "equity": actual["nav"],
                     "action_checks": receipt["action_checks"],
+                    "opening_reconciliation": n["opening_reconciliation"],
                 }
             )
             item["refusals"].extend({"day": day, **v} for v in n["refusals"])
@@ -167,6 +219,24 @@ def main():
                 out / "matrix.json",
                 {"risk": risk, "continuous_paper_accepted": False, "cases": results},
             )
+    if any(item["differences"] for item in results):
+        raise SystemExit("Native/reference differences retained in matrix.json")
+    for item in results:
+        if not item["stopped"]:
+            continue
+        expected_ad_block = (
+            bool(args.execution_source)
+            and item["name"].startswith("w2024-")
+            and item["stopped"]["code"] == "PAPER_AD_NOT_ADMITTED"
+        )
+        expected_legacy_block = (
+            not args.execution_source
+            and args.cash_dividend_policy == "reject"
+            and item["name"] == "w2022-equal-weight"
+            and item["stopped"]["code"] == "PAPER_ACTION_TIMING_UNSUPPORTED"
+        )
+        if not expected_ad_block and not expected_legacy_block:
+            raise SystemExit("Unexpected stopped case retained in matrix.json: " + item["name"])
 
 
 if __name__ == "__main__":

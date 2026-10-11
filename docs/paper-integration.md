@@ -10,7 +10,7 @@
 
 `Decision` / `CloseInput` 新增 `clock_basis`。研究模式是 `retrospective_model`，原有 `observed_at` / `received_at` 字段在此模式下**明确为模拟可用时刻，不是源接收时间**。实际来源时钟、研究状态假设和覆盖边界仍在不可变 AD 导出及收据来源中。界面显示“非在线新鲜度证明”，不把历史时钟改名为在线实时数据。
 
-公司行动连续应收、股数变更和到账恢复尚未开放。有登记日权益时停在首次可能入账日。新模拟模式允许正常完成登记日；除权/到账区间只有已提交登记日原生账户证明该证券权益为零才可继续，收据保留登记日 checkpoint 和数量。它不把事件改成“无公司行动”。未知权益仍停止。字段缺失、过期、未知规则和完整性冲突仍停止。
+现金公司行动已增补明确的原生续接政策，AD 单日执行用途收据入口与完整限制见 [paper-execution.md](paper-execution.md)。原默认政策仍拒绝有权益公司行动；显式 `gross_zero_withholding_0900` 会由原生生命周期处理成本、应收和支付。未知字段、过期、未知规则、非现金行动及不支持的时序仍停止。
 
 ## 冻结模拟风控 v1
 
@@ -51,4 +51,4 @@ PYTHONPATH=src /path/to/native/python -B -m ashare_quant.paper --root /path/to/s
 
 旧保守门禁复现：`PYTHONPATH=src /path/to/native/python -B scripts/verify_paper_integration.py --output <新目录> [--owner-input-dir <目录>]`。新全窗模拟：`PYTHONPATH=src /path/to/native/python -B scripts/verify_paper_research.py --output <新目录> --owner-input-dir <固定AD导出目录> --reference-dir <固定真实策略baseline目录>`。两者都保留全部八证券、三策略、三窗，不跳过失败日。新矩阵每天检查四个新事件、日结计数、成交ID唯一、信号、成交/费用、可卖持仓、现金及NAV，并验证最终日重复请求的完整报告相等。
 
-实际整合验证：九组中八组完整 485 个账户交易日、278 笔唯一成交，与固定真实策略参考逐日零差异。2022等权前26日13笔一致，2022-04-08因000651.XSHE登记日持有3500股停下，未改已提交账本。动量/趋势登记日零持仓证明允许继续。新增卖出成交后现金释放、跳空资金不足只拒绝本笔、成交中SIGKILL恢复及重复请求测试；全部401 pytest通过、86依赖项跳过。JQ九组参考已由独立任务完成，当前只读其固定交接；2022等权分红金额/税口径另行核对。现有明确历史研究模型不能升级为在线已验。剩余为最终AD执行用途时点/增量契约、有权益公司行动的原生续接与独立人类验收。
+先前整合完成八组完整窗口及2022等权前26日；该基线保留在历史交接中。当前修订消费 AD 400ebcf0 与 AQ 90f6ce9，补齐有权益现金分红和单日交付，具体契约与复现见 [paper-execution.md](paper-execution.md)。验证产物记录每次完整运行，不把旧统计用于新版本，也不将模型回归等同于在线已验或跨平台完全一致。

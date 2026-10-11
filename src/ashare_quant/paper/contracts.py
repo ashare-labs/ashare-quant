@@ -65,6 +65,7 @@ class SessionConfig(Contract):
     data_mode: Literal["synthetic_fixture", "historical_research"] = "synthetic_fixture"
     strategy_id: StrategyId | None = None
     replay_binding_sha256: Sha | None = None
+    cash_dividend_policy: Literal["reject", "gross_zero_withholding_0900"] = "reject"
 
     @model_validator(mode="after")
     def scope(self):
@@ -95,9 +96,21 @@ class DecisionRow(Contract):
     upper_limit: Money | None
     rule_version: str | None
     actions_known_absent: bool = Field(strict=True)
-    action_effect: Literal["none", "zero_entitlement"] = "none"
+    action_effect: Literal["none", "zero_entitlement", "native_cash_dividend"] = "none"
     facts_available_at: AwareDatetime
     round_lot: Literal[100] = 100
+
+
+class CashDividend(Contract):
+    security: Security
+    record_date: date
+    ex_date: date
+    pay_date: date
+    cash_per_share: Money
+    record_quantity: Quantity
+    record_checkpoint: Sha
+    source_event: dict
+    model_cash_available_at: AwareDatetime
 
 
 class Decision(Contract):
@@ -116,6 +129,7 @@ class Decision(Contract):
     evidence_kind: Literal["synthetic", "historical_research"] = "synthetic"
     clock_basis: Literal["synthetic_clock", "retrospective_model"] = "synthetic_clock"
     strategy_receipt: dict | None = None
+    cash_dividends: tuple[CashDividend, ...] = ()
     rows: tuple[DecisionRow, ...] = Field(min_length=1, max_length=10)
     targets: dict[Security, Quantity]
     reason: str = Field(min_length=1, max_length=1024)
