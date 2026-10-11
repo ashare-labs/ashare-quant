@@ -24,10 +24,11 @@ def main():
     risk = json.loads((REPO / "examples/daily-paper-research-risk.json").read_text())
     service = PaperService(output / "store")
     cases = {}
-    for name, window, policy in (
-        ("dividend-review", "w2022", risk),
-        ("missing-state-review", "w2024", risk),
-        ("conservative-review", "w2020", {}),
+    for name, window, policy, strategy in (
+        ("dividend-review", "w2022", risk, "equal-weight"),
+        ("missing-state-review", "w2024", risk, "equal-weight"),
+        ("conservative-review", "w2020", {}, "equal-weight"),
+        ("observation-review", "w2024", risk, "trend"),
     ):
         item = bind(
             service,
@@ -39,12 +40,16 @@ def main():
             source / spec["wheel"],
             spec["wheel_sha"],
             spec["ad_commit"],
-            "equal-weight",
+            strategy,
             window,
             name,
             accepted_assumptions=spec["accepted_assumptions"],
             accept_listing_continuity=spec["accept_listing_continuity"],
             cash_credit_policy=spec["cash_credit_policy"],
+            consumer_contract=source / spec["consumer_contract"]
+            if spec.get("consumer_contract")
+            else None,
+            consumer_contract_sha=spec.get("consumer_contract_sha"),
             risk=policy,
         )
         sid, parent = item["session_id"], None

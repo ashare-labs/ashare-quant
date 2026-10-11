@@ -49,6 +49,8 @@ def main():
         execution.add_argument("--" + field, required=True)
     execution.add_argument("--accept-assumption", action="append", default=[])
     execution.add_argument("--accept-listing-continuity", action="store_true")
+    execution.add_argument("--consumer-contract")
+    execution.add_argument("--consumer-contract-sha")
     receive = commands.add_parser("ingest")
     receive.add_argument("--session", required=True)
     receive.add_argument("--day", required=True)
@@ -96,6 +98,8 @@ def main():
             accept_listing_continuity=args.accept_listing_continuity,
             cash_credit_policy=args.cash_credit_policy,
             risk=risk,
+            consumer_contract=args.consumer_contract,
+            consumer_contract_sha=args.consumer_contract_sha,
         )
     elif args.command == "ingest":
         from .execution import ingest

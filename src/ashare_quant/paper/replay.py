@@ -182,6 +182,8 @@ def provenance(binding, inputs):
             else None,
             "source_sha256": binding["source_sha256"],
             "ad_admission": inputs.registry["description"]["admission"],
+            "observation_admission": inputs.observation_admission,
+            "consumer_contract": inputs.registry["spec"].get("consumer_contract"),
         }
     return result
 
@@ -291,6 +293,11 @@ def build(service, sid, day, parent):
             "targets": quantities,
         }
     )
+    order_permissions = (
+        inputs.order_permissions(day, signal["targets"], quantities)
+        if hasattr(inputs, "order_permissions")
+        else []
+    )
     receipt = {
         "schema": "paper-strategy-receipt.v1",
         "strategy_id": config.strategy_id,
@@ -341,8 +348,8 @@ def build(service, sid, day, parent):
                 eligible=row["eligible"] if hasattr(inputs, "packet") else True,
                 suspended=row["suspended"],
                 is_st=row["is_st"] if hasattr(inputs, "packet") else False,
-                lower_limit=str(row["lower_limit"]),
-                upper_limit=str(row["upper_limit"]),
+                lower_limit=str(row["lower_limit"]) if row["lower_limit"] is not None else None,
+                upper_limit=str(row["upper_limit"]) if row["upper_limit"] is not None else None,
                 rule_version="explicit-owner-research-model" if historical else "synthetic-rules",
                 actions_known_absent=security not in zero_entitlement
                 and not any(a["security"] == security for a in cash_dividends),
@@ -369,6 +376,7 @@ def build(service, sid, day, parent):
         strategy_receipt_sha256=digest(receipt),
         strategy_receipt=receipt,
         cash_dividends=cash_dividends,
+        order_admissions=order_permissions,
         data_manifest_sha256=inputs.sha256,
         rows=rows,
         targets=signal["targets"],

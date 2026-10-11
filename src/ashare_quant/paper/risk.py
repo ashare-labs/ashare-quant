@@ -87,17 +87,20 @@ def decision_gate(config, decision):
             and row.facts_available_at <= decision.logical_at,
             "PAPER_DATA_NOT_VISIBLE",
         )
-        require(
-            row.eligible is True and row.suspended is False and row.is_st is False,
-            "PAPER_TRADING_STATE_BLOCKED",
-        )
-        require(
-            row.lower_limit is not None
-            and row.upper_limit is not None
-            and 0 < D(row.lower_limit) <= D(row.upper_limit)
-            and bool(row.rule_version),
-            "PAPER_TRADING_RULES_UNKNOWN",
-        )
+        if config.execution_admission_scope == "per_order":
+            require(row.eligible is True, "PAPER_TRADING_STATE_BLOCKED")
+        else:
+            require(
+                row.eligible is True and row.suspended is False and row.is_st is False,
+                "PAPER_TRADING_STATE_BLOCKED",
+            )
+            require(
+                row.lower_limit is not None
+                and row.upper_limit is not None
+                and 0 < D(row.lower_limit) <= D(row.upper_limit)
+                and bool(row.rule_version),
+                "PAPER_TRADING_RULES_UNKNOWN",
+            )
         require(
             row.actions_known_absent
             or row.action_effect == "zero_entitlement"
@@ -105,6 +108,41 @@ def decision_gate(config, decision):
             and row.security in events,
             "PAPER_ACTION_COVERAGE_UNSUPPORTED",
         )
+
+
+def order_permission(config, decision, security, side):
+    if config.execution_admission_scope != "per_order":
+        return
+    matches = [
+        r
+        for r in decision.order_admissions
+        if r["row"]["security"] == security and r["report"]["admitted_side"] == side
+    ]
+    require(len(matches) == 1, "PAPER_AD_ORDER_SCOPE")
+    permission = matches[0]
+    report, admission, row = permission["report"], permission["admission"], permission["row"]
+    day = decision.trading_date.isoformat()
+    require(
+        admission["ready"]
+        and report["admission_scope"] == "single_order"
+        and report["as_of"] == day + "T09:00:00+08:00"
+        and row["date"] == day
+        and admission["requests"] == [{"date": day, "security": security, "side": side}],
+        "PAPER_AD_ORDER_SCOPE",
+    )
+    before = indexed(decision.rows, config.universe)[security]
+    require(
+        before.eligible is True and before.suspended is False and before.is_st is False,
+        "PAPER_TRADING_STATE_BLOCKED",
+    )
+    limit_name = "upper_limit" if side == "BUY" else "lower_limit"
+    require(
+        getattr(before, limit_name) is not None
+        and getattr(before, limit_name) == row[limit_name]["value"]
+        and row["suspended"]["value"] is False
+        and row["is_st"]["value"] is False,
+        "PAPER_AD_ORDER_SCOPE",
+    )
 
 
 def close_gate(config, decision, close):
@@ -153,6 +191,14 @@ def pretrade(config, decision, account):
 
 
 def _pretrade(config, decision, account):
+    if config.execution_admission_scope == "per_order":
+        count = 0
+        for security in config.universe:
+            delta = decision.targets[security] - account["positions"][security]["quantity"]
+            if delta:
+                count += 1
+                order_permission(config, decision, security, "BUY" if delta > 0 else "SELL")
+        require(count == len(decision.order_admissions), "PAPER_AD_ORDER_SCOPE")
     if config.risk.profile == "target_then_native_cash_v1":
         return target_pretrade(config, decision, account)
     rows, risk = indexed(decision.rows, config.universe), config.risk
@@ -162,12 +208,16 @@ def _pretrade(config, decision, account):
     holdings = 0
     for sid in config.universe:
         pos = account["positions"].get(sid, {"quantity": 0, "sellable": 0})
-        target, qty, upper = decision.targets[sid], pos["quantity"], D(rows[sid].upper_limit)
+        target, qty = decision.targets[sid], pos["quantity"]
         pending = sum(
             o["remaining"]
             for o in account["open_orders"]
             if o["security"] == sid and o["side"] == "BUY"
         )
+        if not max(qty, target) + pending:
+            continue
+        require(rows[sid].upper_limit is not None, "PAPER_TRADING_RULES_UNKNOWN")
+        upper = D(rows[sid].upper_limit)
         exposure = (max(qty, target) + pending) * upper
         gross += exposure
         holdings += exposure > 0

@@ -64,6 +64,10 @@ def main():
                 accepted_assumptions=contract["accepted_assumptions"],
                 accept_listing_continuity=contract["accept_listing_continuity"],
                 cash_credit_policy=contract["cash_credit_policy"],
+                consumer_contract=fixed / contract["consumer_contract"]
+                if contract.get("consumer_contract")
+                else None,
+                consumer_contract_sha=contract.get("consumer_contract_sha"),
                 risk=risk,
             )
             sid = delivery["session_id"]
@@ -227,7 +231,7 @@ def main():
         expected_ad_block = (
             bool(args.execution_source)
             and item["name"].startswith("w2024-")
-            and item["stopped"]["code"] == "PAPER_AD_NOT_ADMITTED"
+            and item["stopped"]["code"] in {"PAPER_AD_NOT_ADMITTED", "PAPER_AD_ORDER_NOT_ADMITTED"}
         )
         expected_legacy_block = (
             not args.execution_source

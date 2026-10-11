@@ -1,4 +1,4 @@
-"""Isolated, offline AD v12 public API reader. Never imports native accounting."""
+"""Isolated, offline fixed AD public API reader. Never imports native accounting."""
 
 import hashlib
 import json
@@ -40,22 +40,63 @@ def read(request):
         "cash_credit_policy": spec["cash_credit_policy"],
     }
     admission = owner.preflight(window, purpose="retrospective_simulation", **opts)
+    per_order = spec.get("consumer_contract") is not None
+    observation = (
+        owner.preflight_orders(window, [], purpose="retrospective_simulation", **opts)
+        if per_order
+        else admission
+    )
     base = research.read_window(window, role=ROLE)
     descriptor = owner.descriptor()
     if request["operation"] == "describe":
         return {
             "descriptor": descriptor,
             "admission": admission,
+            "observation_admission": observation,
             "window": base["window"],
             "securities": base["securities"],
             "listing": base["listing"],
             "limitations": base["limitations"],
             "source_role": "incrementally_delivered_retrospective_simulation",
         }
-    if not admission["ready"]:
-        return {"blocked": admission}
-    engine = owner.read_window(window, purpose="retrospective_simulation", **opts)
-    if not engine["report"]["simulation_admitted"]:
+    if request["operation"] == "orders":
+        if not per_order:
+            raise ValueError("AD_ORDER_API_NOT_BOUND")
+        requests = request["orders"]
+        if any(r["date"] != request["day"] for r in requests):
+            raise ValueError("AD_ORDER_DAY_MISMATCH")
+        checked = owner.preflight_orders(
+            window, requests, purpose="retrospective_simulation", **opts
+        )
+        if not checked["ready"]:
+            return {"blocked": checked}
+        permissions = []
+        for r in requests:
+            state = owner.order_state(
+                window, r["security"], as_of=r["date"] + "T09:00:00+08:00", side=r["side"], **opts
+            )
+            permissions.append(
+                {
+                    **state,
+                    "response_sha256": receipt("order_state", r["security"], state)[
+                        "response_sha256"
+                    ],
+                    "admission": {
+                        **state["admission"],
+                        "issues": [i for i in state["admission"]["issues"] if i["blocking"]],
+                        "observation_warning_count": sum(
+                            not i["blocking"] for i in state["admission"]["issues"]
+                        ),
+                    },
+                }
+            )
+        return {"admission": checked, "permissions": permissions}
+    if not observation["ready"]:
+        return {"blocked": observation}
+    engine = owner.read_window(
+        window, purpose="signal_research" if per_order else "retrospective_simulation", **opts
+    )
+    if not per_order and not engine["report"]["simulation_admitted"]:
         raise ValueError("AD_SIMULATION_NOT_ADMITTED")
     day = request["day"]
     history, rows, reads = {}, {}, []
@@ -73,7 +114,22 @@ def read(request):
         index = sessions.index(day)
         if [r["date"] for r in h["rows"]] != sessions[index - 120 : index]:
             raise ValueError("AD_HISTORY_WATERMARK_OR_COVERAGE")
-        state = owner.state(window, security, as_of=day + "T09:00:00+08:00", **opts)
+        state = (
+            {
+                "row": next(
+                    r
+                    for r in engine["execution_states"]
+                    if r["security"] == security and r["date"] == day
+                ),
+                "report": {
+                    **engine["report"],
+                    "as_of": day + "T09:00:00+08:00",
+                    "admission_scope": "observation_only",
+                },
+            }
+            if per_order
+            else owner.state(window, security, as_of=day + "T09:00:00+08:00", **opts)
+        )
         opening = research.opening(window, security, as_of=day + "T09:30:00+08:00")
         closing = research.closing(window, security, as_of=day + "T15:30:00+08:00")
         bar = owner.history(
@@ -101,7 +157,7 @@ def read(request):
         ):
             raise ValueError("AD_LISTING_SCOPE_UNADMITTED")
         facts = state["row"]
-        if any(
+        if not per_order and any(
             facts[f]["value"] is None for f in ("is_st", "suspended", "upper_limit", "lower_limit")
         ):
             raise ValueError("AD_REQUIRED_STATE_UNAVAILABLE")
@@ -155,8 +211,9 @@ def read(request):
         "history": history,
         "rows": rows,
         "actions": actions,
-        "admission": admission,
-        "report": engine["report"],
+        "admission": observation,
+        "whole_window_admission": admission,
+        "report": {**engine["report"], "observation_admitted": observation["ready"]},
         "action_coverage": engine["action_coverage"],
         "reads": reads,
     }

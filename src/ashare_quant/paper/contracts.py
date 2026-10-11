@@ -66,6 +66,7 @@ class SessionConfig(Contract):
     strategy_id: StrategyId | None = None
     replay_binding_sha256: Sha | None = None
     cash_dividend_policy: Literal["reject", "gross_zero_withholding_0900"] = "reject"
+    execution_admission_scope: Literal["whole_window", "per_order"] = "whole_window"
 
     @model_validator(mode="after")
     def scope(self):
@@ -73,6 +74,10 @@ class SessionConfig(Contract):
             raise ValueError("Strategy and local replay binding must be supplied together")
         if self.data_mode == "historical_research" and self.strategy_id is None:
             raise ValueError("Historical replay requires a pinned local owner binding")
+        if self.execution_admission_scope == "per_order" and (
+            self.data_mode != "historical_research" or self.strategy_id is None
+        ):
+            raise ValueError("Per-order AD admission requires a pinned historical strategy binding")
         if len(set(self.universe)) != len(self.universe) or Decimal(self.initial_cash) <= 0:
             raise ValueError("Unique securities and positive initial cash required")
         for key in ("commission_rate", "sell_tax_rate"):
@@ -130,6 +135,7 @@ class Decision(Contract):
     clock_basis: Literal["synthetic_clock", "retrospective_model"] = "synthetic_clock"
     strategy_receipt: dict | None = None
     cash_dividends: tuple[CashDividend, ...] = ()
+    order_admissions: tuple[dict, ...] = ()
     rows: tuple[DecisionRow, ...] = Field(min_length=1, max_length=10)
     targets: dict[Security, Quantity]
     reason: str = Field(min_length=1, max_length=1024)

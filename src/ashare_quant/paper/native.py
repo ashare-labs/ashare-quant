@@ -193,8 +193,8 @@ class DaySource(AbstractDataSource):
             **{k: float(getattr(r, k)) for k in ("open", "high", "low", "close")},
             "datetime": int(dt.strftime("%Y%m%d") + "000000"),
             "volume": r.volume,
-            "limit_up": float(facts.upper_limit),
-            "limit_down": float(facts.lower_limit),
+            "limit_up": float(facts.upper_limit) if facts.upper_limit is not None else np.nan,
+            "limit_down": float(facts.lower_limit) if facts.lower_limit is not None else np.nan,
         }
 
     def get_open_auction_bar(self, instrument, dt):
@@ -207,8 +207,12 @@ class DaySource(AbstractDataSource):
         return {
             "datetime": dt,
             "open": float(self.after[sid].open),
-            "limit_up": float(self.before[sid].upper_limit),
-            "limit_down": float(self.before[sid].lower_limit),
+            "limit_up": float(self.before[sid].upper_limit)
+            if self.before[sid].upper_limit is not None
+            else np.nan,
+            "limit_down": float(self.before[sid].lower_limit)
+            if self.before[sid].lower_limit is not None
+            else np.nan,
         }
 
     def history_bars(
@@ -554,6 +558,9 @@ class PaperMod(AbstractMod):
         for sid, delta in sorted(deltas, key=lambda x: (x[1] >= 0, x[0])):
             if not delta:
                 continue
+            from .risk import order_permission
+
+            order_permission(self.session, self.decision, sid, "BUY" if delta > 0 else "SELL")
             self.submitting = (sid, abs(delta), "BUY" if delta > 0 else "SELL")
             before_order = snapshot(self.env, self.session.universe)
             if self.session.risk.profile == "target_then_native_cash_v1":

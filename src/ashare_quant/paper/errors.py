@@ -2,6 +2,18 @@
 
 MESSAGES = {
     "PAPER_EXECUTION_DAY_MISSING": "当日 AD 数据收据尚未接收；账户没有推进。",
+    "PAPER_AD_ORDER_NOT_ADMITTED": (
+        "当前实际目标订单缺少所需执行字段；账户未提交。",
+        "检查该订单证券、日期和买卖方向；无订单观察可继续，但未知字段不能由敏感性情景补齐。",
+    ),
+    "PAPER_AD_ORDER_SCOPE": (
+        "订单与当日 AD 单笔许可不符；执行已拒绝。",
+        "核对固定证券、日期、方向与原生目标，不复用其他日或方向的许可。",
+    ),
+    "PAPER_AD_CONTRACT_CHANGED": (
+        "AD 消费契约或引用与冻结版本不符。",
+        "重新核对已审阅契约、数据 binding、事件指针和缺口文件。",
+    ),
     "PAPER_AD_NOT_ADMITTED": "AD 当前固定补充包未准入该窗口；未知字段保持为空。",
     "PAPER_AD_READER_REJECTED": "AD 公共读取器拒绝了此次输入或用途。",
     "PAPER_DELIVERY_CHANGED": "已接收的单日数据内容与固定收据哈希不符。",
@@ -33,12 +45,16 @@ def error_value(exc):
     code = getattr(exc, "code", "PAPER_FAILURE")
     risk = code.startswith("PAPER_") and (code.endswith("_LIMIT") or code == "PAPER_CASH_BUFFER")
     message = MESSAGES.get(code, "独立风控拒绝当前目标；账户未提交。" if risk else str(exc))
+    action = None
+    if isinstance(message, tuple):
+        message, action = message
     return {
         "code": code,
         "message": message,
         "detail": str(exc),
         "retryable": False,
-        "next_action": (
+        "next_action": action
+        or (
             "核对冻结风控与策略参数；不能在原会话中放宽风控后重试。"
             if risk
             else "检查数据/版本与已提交账户。中断可先恢复同一冻结日；修改输入或策略须新建会话。"

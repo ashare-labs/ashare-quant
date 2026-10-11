@@ -39,7 +39,7 @@ def copy_package(binding, expected, target):
     atomic(target / "binding.json", raw)
 
 
-def reader(root, spec, operation, day=None):
+def reader(root, spec, operation, day=None, orders=None):
     # AD's new reader is isolated from the existing pinned AQ/RQ dependency set.
     # Every executable wheel file is checked before this offline child starts.
     for relative, expected in spec["runtime_inventory"].items():
@@ -53,7 +53,15 @@ def reader(root, spec, operation, day=None):
     try:
         run = subprocess.run(
             [sys.executable, "-I", "-S", "-B", "-c", boot, json.dumps(paths)],
-            input=canonical({"root": str(root), "spec": spec, "operation": operation, "day": day}),
+            input=canonical(
+                {
+                    "root": str(root),
+                    "spec": spec,
+                    "operation": operation,
+                    "day": day,
+                    "orders": orders,
+                }
+            ),
             capture_output=True,
             timeout=60,
             env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1", "OPENBLAS_NUM_THREADS": "1"},
@@ -68,6 +76,78 @@ def reader(root, spec, operation, day=None):
         json.dumps(result.get("error"), ensure_ascii=False),
     )
     return result["result"]
+
+
+def contract_metadata(path, expected, research_binding, execution_binding, ad_commit):
+    """Bind the reviewed consumer contract; resolve references against sealed data."""
+    raw = regular(Path(path))
+    require(sha(raw) == expected, "PAPER_AD_CONTRACT_CHANGED")
+    contract = json.loads(raw)
+    require(
+        contract["schema"] == "ad.daily-execution-consumer-contract.v2"
+        and contract["source_commit"] == ad_commit
+        and contract["path_base"] == "package_root",
+        "PAPER_AD_CONTRACT_CHANGED",
+    )
+    require(
+        contract["research_binding_sha256"] == sha(regular(Path(research_binding)))
+        and contract["binding_sha256"] == sha(regular(Path(execution_binding))),
+        "PAPER_AD_CONTRACT_CHANGED",
+    )
+    refs = {}
+    for field in ("existing_cash_event_contract", "order_impact_summary"):
+        rel = Path(contract[field])
+        require(not rel.is_absolute() and ".." not in rel.parts, "PAPER_AD_SOURCE_PATH")
+        refs[field] = json.loads(regular(Path(path).parent / rel))
+    rel = Path(contract["unresolved"]["details"])
+    require(not rel.is_absolute() and ".." not in rel.parts, "PAPER_AD_SOURCE_PATH")
+    gaps = json.loads(regular(Path(path).parent / rel))
+    cash = refs["existing_cash_event_contract"]
+    for name, binding in (
+        ("research_event", research_binding),
+        ("execution_event", execution_binding),
+    ):
+        source, pointer = cash["paths"][name].split("#")
+        allowed = "binding-data.json" if name == "research_event" else "execution-data.json"
+        require(Path(source).name == allowed, "PAPER_AD_CONTRACT_CHANGED")
+        event = json.loads(regular(Path(binding).parent / allowed))
+        try:
+            for part in pointer.strip("/").split("/"):
+                event = event[int(part)] if isinstance(event, list) else event[part]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise DomainError(
+                "PAPER_AD_CONTRACT_CHANGED", "Invalid cash event pointer", 409
+            ) from exc
+        keys = (
+            "security",
+            "type",
+            "announcement_date",
+            "record_date",
+            "ex_date",
+            "payment_date",
+            "cash_per_share",
+            "ex_price_cash_deduction",
+            "bonus_share_ratio",
+            "capitalization_share_ratio",
+        )
+        require(
+            all(event.get(k) == cash["source_event"][k] for k in keys),
+            "PAPER_AD_CONTRACT_CHANGED",
+            "Cash event pointer does not resolve to the reviewed event",
+        )
+    actual = json.loads(regular(Path(execution_binding).parent / "execution-data.json"))
+    cells = {
+        (r["security"], r["date"], f)
+        for r in actual["states"]
+        for f in ("is_st", "upper_limit", "lower_limit")
+        if r[f]["value"] is None
+    }
+    require(
+        cells == {(r["security"], r["date"], r["field"]) for r in gaps["exact_issues"]}
+        and len(cells) == contract["unresolved"]["field_count"],
+        "PAPER_AD_CONTRACT_CHANGED",
+    )
+    return {"sha256": expected, "contract": contract, "references": refs, "exact_gap_scope": gaps}
 
 
 def bind(
@@ -88,6 +168,8 @@ def bind(
     accept_listing_continuity,
     cash_credit_policy,
     risk=None,
+    consumer_contract=None,
+    consumer_contract_sha=None,
 ):
     from .replay import strategy_version
 
@@ -113,12 +195,29 @@ def bind(
         "accept_listing_continuity": accept_listing_continuity,
         "cash_credit_policy": cash_credit_policy,
     }
+    require(bool(consumer_contract) == bool(consumer_contract_sha), "PAPER_AD_CONTRACT_CHANGED")
+    if consumer_contract:
+        spec["consumer_contract"] = contract_metadata(
+            consumer_contract, consumer_contract_sha, research_binding, execution_binding, ad_commit
+        )
     source_id = digest(spec)
     source = service.root / "sources" / source_id
     source.mkdir(parents=True, exist_ok=True)
     with lock(source / "import.lock"):
         copy_package(research_binding, research_sha, source / "research")
         copy_package(execution_binding, execution_sha, source / "execution")
+        if consumer_contract:
+            directory = source / "consumer"
+            directory.mkdir(exist_ok=True)
+            atomic(directory / "consumer-contract.json", regular(Path(consumer_contract)))
+            meta = spec["consumer_contract"]
+            for field, value in meta["references"].items():
+                dest = directory / meta["contract"][field]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                atomic(dest, value)
+            dest = directory / meta["contract"]["unresolved"]["details"]
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            atomic(dest, meta["exact_gap_scope"])
         atomic(source / "owner.whl", wheel_raw)
         inventory = {}
         with zipfile.ZipFile(source / "owner.whl") as archive:
@@ -176,6 +275,7 @@ def bind(
         universe=tuple(manifest["securities"]),
         data_mode="historical_research",
         cash_dividend_policy="gross_zero_withholding_0900",
+        execution_admission_scope="per_order" if consumer_contract else "whole_window",
         commission_rate=fees["buy_commission_rate"],
         minimum_commission=fees["minimum_commission"],
         sell_tax_rate=fees["sell_tax_rate"],
@@ -207,7 +307,8 @@ class ExecutionInputs:
         scope = binding["window"]
         self.days = [x for x in self.calendar if scope["start"] <= x <= scope["end"]]
         self.previous = {x: self.calendar[self.calendar.index(x) - 1] for x in self.days}
-        self.gaps = d["admission"]["issues"]
+        self.observation_admission = d.get("observation_admission", d["admission"])
+        self.gaps = [i for i in self.observation_admission["issues"] if i["blocking"]]
         self.sha256 = binding["source_id"]
         self.actions = []
         self.packet = None
@@ -247,7 +348,28 @@ class ExecutionInputs:
         self.directory = service.root / sid / "deliveries"
 
     def preflight(self):
-        return {**self.registry["description"]["admission"], "gaps": self.gaps}
+        return {**self.observation_admission, "gaps": self.observation_admission["issues"]}
+
+    def order_permissions(self, day, targets, quantities):
+        if not self.registry["spec"].get("consumer_contract"):
+            return []
+        requests = [
+            {"date": day, "security": s, "side": "BUY" if targets[s] > quantities[s] else "SELL"}
+            for s in self.ids
+            if targets[s] != quantities[s]
+        ]
+        result = reader(self.source, self.registry["spec"], "orders", day, requests)
+        if "blocked" in result:
+            blocked = result["blocked"]
+            detail = {
+                **blocked,
+                "issues": [i for i in blocked["issues"] if i["blocking"]],
+                "observation_warning_count": sum(not i["blocking"] for i in blocked["issues"]),
+            }
+            raise DomainError(
+                "PAPER_AD_ORDER_NOT_ADMITTED", json.dumps(detail, ensure_ascii=False), 409
+            )
+        return result["permissions"]
 
     def deliveries(self):
         result, parent = [], None
@@ -292,7 +414,12 @@ class ExecutionInputs:
         self.sha256 = digest(packet)
         self.actions = self.packet["actions"]
         require(
-            self.packet["admission"]["ready"] and self.packet["report"]["simulation_admitted"],
+            self.packet["admission"]["ready"]
+            and (
+                self.packet["report"].get("observation_admitted")
+                if self.registry["spec"].get("consumer_contract")
+                else self.packet["report"]["simulation_admitted"]
+            ),
             "PAPER_AD_NOT_ADMITTED",
         )
 
@@ -316,6 +443,7 @@ def fork(service, sid, account, risk):
     binding, inputs = load(service, sid, config)
     spec = inputs.registry["spec"]
     source = inputs.source
+    contract = spec.get("consumer_contract")
     return bind(
         service,
         service.root / sid / "replay/manifest.json",
@@ -333,6 +461,8 @@ def fork(service, sid, account, risk):
         accept_listing_continuity=spec["accept_listing_continuity"],
         cash_credit_policy=spec["cash_credit_policy"],
         risk=risk,
+        consumer_contract=source / "consumer/consumer-contract.json" if contract else None,
+        consumer_contract_sha=contract["sha256"] if contract else None,
     )
 
 
@@ -378,7 +508,11 @@ def ingest(service, sid, day, expected_parent, *, fault=None):
         require(
             data["day"] == day
             and data["admission"]["ready"]
-            and data["report"]["simulation_admitted"],
+            and (
+                data["report"].get("observation_admitted")
+                if inputs.registry["spec"].get("consumer_contract")
+                else data["report"]["simulation_admitted"]
+            ),
             "PAPER_AD_NOT_ADMITTED",
         )
         packet = {

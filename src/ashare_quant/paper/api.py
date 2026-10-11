@@ -62,6 +62,7 @@ def create_app(root):
             "data_modes": ["synthetic_fixture", "historical_research"],
             "historical_replay_enabled": True,
             "ad_daily_delivery_enabled": True,
+            "ad_execution_gate": "fixed_daily_observation_then_each_actual_order_security_date_side",
             "cash_dividend_policy": "explicit_gross_zero_withholding_payment_date_0900",
             "historical_pit_verified": False,
             "execution_permission": False,
@@ -71,7 +72,7 @@ def create_app(root):
             "broker_enabled": False,
             "strategy_execution": "pinned_shared_daily_signals",
             "awaiting": [
-                "AD_w2024_four_XSHG_state_cells_in_current_pinned_supplement",
+                "AD_w2024_unknown_required_order_fields_not_observation_day_blanket_rejection",
                 "source_qualified_live_or_historical_delivery_timestamps",
                 "independent_quant_web_human_acceptance",
             ],
