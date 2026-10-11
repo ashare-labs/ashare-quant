@@ -81,6 +81,8 @@ export ASHARE_QUANT_M2_STORE="$PWD/.state/owner-store"
 
 输入、返回值和资源限制见[策略编写](docs/strategies.md)。真实任务使用 `job-create`、`job-worker --once`、`job-result JOB_ID`，请求与恢复说明见[研究任务](docs/research.md)。
 
+**多股整链题。** 独立本机入口支持固定八股的等权、动量和均线过滤题，信号、共享现金、原生订单与权益逐日留痕。准备真实 AD 输入后按[日频多股验收](docs/daily-portfolio.md)运行；合成运行不等于真实数据或 JQ 一致验收。
+
 **诊断与开发。** `source-diagnostics-capabilities` 查看配置；只读检查需独立固定的 reader 环境及已有数据，见[数据诊断](docs/diagnostics.md)。测试和发行包构建见[开发与打包](docs/development.md)。
 
 **连续账户基础验收。** 独立的 `python -m ashare_quant.paper` 入口可验证合成日意图、原生跨日账户、故障恢复与风险告警，见[日频连续模拟契约](docs/daily-paper.md)。真实数据、策略调度和人类前端联验仍待接入，能力接口明确返回未完成真实连续模拟验收。

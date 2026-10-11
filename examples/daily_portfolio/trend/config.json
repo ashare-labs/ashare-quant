@@ -1,0 +1,9 @@
+{
+  "id": "trend",
+  "title": "趋势过滤/持币切换",
+  "holdings_max": 8,
+  "schedule": "every output exchange session",
+  "formula": "SMA120_i = sum(C_i[p-119:p+1])/120; weight_i = 0.98/8 if C_i[p] > SMA120_i else 0; unused slots stay in cash, no redistribution",
+  "lookback_sessions": 120,
+  "equality": "cash"
+}

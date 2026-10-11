@@ -1,0 +1,8 @@
+{
+  "id": "equal-weight",
+  "title": "定期等权再平衡",
+  "holdings": 8,
+  "schedule": "first output session, then first exchange session of each calendar month",
+  "formula": "each of the eight frozen securities has weight 0.98/8; no rank/return filter",
+  "lookback_sessions": 1
+}

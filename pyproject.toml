@@ -90,6 +90,7 @@ include = [
   "/docs/diagnostics.md", "/docs/development.md", "/docs/licensing.md",
   "/docs/second-batch.md",
   "/docs/daily-paper.md",
+  "/docs/daily-portfolio.md",
   "/docs/rqalpha/RQAlpha-LICENSE.txt",
 ]
 
