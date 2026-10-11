@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from importlib.metadata import version
 from pathlib import Path
 
 
@@ -21,6 +22,7 @@ def main():
         assert state["account"]["cash"] == "9000.00"
         assert len(state["fills"]) == 1
         assert manifest["real_strategy_executed"] is False
+        assert manifest["backend_version"] == version("ashare-quant")
         print(json.dumps({"result": "PASS", "scope": "synthetic_fixture_only",
                           "is_test_double": True, "real_strategy_executed": False,
                           "cash": "9000.00", "fills": 1,

@@ -1,6 +1,6 @@
-"""Trusted isolated wrapper around the sealed parameter execution revision. Loaded by filename, not package import.
+"""Trusted isolated wrapper around the installed source-pinned executor. Loaded by filename, not package import.
 
-Only the frozen executor's modules enter this interpreter. Checkpoint decoding is
+Only explicitly pinned package roots enter this interpreter. Checkpoint decoding is
 confined here, with local writer exclusion and frozen session/header checks.
 This process boundary is not an adversarial Python-code sandbox.
 """
@@ -52,32 +52,30 @@ def execute(args):
 
     install_network_guard()
     from ashare_data import Store as DataStore
-    from ashare_data.m2_types import canonical_hash
 
     from ashare_quant import __version__
     from ashare_quant.identity import source_inventory, source_sha256
     from ashare_quant.m2.common import digest, require
     from ashare_quant.m2.journal import Session
     from ashare_quant.m2.owner import OwnerClient, prepare
-    from ashare_quant.m2.owner_wire import release, review, verify_runtime
-    from ashare_quant.m2.parameter_policy import BandParameters
+    from ashare_quant.m2.owner_wire import verify_runtime
+    from ashare_quant.m2.parameter_policy import check_strategy, parse_parameters
+    from ashare_quant.m2.portable import LocalDataBinding
     from ashare_quant.m2.registry import StrategyRegistry
     from ashare_quant.rq_mod import atomic_json
     from ashare_quant.runtime import runtime_fingerprint
-    from ashare_quant.store import Store
     from rqprobe.runtime import runtime_identity
 
-    assert __version__ == args["executor_version"] == "0.4.0.dev15+exec1"
+    assert __version__ == args["executor_version"]
     require(
         source_sha256() == args["executor_source_sha256"],
         "M2_JOB_EXECUTOR_CHANGED",
         "Executor source differs",
     )
     verify_runtime()
-    review()
     root, owner = Path(args["root"]), DataStore(Path(args["store"]))
     session_file = root / "session.json"
-    parameters = BandParameters.model_validate(args["parameters"])
+    parameters = parse_parameters(args["parameters"])
     parameter_file = root / "parameters.json"
     require(
         not parameter_file.is_symlink()
@@ -88,28 +86,54 @@ def execute(args):
         "M2_JOB_PARAMETERS_CHANGED",
         "Frozen parameters differ",
     )
-    definition = parameters.definition()
-    run_id = "m2-native-" + args["window"] + "-" + digest(str(root))[:12]
+    strategy_file = root / "strategy.json"
+    require(
+        not strategy_file.is_symlink()
+        and strategy_file.is_file()
+        and hashlib.sha256(strategy_file.read_bytes()).hexdigest() == args["strategy_sha256"],
+        "M2_JOB_STRATEGY_CHANGED",
+        "Frozen strategy bytes differ",
+    )
+    strategy = StrategyRegistry._decode(
+        strategy_file.read_bytes(), json.loads(strategy_file.read_bytes())["version_id"]
+    )
+    check_strategy(parameters, strategy)
+    from ashare_quant.python_strategies.spec import is_python, task_source
+    task_source(root, strategy)
+    run_id = "m2-native-" + args["job_id"]
+    binding_file = root / "data-binding.json"
+    require(
+        not binding_file.is_symlink()
+        and hashlib.sha256(binding_file.read_bytes()).hexdigest() == args["data_binding_sha256"],
+        "M2_DATA_BINDING_CHANGED",
+        "Frozen owner metadata differs",
+    )
+    binding = LocalDataBinding.model_validate_json(binding_file.read_bytes()).checked()
+    entry = binding.entry(args["window"])
+    from ashare_quant.m2.execution_dates import ExecutionScope, resolve
+    scope_file = root / "execution-scope.json"
+    require(not scope_file.is_symlink() and scope_file.is_file()
+            and hashlib.sha256(scope_file.read_bytes()).hexdigest() == args["execution_scope_sha256"],
+            "M2_EXECUTION_SCOPE_CHANGED", "Frozen execution prefix bytes differ")
+    scope = ExecutionScope.model_validate_json(scope_file.read_bytes())
+    require(scope == resolve(entry, scope.requested_end_date), "M2_EXECUTION_SCOPE_CHANGED",
+            "Execution prefix must exactly copy admitted owner dates")
     if args["action"] == "prepare":
         require(
             not session_file.exists(),
             "M2_JOB_SESSION_EXISTS",
             "Preparation cannot replace a session",
         )
-        pin = release()
-        window = next(w for w in pin["windows"] if w["window_id"] == args["window"])
-        profile = next(
-            p for p in pin["owner_pins"] if canonical_hash(p) == window["owner_pin_sha256"]
-        )["profile_sha256"]
-        strategy = StrategyRegistry(Store(root / "control.sqlite")).register(definition)
         client = prepare(
             owner,
             strategy,
             run_id=run_id,
             initial_cash=parameters.initial_cash,
             key=run_id,
-            profile_sha256=profile,
-            window_id=args["window"],
+            entry=entry,
+            strategy_parameters=getattr(parameters, "strategy_parameters", {}),
+            data_binding_sha256=binding.identity,
+            end_date=scope.requested_end_date,
         )
         atomic_json(session_file, client.session.model_dump(mode="json"))
     else:
@@ -123,7 +147,11 @@ def execute(args):
         session = Session.model_validate_json(session_file.read_text())
         require(
             session.run_id == run_id
-            and session.strategy.definition == definition
+            and session.request.end_date == scope.requested_end_date
+            and session.entry == entry
+            and session.strategy == strategy
+            and session.strategy_parameters == getattr(parameters, "strategy_parameters", {})
+            and session.data_binding_sha256 == binding.identity
             and session.entry.owner_binding.owner_window_id == args["window"]
             and session.request.initial_cash == parameters.initial_cash,
             "M2_JOB_SESSION_CHANGED",
@@ -132,7 +160,7 @@ def execute(args):
         client = OwnerClient.reopen(owner, session)
     session = client.session
     records = []
-    for day in session.entry.windows[0].days:
+    for day in session.days:
         for event, at in [
             ("BEFORE_TRADING", "09:00:00"),
             ("BAR", "15:00:00"),
@@ -143,7 +171,7 @@ def execute(args):
                     cursor=len(records) + 1, event=event, dt=day.trading_date.isoformat() + "T" + at
                 )
             )
-    rq, runtime_pin = runtime_identity(), runtime_fingerprint()
+    rq, runtime_pin = runtime_identity(), runtime_fingerprint(native=True)
     identity = digest(
         dict(
             schema="m2.native.experiment.v1",
@@ -160,6 +188,7 @@ def execute(args):
         run(
             SimpleNamespace(
                 root=root,
+                run_id=run_id,
                 store=Path(args["store"]),
                 window=args["window"],
                 invocation=args["invocation"],
@@ -217,12 +246,16 @@ def execute(args):
     completion_path = root / (args["invocation"] + ".completion.json")
     completion = json.loads(completion_path.read_text()) if completion_path.exists() else None
     proof = dict(
-        schema="m2-job-proof.v1",
+        schema="m2-job-proof.v3",
         action=args["action"],
         executor_version=__version__,
         executor_source_sha256=source_sha256(),
         runner_sha256=args["runner_sha256"],
         parameters_sha256=digest(parameters),
+        strategy_sha256=digest(strategy),
+        python_source_sha256=strategy.source_sha256 if is_python(strategy) else None,
+        data_binding_sha256=binding.identity,
+        execution_scope_sha256=digest(scope),
         session_sha256=session.identity,
         session_file_sha256=hashlib.sha256(session_file.read_bytes()).hexdigest(),
         native_identity=identity,
@@ -254,7 +287,8 @@ if __name__ == "__main__":
                 {
                     "type": type(exc).__name__,
                     "code": getattr(exc, "code", type(exc).__name__),
-                    "message": str(exc),
+                    "message": str(exc)[:1000],
+                    "details": getattr(exc, "details", None),
                 },
                 ensure_ascii=False,
             )

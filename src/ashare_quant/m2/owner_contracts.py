@@ -6,6 +6,8 @@ from pydantic import Field
 
 from ashare_quant.contracts import Contract
 
+from .common import digest
+
 
 class OwnerDocuments(Contract):
     query: str
@@ -19,11 +21,18 @@ class OwnerDocuments(Contract):
 
 
 class OwnerBinding(Contract):
-    release_sha256: str = Field(pattern="^[a-f0-9]{64}$")
+    policy_sha256: str = Field(pattern="^[a-f0-9]{64}$")
+    owner_runtime_sha256: str = Field(pattern="^[a-f0-9]{64}$")
     descriptor: str
     window_plan: str
     envelope: str
     assumption_refs: tuple[str, ...]
     owner_window_id: Literal["m2a", "w1", "w2"]
-    review_status: Literal["PASS_CONDITIONAL_OWNER_API_AND_PUBLIC_CODEC"] = "PASS_CONDITIONAL_OWNER_API_AND_PUBLIC_CODEC"
+    review_status: Literal["local_contract_verified_not_independently_reviewed"] = (
+        "local_contract_verified_not_independently_reviewed"
+    )
     execution_permission: Literal[False] = False
+
+    @property
+    def identity(self):
+        return digest(self)

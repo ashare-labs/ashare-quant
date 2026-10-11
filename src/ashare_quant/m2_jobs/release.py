@@ -1,12 +1,7 @@
-"""Identity of the separately sealed parameter executor, never the dev11 review claim."""
+"""The installed package is the executor: source bytes are its portable identity."""
 
-import hashlib
-import json
-from pathlib import Path
+from ashare_quant import __version__
+from ashare_quant.identity import source_sha256
 
-_raw = Path(__file__).with_name("executor-release.json").read_bytes()
-RELEASE = json.loads(_raw)
-RELEASE_SHA256 = hashlib.sha256(_raw).hexdigest()
-EXECUTION_VERSION = RELEASE["version"]
-EXECUTION_SOURCE_SHA256 = RELEASE["source_sha256"]
-EXECUTION_WHEEL_SHA256 = RELEASE["wheel_sha256"]
+EXECUTION_VERSION = __version__
+EXECUTION_SOURCE_SHA256 = source_sha256()

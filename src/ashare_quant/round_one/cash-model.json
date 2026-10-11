@@ -1,0 +1,23 @@
+{
+  "schema": "aq.stock-cash-settlement.v1",
+  "scope": "One virtual long-only mainland CS account, T+1 holdings, no leverage, no initial holdings, no delayed deposits or withdrawals, gross dividend research only; no dividend withholding or later tax levy",
+  "cash_owner": "CashAccount extends pinned native RQAlpha Account; superclass alone changes total cash, order reservation and positions",
+  "state": "Unspent net sale receipts with an AD-admitted next session, applied execution identities and completed native lifecycle phases; these restrict existing cash and are not a second cash balance",
+  "withdrawable_formula": "max(0, min(native total_cash - pending unspent net sale receipts, native cash))",
+  "spend_policy": "Buys reuse already-received unsettled sale proceeds first, FIFO. A later sale does not retrospectively refinance an earlier purchase. Reservations use unsettled proceeds first without consuming receipts until filled.",
+  "settlement": "Release restriction during next admitted session PRE_BEFORE_TRADING, before strategy before_trading; never at the sale session final callback or because wall-clock date changed",
+  "dividends": "Native gross receivable/payment accounting; explicit execution model must separately authorize qualification, tax and PRE_BEFORE_TRADING posting. A payment credited there is treated as settled cash by this virtual account model.",
+  "cash_transfers": "Immediate virtual deposits are settled; virtual withdrawals are bounded by transferable_cash and native order reservations. No real bank or broker operation.",
+  "external_support": [
+    {
+      "url": "https://stock.hnchasing.com/main/khfw/cjwt/index.html",
+      "retrieved": "2026-10-10",
+      "supports": "Broker FAQ says stock-sale cash is not withdrawable on sale day and is withdrawable T+1",
+      "does_not_support": "AQ intraday receipt-spending priority, JQ field timing, historical 2024 account behavior or real bank withdrawal permission"
+    }
+  ],
+  "jq_equivalence": "NOT_VERIFIED; sequential spending priority and lifecycle clock are declared AQ model choices, not exchange-wide rules or measured JQ behavior",
+  "restart": "Cash restrictions, execution identities and lifecycle phases serialize with native account state; restored model identity required. Complete event cursor and native broker/portfolio/matcher state must still be committed atomically.",
+  "historical_pit": false,
+  "orphan_reservation_repair": "When no native open orders remain, normalize only a nonzero frozen-cash remainder bounded by both eight ULPs of total_cash and 1e-9 CNY. Never forgive a real-cent reservation or a live order. Lifecycle/accepted-transfer path updates the one native reservation; read projections do not round cash."
+}

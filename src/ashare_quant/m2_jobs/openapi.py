@@ -6,7 +6,9 @@ def document(app):
     paths = {
         name: value
         for name, value in full["paths"].items()
-        if name.startswith(("/api/v1/m2/jobs", "/api/v1/m2/results"))
+        if name.startswith(
+            ("/api/v1/m2/jobs", "/api/v1/m2/results", "/api/v1/m2/data", "/api/v1/m2/strategies", "/api/v1/m2/python-strategies")
+        )
     }
     required = set()
 

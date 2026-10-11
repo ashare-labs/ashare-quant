@@ -1,14 +1,14 @@
 """Finite human-selected parameters; no data, matching or strategy-code authority."""
 
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from ashare_quant.contracts import Contract
 
-from .common import decimal_text
-from .contracts import StrategyDefinition
+from .common import decimal_text, require
+from .contracts import Sha, StrategyDefinition
 
 Cents = Annotated[str, Field(pattern=r"^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$", max_length=12)]
 
@@ -62,3 +62,64 @@ class ParameterLimits(Contract):
     entry_comparison: Literal["previous_close <= enter_below"] = "previous_close <= enter_below"
     exit_comparison: Literal["previous_close >= exit_above"] = "previous_close >= exit_above"
     initial_position: Literal[0] = 0
+
+
+class RegisteredRuleParameters(Contract):
+    template: Literal["registered_rules.v1"] = "registered_rules.v1"
+    strategy_version_id: Sha
+    security: Literal["600000.XSHG"] = "600000.XSHG"
+    frequency: Literal["1d"] = "1d"
+    initial_cash: Cents = "10000"
+
+    @field_validator("initial_cash")
+    @classmethod
+    def cash(cls, value):
+        if not Decimal("1000") <= Decimal(value) <= Decimal("10000"):
+            raise ValueError("initial_cash must be between 1000 and 10000 inclusive")
+        return decimal_text(value)
+
+
+class RegisteredPythonParameters(RegisteredRuleParameters):
+    template: Literal["registered_python.v1"] = "registered_python.v1"
+    strategy_parameters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("strategy_parameters", mode="before")
+    @classmethod
+    def flat_parameters(cls, value):
+        from ashare_quant.python_strategies.spec import parameters
+
+        return parameters(value)
+
+
+JobParameters = Annotated[
+    BandParameters | RegisteredRuleParameters | RegisteredPythonParameters,
+    Field(discriminator="template"),
+]
+
+
+def parse_parameters(value):
+    return TypeAdapter(JobParameters).validate_python(value)
+
+
+def check_strategy(parameters, strategy):
+    if isinstance(parameters, RegisteredPythonParameters):
+        require(
+            strategy.version_id == parameters.strategy_version_id
+            and strategy.definition.template == "trusted_python_decision.v1",
+            "M2_JOB_STRATEGY_CHANGED",
+            "Use the exact registered Python version",
+        )
+    elif isinstance(parameters, RegisteredRuleParameters):
+        require(
+            strategy.version_id == parameters.strategy_version_id
+            and strategy.definition.template == "decision_rules.v1",
+            "M2_JOB_STRATEGY_CHANGED",
+            "Use the exact registered rules version",
+        )
+    else:
+        require(
+            strategy.definition == parameters.definition(),
+            "M2_JOB_STRATEGY_CHANGED",
+            "Template parameters differ from the frozen version",
+        )
+    return strategy

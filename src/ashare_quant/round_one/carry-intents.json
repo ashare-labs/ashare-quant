@@ -1,0 +1,195 @@
+{
+  "B14": {
+    "case_id": "B14",
+    "script_sha256": "d4d334db93e54896822a2b846ee3434494c7c2ea5be95859e2b7b30cc9182660",
+    "config": {
+      "case_id": "B14",
+      "dimension": "D2.1",
+      "strategy_name": "AQJQ-20261010-B14-fee_components-v1",
+      "run_tag": "AQJQ_20261010_B14_fee_components_v1",
+      "symbol": "000001.XSHE",
+      "start_date": "2024-03-04",
+      "end_date": "2024-03-05",
+      "frequency": "minute",
+      "initial_cash": 1000000,
+      "use_real_price": true,
+      "avoid_future_data": true,
+      "order_volume_ratio": 1.0,
+      "slippage": 0,
+      "slippage_model": "FixedSlippage",
+      "open_tax": 0,
+      "close_tax": 0.0005,
+      "open_commission": 0.0003,
+      "close_commission": 0.0003,
+      "close_today_commission": 0,
+      "min_commission": 5,
+      "submit_time": "10:00",
+      "amount": 10000,
+      "buy_orders": 1,
+      "round_trip": true
+    }
+  },
+  "B16": {
+    "case_id": "B16",
+    "script_sha256": "99af1387554ad08e826f55031829d7708e53c7608e5a59258cc7ae2bfa3c5468",
+    "config": {
+      "case_id": "B16",
+      "dimension": "D2.3",
+      "strategy_name": "AQJQ-20261010-B16-stamp_tax_direction-v1",
+      "run_tag": "AQJQ_20261010_B16_stamp_tax_direction_v1",
+      "symbol": "000001.XSHE",
+      "start_date": "2024-03-04",
+      "end_date": "2024-03-05",
+      "frequency": "minute",
+      "initial_cash": 1000000,
+      "use_real_price": true,
+      "avoid_future_data": true,
+      "order_volume_ratio": 1.0,
+      "slippage": 0,
+      "slippage_model": "FixedSlippage",
+      "open_tax": 0,
+      "close_tax": 0.0005,
+      "open_commission": 0,
+      "close_commission": 0,
+      "close_today_commission": 0,
+      "min_commission": 0,
+      "submit_time": "10:00",
+      "amount": 10000,
+      "buy_orders": 1,
+      "round_trip": true
+    }
+  },
+  "B17": {
+    "case_id": "B17",
+    "script_sha256": "3e4e2bf40c118b7df49ea2e6d3587fb1839f0b6b22b8ef3c977ca10a52bfc20b",
+    "config": {
+      "case_id": "B17",
+      "dimension": "D2.4",
+      "strategy_name": "AQJQ-20261010-B17-transfer_fee_boundary-v1",
+      "run_tag": "AQJQ_20261010_B17_transfer_fee_boundary_v1",
+      "symbol": "600000.XSHG",
+      "start_date": "2024-03-04",
+      "end_date": "2024-03-05",
+      "frequency": "minute",
+      "initial_cash": 1000000,
+      "use_real_price": true,
+      "avoid_future_data": true,
+      "order_volume_ratio": 1.0,
+      "slippage": 0,
+      "slippage_model": "FixedSlippage",
+      "open_tax": 0,
+      "close_tax": 0,
+      "open_commission": 0,
+      "close_commission": 0,
+      "close_today_commission": 0,
+      "min_commission": 0,
+      "submit_time": "10:00",
+      "amount": 10000,
+      "buy_orders": 1,
+      "round_trip": true
+    }
+  },
+  "B18": {
+    "case_id": "B18",
+    "script_sha256": "827a60bd398c2d69d6ada931d75de42816a8bb8d42cfc592f647e80e4f034959",
+    "config": {
+      "case_id": "B18",
+      "dimension": "D2.5",
+      "strategy_name": "AQJQ-20261010-B18-fixed_slippage-v1",
+      "run_tag": "AQJQ_20261010_B18_fixed_slippage_v1",
+      "symbol": "000001.XSHE",
+      "start_date": "2024-03-04",
+      "end_date": "2024-03-05",
+      "frequency": "minute",
+      "initial_cash": 1000000,
+      "use_real_price": true,
+      "avoid_future_data": true,
+      "order_volume_ratio": 1.0,
+      "slippage": 0.02,
+      "slippage_model": "FixedSlippage",
+      "open_tax": 0,
+      "close_tax": 0,
+      "open_commission": 0,
+      "close_commission": 0,
+      "close_today_commission": 0,
+      "min_commission": 0,
+      "submit_time": "10:00",
+      "amount": 10000,
+      "buy_orders": 1,
+      "round_trip": true
+    }
+  },
+  "B22": {
+    "case_id": "B22",
+    "script_sha256": "5a581cbc5469cc4a8c1a280a282853c5471d3cbe619de2f18ee4ab0847738116",
+    "config": {
+      "case_id": "B22",
+      "dimension": "D3.3",
+      "strategy_name": "AQJQ-20261010-B22-sale_cash_settlement-v1",
+      "run_tag": "AQJQ_20261010_B22_sale_cash_settlement_v1",
+      "symbol": "000001.XSHE",
+      "start_date": "2024-03-04",
+      "end_date": "2024-03-06",
+      "frequency": "minute",
+      "initial_cash": 1000000,
+      "use_real_price": true,
+      "avoid_future_data": true,
+      "order_volume_ratio": 1.0,
+      "all_fees": 0,
+      "slippage": 0,
+      "probe_times": [
+        "10:00",
+        "10:01"
+      ]
+    }
+  },
+  "B33": {
+    "case_id": "B33",
+    "script_sha256": "3403964f83acd91111721091ed6d1ef00aad0361ded2a43a4e625554b4f26e6b",
+    "config": {
+      "case_id": "B33",
+      "dimension": "D5.5",
+      "strategy_name": "AQJQ-20261010-B33-same_day_sellability-v1",
+      "run_tag": "AQJQ_20261010_B33_same_day_sellability_v1",
+      "symbol": "000001.XSHE",
+      "start_date": "2024-03-04",
+      "end_date": "2024-03-05",
+      "frequency": "minute",
+      "initial_cash": 1000000,
+      "use_real_price": true,
+      "avoid_future_data": true,
+      "order_volume_ratio": 1.0,
+      "commission": 0,
+      "min_commission": 0,
+      "all_taxes": 0,
+      "slippage": 0,
+      "probe_times": [
+        "10:00",
+        "10:01"
+      ],
+      "orders": [
+        {
+          "date": "2024-03-04",
+          "symbol": "000001.XSHE",
+          "api": "order",
+          "label": "buy_day_one",
+          "value": 1000
+        },
+        {
+          "date": "2024-03-04",
+          "symbol": "000001.XSHE",
+          "api": "order",
+          "label": "sell_same_callback",
+          "value": -1000
+        },
+        {
+          "date": "2024-03-05",
+          "symbol": "000001.XSHE",
+          "api": "order",
+          "label": "sell_next_day",
+          "value": -1000
+        }
+      ]
+    }
+  }
+}

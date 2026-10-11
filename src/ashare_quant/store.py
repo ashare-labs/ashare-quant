@@ -20,6 +20,7 @@ from .contracts import (
     StateView,
     StrategyVersion,
 )
+from .database_compat import require_compatible_database
 
 
 def now() -> str:
@@ -39,6 +40,7 @@ def digest(value) -> str:
 class Store:
     def __init__(self, path: str | Path):
         self.path = Path(path).expanduser().resolve()
+        require_compatible_database(self.path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
@@ -53,6 +55,9 @@ class Store:
                 );
                 CREATE TABLE IF NOT EXISTS m2_strategies (
                     version_id TEXT PRIMARY KEY, body TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS m2_python_sources (
+                    version_id TEXT PRIMARY KEY REFERENCES m2_strategies(version_id), source BLOB NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS runs (
                     run_id TEXT PRIMARY KEY,

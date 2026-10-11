@@ -1,0 +1,1 @@
+{"template":"decision_rules.v1","rules":[{"rule_id":"hold","when_all":[],"target_shares":100}]}

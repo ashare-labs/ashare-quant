@@ -87,7 +87,7 @@ class Repository:
             updated_at=row["updated_at"],
             attempt_count=row["attempt_count"],
             committed_cursor=row["committed_cursor"],
-            total_cursors=len(manifest.approved_window.scope.trading_dates) * 3,
+            total_cursors=len(manifest.execution_scope.trading_dates) * 3,
             checkpoint_complete=bool(row["checkpoint_complete"]),
             cancellation_requested_at=row["cancellation_requested_at"],
             recovery_required=expired,

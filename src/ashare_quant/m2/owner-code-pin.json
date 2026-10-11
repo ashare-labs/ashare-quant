@@ -1,0 +1,16 @@
+{
+  "commit": "0c984cdeca6c63c684e91343955701c9b4e28977",
+  "query_contract_sha256": "afd1220b1e6d5828fe3a284fe57fb0b809f4edd5ceb2bb28283b16d9094ff37e",
+  "repository": "https://github.com/ashare-labs/ashare-data",
+  "runtime_code_sha256": "0d139184881b8bfc7f00ff99e32c63c5407ddfcb12695f7209d84e27ddc8b00a",
+  "schema": "m2.owner-source-pin.v1",
+  "source_verification": "fixed_candidate_commit_runtime_bytes",
+  "version": "0.8.0.dev2",
+  "distribution_status": "unpublished_candidate",
+  "contract_review": {
+    "status": "PASS_CONDITIONAL_DATA_PRODUCER",
+    "receipt_sha256": "8972635aa72609c4cf6cb2b74698d41774f0be563cdb2da9335ecb61989b4c26",
+    "scope": "data_production_contract_only",
+    "execution_permission": false
+  }
+}

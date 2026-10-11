@@ -8,8 +8,12 @@ from importlib.resources import files
 from .contracts import DomainError
 
 
-def runtime_fingerprint() -> dict[str, str]:
-    expected = json.loads(files("ashare_quant").joinpath("runtime-lock.json").read_text())
+def runtime_fingerprint(*, native=False) -> dict[str, str]:
+    expected = json.loads(
+        files("ashare_quant")
+        .joinpath("native-runtime-lock.json" if native else "runtime-lock.json")
+        .read_text()
+    )
     actual = {"python": platform.python_version()}
     mismatches = []
     for name, version in expected.items():

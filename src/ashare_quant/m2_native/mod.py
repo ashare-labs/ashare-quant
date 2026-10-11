@@ -80,7 +80,7 @@ class NativeM2Mod(AbstractMod):
     def start_up(self, env, config):
         self.env, self.config, self.client = env, config, runtime["client"]
         runtime["mod"] = self
-        self.days = self.client.session.entry.windows[0].days
+        self.days = self.client.session.days
         self.scope = self.days[0]
         self.at = datetime.combine(self.scope.trading_date, time(8, 30), SHANGHAI)
         self.phase, self.closed, self.submitting = "INITIALIZE", False, False
@@ -186,8 +186,14 @@ class NativeM2Mod(AbstractMod):
             raise RuntimeError("M2_PURE_STRATEGY_NATIVE_ACCESS")
         Environment.get_instance = classmethod(deny)
         try:
+            from ashare_quant.python_strategies.spec import is_python
+            python_receipt = None
+            if is_python(self.client.session.strategy):
+                from ashare_quant.python_strategies.runtime import invoke
+                python_receipt = invoke(self.client.session, self.context(), account, read, runtime["root"], runtime["invocation"])
             self.journal = prepare_decision(self.journal, self.context(), account, read,
-                commit_sequence=self.journal.last_sequence + 1, cursor_after=self.env.event_source.cursor + 1)
+                commit_sequence=self.journal.last_sequence + 1, cursor_after=self.env.event_source.cursor + 1,
+                python_receipt=python_receipt)
         finally:
             Environment.get_instance = getter
         self.record("decision_candidate", {"decision_id": self.journal.decisions[-1].decision_id,

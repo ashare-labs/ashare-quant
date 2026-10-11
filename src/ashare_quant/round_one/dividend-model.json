@@ -1,0 +1,10 @@
+{
+  "schema": "aq.cash-dividend-execution.v1",
+  "qualification": "virtual_position_at_record_close_carried_unchanged_to_ex_open",
+  "tax": "gross_research_no_withholding_or_deferred_tax",
+  "posting": "native_PRE_BEFORE_TRADING_on_payment_session",
+  "withdrawal": "credited_payment_is_settled_in_virtual_account",
+  "event_set": "known_cash_event_only_other_categories_require_separate_coverage",
+  "official_intraday_time": false,
+  "jq_equivalence": false
+}

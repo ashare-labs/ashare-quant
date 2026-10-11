@@ -1,0 +1,1 @@
+{"schema_version":"trusted-python-descriptor.v1","entrypoint":"on_decision","api_contract":"python-decision-api.v1","state_model":"stateless_per_decision","data_profile":"m2.previous_close.v1","dependencies":["decimal","math"],"trust_model":"owner_trusted_local","resource_profile":"python-local-bounded.v1"}

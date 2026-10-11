@@ -67,7 +67,7 @@ def test_api_errors_schema_and_host_policy(client):
     capability = client.get("/api/v1/capabilities").json()
     assert "fixture" in capability["executable_modes"]
     assert capability["rqalpha_validation"] in (
-        "optional_dependency_missing", "not_revalidated_in_source_preview")
+        "optional_dependency_missing", "optional_native_installed_use_scoped_m2_catalogue")
     assert capability["real_market_validation"] == "not_run"
 
 

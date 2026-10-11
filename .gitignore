@@ -1,4 +1,8 @@
 .venv/
+.venv-*/
+.env
+.env.*
+!.env.example
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -13,4 +17,11 @@ dist/
 *.sqlite3-*
 *.db
 *.chk
+*.pem
+*.key
+browser-state/
+playwright/.auth/
 .verification/
+
+# Locally built, source-pinned owner dependency; not distributed in this repository.
+local-dependencies/

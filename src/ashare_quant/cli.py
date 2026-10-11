@@ -47,8 +47,18 @@ def main(argv=None) -> int:
     sub.add_parser("d1-br1-profile")
     sub.add_parser("backtest-capabilities")
     sub.add_parser("backtest-strategies")
-    for name in ("job-catalogue", "jobs"):
+    sub.add_parser("source-diagnostics-capabilities")
+    sub.add_parser("source-diagnostics").add_argument("--request", required=True)
+    for name in ("job-catalogue", "jobs", "job-strategies", "job-python-strategies"):
         sub.add_parser(name)
+    sub.add_parser("job-data-bind").add_argument("--dataset", required=True)
+    sub.add_parser("job-data-import").add_argument("--input", required=True)
+    sub.add_parser("job-strategy-register").add_argument("--request", required=True)
+    sub.add_parser("job-strategy-get").add_argument("version_id")
+    py_register = sub.add_parser("job-strategy-register-python")
+    py_register.add_argument("--file", required=True)
+    py_register.add_argument("--descriptor", required=True)
+    sub.add_parser("job-python-strategy-get").add_argument("version_id")
     sub.add_parser("job-create").add_argument("--request", required=True)
     for name in ("job-status", "job-manifest", "job-logs", "job-cancel", "job-resume", "job-result"):
         sub.add_parser(name).add_argument("job_id")
@@ -97,6 +107,16 @@ def main(argv=None) -> int:
     serve.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
     try:
+        if args.command in ("source-diagnostics-capabilities", "source-diagnostics"):
+            from .diagnostics.contracts import DiagnosticQuery
+            from .diagnostics.service import Diagnostics
+            diagnostics = Diagnostics()
+            if args.command == "source-diagnostics-capabilities":
+                emit(diagnostics.capabilities())
+            else:
+                query = DiagnosticQuery.model_validate_json(Path(args.request).read_text())
+                emit(diagnostics.diagnose(query))
+            return 0  # A diagnostic report, including missing capabilities, never grants execution.
         if args.command == "jobs" or args.command.startswith("job-"):
             from .m2_jobs.contracts import JobCreate
             from .m2_jobs.service import Jobs
@@ -104,8 +124,26 @@ def main(argv=None) -> int:
             jobs = Jobs(Store(args.db))
             if args.command == "jobs":
                 emit(jobs.list())
+            elif args.command == "job-strategy-register-python":
+                from .python_strategies.spec import PythonDescriptor
+                emit(jobs.register_python(args.file, PythonDescriptor.model_validate_json(Path(args.descriptor).read_text())))
+            elif args.command == "job-python-strategies":
+                emit(jobs.python_strategies())
+            elif args.command == "job-python-strategy-get":
+                emit(jobs.python_strategy(args.version_id))
+            elif args.command == "job-strategy-register":
+                from .m2.rules import RuleStrategyDefinition
+                emit(jobs.register_strategy(RuleStrategyDefinition.model_validate_json(Path(args.request).read_text())))
+            elif args.command == "job-strategies":
+                emit(jobs.list_strategies())
+            elif args.command == "job-strategy-get":
+                emit(jobs.get_strategy(args.version_id))
             elif args.command == "job-catalogue":
                 emit(jobs.catalogue())
+            elif args.command == "job-data-bind":
+                emit(jobs.bind(args.dataset))
+            elif args.command == "job-data-import":
+                emit(jobs.import_data(Path(args.input)))
             elif args.command == "job-create":
                 emit(jobs.create(JobCreate.model_validate_json(Path(args.request).read_text())))
             elif args.command == "job-manifest":
@@ -190,6 +228,13 @@ def main(argv=None) -> int:
             else:
                 emit(reader.coverage(args.dataset, ResearchCoverageQuery.model_validate_json(Path(args.request).read_text())))
             return 0
+        if args.command == "serve":
+            import uvicorn
+            uvicorn.run(create_app(args.db), host="127.0.0.1", port=args.port)
+            return 0
+        if args.command == "openapi":
+            emit(create_app(args.db).openapi())
+            return 0
         store = Store(args.db)
         service = Service(store)
         match args.command:
@@ -233,11 +278,6 @@ def main(argv=None) -> int:
             case "backup":
                 store.backup(args.destination)
                 emit({"backup": args.destination})
-            case "openapi":
-                emit(create_app(args.db).openapi())
-            case "serve":
-                import uvicorn
-                uvicorn.run(create_app(args.db), host="127.0.0.1", port=args.port)
         return 0
     except DomainError as exc:
         emit({"error": exc.body()})

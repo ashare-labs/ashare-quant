@@ -1,21 +1,19 @@
-"""Run a sealed parameter executor wheel in an isolated interpreter, never the service package."""
+"""Run this installed, source-pinned executor in an isolated interpreter."""
 
-import io
 import json
 import os
-import shutil
 import subprocess
 import sys
-import uuid
-import zipfile
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.identity import source_sha256
+from ashare_quant.runtime import runtime_fingerprint
 
-from .files import atomic, lock, regular, require, sha, sync_dir
-from .release import EXECUTION_SOURCE_SHA256, EXECUTION_VERSION, EXECUTION_WHEEL_SHA256
+from .files import regular, require, sha
+from .release import EXECUTION_SOURCE_SHA256, EXECUTION_VERSION
 
 
 @dataclass(frozen=True)
@@ -40,16 +38,6 @@ class Configuration:
             )
 
 
-def wheel_bytes():
-    raw = regular(Path(__file__).with_name("parameter-executor.whl.evidence"))
-    require(
-        sha(raw) == EXECUTION_WHEEL_SHA256,
-        "M2_JOB_EXECUTOR_CHANGED",
-        "Sealed parameter executor wheel differs",
-    )
-    return raw
-
-
 def runner_sha():
     return sha(regular(Path(__file__).with_name("runner.py")))
 
@@ -59,38 +47,13 @@ class Executor:
         self.root, self.config = Path(root), config
 
     def package(self):
-        raw = wheel_bytes()
-        target = self.root / "executor-parameters-v1"
-        with lock(self.root / "executor.lock", blocking=True):
-            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                expected = {n: archive.read(n) for n in archive.namelist() if not n.endswith("/")}
-                require(
-                    all(not Path(n).is_absolute() and ".." not in Path(n).parts for n in expected)
-                )
-                if not target.exists():
-                    temp = self.root / ("executor-" + uuid.uuid4().hex + ".pending")
-                    temp.mkdir(mode=0o700)
-                    try:
-                        for name, content in expected.items():
-                            p = temp / name
-                            p.parent.mkdir(parents=True, exist_ok=True)
-                            atomic(p, content)
-                        os.replace(temp, target)
-                        sync_dir(self.root)
-                    finally:
-                        if temp.exists():
-                            shutil.rmtree(temp)
-                require(not target.is_symlink(), "M2_JOB_EXECUTOR_CHANGED")
-                paths = list(target.rglob("*"))
-                require(not any(p.is_symlink() for p in paths), "M2_JOB_EXECUTOR_CHANGED")
-                require(
-                    {p.relative_to(target).as_posix() for p in paths if p.is_file()}
-                    == set(expected),
-                    "M2_JOB_EXECUTOR_CHANGED",
-                )
-                for name, content in expected.items():
-                    require(regular(target / name) == content, "M2_JOB_EXECUTOR_CHANGED")
-        return target
+        require(
+            source_sha256() == EXECUTION_SOURCE_SHA256,
+            "M2_JOB_EXECUTOR_CHANGED",
+            "Installed executor source differs",
+        )
+        runtime_fingerprint(native=True)
+        return Path(__file__).resolve().parents[2]
 
     def command(
         self,
@@ -110,6 +73,9 @@ class Executor:
         payload = dict(
             action=action,
             root=str(job_dir),
+            job_id=Path(job_dir).name,
+            data_binding_sha256=sha(regular(Path(job_dir) / "data-binding.json")),
+            execution_scope_sha256=sha(regular(Path(job_dir) / "execution-scope.json")),
             store=str(self.config.owner_store),
             window=window,
             invocation=invocation,
@@ -118,6 +84,7 @@ class Executor:
             executor_version=EXECUTION_VERSION,
             parameters=json.loads(regular(Path(job_dir) / "parameters.json")),
             parameters_sha256=sha(regular(Path(job_dir) / "parameters.json")),
+            strategy_sha256=sha(regular(Path(job_dir) / "strategy.json")),
             runner_sha256=runner_sha(),
             fault=fault,
             control=control,

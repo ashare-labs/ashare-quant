@@ -6,11 +6,15 @@ commit them alongside the native book/cursor. No API exposes these transitions.
 
 import json
 from datetime import datetime, time
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import AwareDatetime, Field, ValidationError, model_validator
 
 from ashare_quant.contracts import SHANGHAI, Contract, DomainError, Identifier
+from ashare_quant.python_strategies.decision import PythonDecisionReceipt
+from ashare_quant.python_strategies.decision import verify as verify_python_receipt
+from ashare_quant.python_strategies.spec import is_python
+from ashare_quant.python_strategies.spec import parameters as check_python_parameters
 
 from .catalogue import PreparationEntry, check_context
 from .common import canonical, digest, require
@@ -23,6 +27,7 @@ from .contracts import (
     Signal,
     StrategyVersion,
 )
+from .execution_dates import execution_days
 from .facade import validate_evidence
 from .registry import StrategyRegistry
 from .strategy import evaluate
@@ -33,19 +38,31 @@ class Session(Contract):
     request: BacktestRequest
     strategy: StrategyVersion
     entry: PreparationEntry
+    strategy_parameters: dict[str, Any] = Field(default_factory=dict)
+    data_binding_sha256: Sha | None = None
 
     @model_validator(mode="after")
     def links(self):
         StrategyRegistry._decode(canonical(self.strategy), self.request.strategy_version_id)
+        if is_python(self.strategy):
+            check_python_parameters(self.strategy_parameters)
+            require(self.data_binding_sha256 is not None, "PYTHON_INPUT_INVALID", "Frozen local data binding required")
+        else:
+            require(not self.strategy_parameters, "PYTHON_PARAMETERS_UNEXPECTED", "Only Python tasks have Python parameters")
         require(self.request.data_binding_id == self.entry.binding.binding_id,
                 "M2_SESSION_MISMATCH", "Session data binding differs")
         require(self.request.assumptions.profile_sha256 == self.entry.profile(self.request.window_id).profile_sha256,
                 "M2_SESSION_MISMATCH", "Session assumption profile differs")
+        execution_days(self.entry, self.request)
         require(not self.entry.unmet_requirements, "M2_SESSION_MISMATCH", "Unmet data requirements")
         if self.entry.evidence_kind == "observed":
             from .owner_wire import validate_binding
             validate_binding(self.entry)
         return self
+
+    @property
+    def days(self):
+        return execution_days(self.entry, self.request)
 
     @property
     def identity(self):
@@ -62,6 +79,7 @@ class DecisionRecord(Contract):
     account: AccountInput
     read_evidence: ReadEvidence | None
     signal: Signal
+    python_receipt: PythonDecisionReceipt | None = None
 
 
 class NativeOrderProjection(Contract):
@@ -147,7 +165,7 @@ def account_digest(account):
 
 
 def initial_state(session):
-    first = session.entry.window(session.request.window_id).days[0].trading_date
+    first = session.days[0].trading_date
     body = dict(run_id=session.run_id, account_id="bt-" + session.run_id, source_kind="initial",
                 commit_sequence=0, account_as_of=datetime.combine(first, time(9), SHANGHAI).isoformat(),
                 cash=session.request.initial_cash, quantity=0, sellable=0)
@@ -175,7 +193,7 @@ def check_inputs(session, context, account, read, expected_account):
     check_context(session.entry, context, run_id=session.run_id, request=session.request)
     validate_account(account, session)
     require(account == expected_account, "M2_ACCOUNT_SOURCE_MISMATCH", "Use the exact prior committed account projection")
-    if session.strategy.definition.template == "previous_close_band.v1":
+    if session.strategy.definition.template in {"previous_close_band.v1", "decision_rules.v1", "trusted_python_decision.v1"}:
         require(read is not None, "M2_READ_EVIDENCE_REQUIRED", "Decision must persist the consumed native read fact")
         validate_evidence(read, session.entry, context,
                           run_id=session.run_id, request=session.request)
@@ -183,23 +201,41 @@ def check_inputs(session, context, account, read, expected_account):
         require(read is None, "M2_UNUSED_PRICE", "Buy-hold does not claim AD08 coverage")
 
 
+def evaluate_inputs(session, context, account, read):
+    require(not is_python(session.strategy), "PYTHON_CALLBACK_REQUIRED", "Python may execute only during a new native decision")
+    day_index = next(i for i, day in enumerate(session.days)
+                     if day.trading_date == context.trading_date)
+    return evaluate(session.strategy.definition, previous_close=read.native_value if read else None,
+                    prior_cash=account.cash, prior_quantity=account.quantity, day_index=day_index)
+
+
 def check_decision(record, state, expected_account):
     session = state.session
     check_inputs(session, record.context, record.account, record.read_evidence, expected_account)
+    if is_python(session.strategy):
+        signal = verify_python_receipt(record.python_receipt, session, record.context, record.account, record.read_evidence)
+    else:
+        require(record.python_receipt is None, "PYTHON_RECEIPT_UNEXPECTED", "JSON rules retain pure semantic replay")
+        signal = evaluate_inputs(session, record.context, record.account, record.read_evidence)
+    require(record.signal == signal, "M2_DECISION_SIGNAL_MISMATCH", "Committed intent differs from its recorded decision")
     economic = digest(economic_input(session, record.context, record.account, record.read_evidence))
     require(record.economic_input_sha256 == economic and record.decision_id == digest({"input": economic, "signal": record.signal}),
             "M2_DECISION_IDENTITY_MISMATCH", "Decision input/intent identity differs")
 
 
-def prepare_decision(state, context, account, read, *, commit_sequence, cursor_after):
+def prepare_decision(state, context, account, read, *, commit_sequence, cursor_after, python_receipt=None):
     require(not state.complete and len(state.decisions) == len(state.day_closes),
             "M2_DECISION_ALREADY_PENDING", "Finish the committed day before making a new decision")
     expected_account = state.day_closes[-1].account if state.day_closes else state.initial_account
     check_inputs(state.session, context, account, read, expected_account)
-    signal = evaluate(state.session.strategy.definition, previous_close=read.native_value if read else None)
+    if is_python(state.session.strategy):
+        signal = verify_python_receipt(python_receipt, state.session, context, account, read)
+    else:
+        require(python_receipt is None, "PYTHON_RECEIPT_UNEXPECTED", "JSON rules retain pure semantic replay")
+        signal = evaluate_inputs(state.session, context, account, read)
     economic = digest(economic_input(state.session, context, account, read))
     record = DecisionRecord(decision_id=digest({"input": economic, "signal": signal}), economic_input_sha256=economic,
-        context=context, account=account, read_evidence=read, signal=signal,
+        context=context, account=account, read_evidence=read, signal=signal, python_receipt=python_receipt,
         commit_sequence=commit_sequence, cursor_after=cursor_after)
     candidate = state.model_copy(update={"decisions": (*state.decisions, record)})
     validate_state(candidate)
@@ -234,7 +270,7 @@ def prepare_day_close(state, close):
 
 
 def prepare_complete(state):
-    require(len(state.day_closes) == len(state.session.entry.window(state.session.request.window_id).days),
+    require(len(state.day_closes) == len(state.session.days),
             "M2_INCOMPLETE_WINDOW", "Every registered trading day needs a completed native commit")
     candidate = state.model_copy(update={"complete": True})
     validate_state(candidate)
@@ -243,7 +279,7 @@ def prepare_complete(state):
 
 def validate_state(state):
     session = state.session
-    days = session.entry.window(session.request.window_id).days
+    days = session.days
     require(state.initial_account == initial_state(session).initial_account,
             "M2_INITIAL_ACCOUNT_MISMATCH", "Initial account must match this run's zero-position declaration")
     require(len(state.day_closes) <= len(state.executions) <= len(state.decisions) <= len(days)

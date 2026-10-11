@@ -3,8 +3,11 @@
 from fastapi import Request, Response
 
 from ashare_quant.contracts import Contract, DomainError
+from ashare_quant.m2.contracts import Sha, StrategyVersion
+from ashare_quant.m2.rules import RuleStrategyDefinition
 
 from .contracts import (
+    DataBindRequest,
     JobCatalogue,
     JobCreate,
     JobID,
@@ -47,6 +50,36 @@ def mount(app, store, configuration=None):
 
         closed_query(request)
         return document(app)
+
+    @app.post("/api/v1/m2/strategies", status_code=201)
+    def register_strategy(body: RuleStrategyDefinition, request: Request) -> StrategyVersion:
+        closed_query(request)
+        return jobs.register_strategy(body)
+
+    @app.get("/api/v1/m2/strategies")
+    def list_strategies(request: Request) -> tuple[StrategyVersion, ...]:
+        closed_query(request)
+        return jobs.list_strategies()
+
+    @app.get("/api/v1/m2/strategies/{version_id}")
+    def get_strategy(version_id: Sha, request: Request) -> StrategyVersion:
+        closed_query(request)
+        return jobs.get_strategy(version_id)
+
+    @app.get("/api/v1/m2/python-strategies")
+    def python_strategies(request: Request) -> tuple[StrategyVersion, ...]:
+        closed_query(request)
+        return jobs.python_strategies()
+
+    @app.get("/api/v1/m2/python-strategies/{version_id}")
+    def python_strategy(version_id: Sha, request: Request) -> StrategyVersion:
+        closed_query(request)
+        return jobs.python_strategy(version_id)
+
+    @app.post("/api/v1/m2/data/bind")
+    def bind(body: DataBindRequest, request: Request) -> JobCatalogue:
+        closed_query(request)
+        return jobs.bind(body.dataset_id)
 
     @app.get("/api/v1/m2/jobs/catalogue")
     def catalogue(request: Request) -> JobCatalogue:

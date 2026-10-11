@@ -7,6 +7,7 @@ from ashare_quant.contracts import Contract, DomainError
 from .catalogue import Catalogue
 from .common import digest
 from .contracts import BacktestRequest, Sha
+from .execution_dates import execution_days
 
 
 class PreflightReceipt(Contract):
@@ -33,11 +34,12 @@ def preflight(request: BacktestRequest, registry, catalogue: Catalogue) -> Prefl
         if exc.status != 404:
             raise
         blockers.append("M2_STRATEGY_NOT_FOUND")
-    entry, window, profile = None, None, None
+    entry, window, profile, days = None, None, None, ()
     try:
         entry = catalogue.get(request.data_binding_id)
         window = entry.window(request.window_id)
         profile = entry.profile(window.window_id)
+        days = execution_days(entry, request)
         if entry.evidence_kind == "observed":
             from .owner_wire import validate_binding
             validate_binding(entry)
@@ -51,7 +53,7 @@ def preflight(request: BacktestRequest, registry, catalogue: Catalogue) -> Prefl
     return PreflightReceipt(request_sha256=digest(request), catalogue_sha256=catalogue.identity,
         contract_checks="blocked" if blockers else ("passed_owner_codec_contract" if entry.evidence_kind == "observed" else "passed_synthetic_contract"),
         contract_blockers=tuple(dict.fromkeys(blockers)), selected_window_id=window.window_id if window else None,
-        trading_day_count=len(window.days) if window else 0,
+        trading_day_count=len(days),
         assumptions_profile_sha256=profile.profile_sha256 if profile else None,
         original_unknowns=entry.original_unknowns if entry else ())
 

@@ -52,6 +52,7 @@ from .d1_codec import BR1BindRequest, FrozenBindingReport, FrozenBR1Reader
 from .d1_result_contracts import BR1ResultDetail, BR1ResultList
 from .d1_results import canonical, digest, list_results, result_detail
 from .data import PinnedAshareData, capabilities
+from .database_compat import DatabaseCompatibilityError
 from .engine import specifications
 from .research import (
     ResearchCoverage,
@@ -66,14 +67,26 @@ from .service import Service
 from .store import Store
 
 
-def create_app(db_path: str | None = None, research_stores: dict[str, str] | None = None, m2_jobs_configuration=None) -> FastAPI:
-    store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
-    service = Service(store)
+def create_app(db_path: str | None = None, research_stores: dict[str, str] | None = None, m2_jobs_configuration=None, diagnostics_configuration=None) -> FastAPI:
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
                   responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse},
                              422: {"model": ErrorResponse | ValidationResponse}})
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+    try:
+        store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
+    except DatabaseCompatibilityError as exc:
+        app.state.database_error = exc.body()
+
+        @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+                       status_code=409, response_model=ErrorResponse)
+        def incompatible_database(path: str):
+            return JSONResponse(status_code=409, content={
+                "error": app.state.database_error, "api_version": "v1",
+            }, headers={"Cache-Control": "no-store"})
+
+        return app
+    service = Service(store)
     app.state.store = store
     from .m2.api import mount as mount_m2
     mount_m2(app, store)
@@ -81,6 +94,8 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     mount_m2_results(app)
     from .m2_jobs.api import mount as mount_m2_jobs
     mount_m2_jobs(app, store, m2_jobs_configuration)
+    from .diagnostics.api import mount as mount_diagnostics
+    mount_diagnostics(app, diagnostics_configuration)
     roots = dict(research_stores) if research_stores is not None else json.loads(os.getenv("ASHARE_QUANT_RESEARCH_STORES", "{}"))
     if not isinstance(roots, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in roots.items()):
         raise ValueError("ASHARE_QUANT_RESEARCH_STORES must map explicit aliases to store paths")

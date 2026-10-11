@@ -39,7 +39,7 @@ def _historical_price_reads(manifest, receipt):
     session = Session.model_validate(manifest.session)
     desc, plan, envelope = validate_binding(session.entry)
     binding = owner_binding(session.entry, session.request, session.run_id).to_dict()
-    dates = [d.trading_date for d in session.entry.windows[0].days]
+    dates = [d.trading_date for d in session.days]
     observations = receipt["native_observations"]
     prices, facts, used = [], {}, set()
     for packet in receipt["owner_reads"]:

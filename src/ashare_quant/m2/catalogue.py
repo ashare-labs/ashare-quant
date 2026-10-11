@@ -6,6 +6,7 @@ from ashare_quant.contracts import Contract, DomainError
 
 from .common import digest, require
 from .contracts import BacktestRequest, DataBinding, DecisionContext, ModelProfile, WindowPlan
+from .execution_dates import execution_days
 from .owner_contracts import OwnerBinding
 
 
@@ -73,8 +74,8 @@ def check_context(entry: PreparationEntry, context: DecisionContext, *, run_id, 
             and request.assumptions.profile_sha256 == entry.profile(request.window_id).profile_sha256
             and not entry.unmet_requirements,
             "M2_REQUEST_BINDING_MISMATCH", "Request data/profile must match the selected catalogue entry")
-    window = entry.window(request.window_id)
-    day = next((d for d in window.days if d.trading_date == context.trading_date), None)
+    days = execution_days(entry, request)
+    day = next((d for d in days if d.trading_date == context.trading_date), None)
     require(day is not None and day.previous_open == context.previous_open,
             "M2_WINDOW_CONTEXT_MISMATCH", "Use the owner-confirmed predecessor for this trading day")
     return day

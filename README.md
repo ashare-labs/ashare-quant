@@ -1,55 +1,94 @@
-# A宽（ashare-quant）源码预览
+# A宽（ashare-quant）
 
-`0.4.0.dev15+sourcepreview1` 是从已审 dev15 后端整理的独立源码快照，提供本地任务控制、HTTP API、持久化状态及合成 fixture 演示。新机器可以安装并运行下面的演示；其中的价格、成交和账户变化均为人为构造，**不是真实行情回测，也没有启动 RQAlpha**。
+## 项目简介
 
-真实的有限参数研究实现仍保留在源码中，但所需固定行情包、封存执行器、历史结果材料和原始 owner release receipt 没有公开交付。源码预览不能直接运行这类任务，也不能替换 quant-web 已审的三个后端服务。详见[真实研究前置条件](docs/research-prerequisites.md)和[版本路由](docs/service-routing.md)。
+A宽是面向本机使用的 A 股量化研究后端，提供策略注册、持久任务、CLI、HTTP API、运行记录和结果查询。真实研究的数据由 A数达提供，交易账户由 RQAlpha 维护。仓库自带合成示例，便于先了解任务和结果的使用方式。
 
-## 安装
+当前版本为 **0.11.0.dev14**。日频任务支持固定证券和窗口内的可信 Python 策略及 JSON 规则；分钟事件、跨日持仓、费用和公司行动另有固定研究入口。这些实验能力不代表服务支持任意股票、日期或完整聚宽 API。
 
-在包含本 README 的源码目录中操作。需要 Git、[uv](https://docs.astral.sh/uv/getting-started/installation/) 和 **Python 3.12.13**；`.python-version` 和运行时指纹固定此补丁版本。本轮验证平台为 macOS arm64；其他 POSIX 平台尚未验证，原生 Windows 不在范围内（源码使用 `fcntl`）。
+现有 38 项评估为 **25 项有限范围主目标满足、4 项实质差异、6 项证据不足、2 项不适用、1 项工程验证**。范围见[能力与比较边界](docs/compatibility.md)。
+
+## 安装指南
+
+需要 Git、[uv](https://docs.astral.sh/uv/) 和 Python **3.12.13**。以下命令在项目根目录执行；运行环境固定到该 Python 补丁版本和仓库锁文件。
+
+本版本依赖 A数达 **0.8.0.dev2** 的[固定公开提交](https://github.com/ashare-labs/ashare-data/commit/0c984cdeca6c63c684e91343955701c9b4e28977)。以下命令从公开 GitHub 获取这份源码，在本机构建并核对固定 wheel，不需要私人 checkout、账号或预置行情。首次安装需要访问 GitHub 和 PyPI；仅在具备相应使用权限时执行，现有[许可声明](docs/licensing.md)保持不变。
 
 ```sh
 uv python install 3.12.13
+git init .state/ashare-data-source
+git -C .state/ashare-data-source fetch --depth=1 https://github.com/ashare-labs/ashare-data.git 0c984cdeca6c63c684e91343955701c9b4e28977
+git -C .state/ashare-data-source checkout --detach 0c984cdeca6c63c684e91343955701c9b4e28977
+uv run --no-project --python 3.12.13 python scripts/stage_owner.py --source .state/ashare-data-source
 uv sync --locked --no-dev
 ```
 
-首次安装需要联网访问官方 PyPI 和 GitHub，无须预置缓存，不要加 `--offline`。`ashare-data` 从公开源码的固定提交 `a4086b188c3023fded59731ba154fd44ee7cde37` 构建，其余依赖由 `uv.lock` 锁定。没有引用发布者电脑中的路径，也没有随仓库捆绑第三方 wheel。
+如已有包含该提交的合法 checkout，可跳过三个 Git 步骤，将 `--source` 改为其路径。构建脚本只读固定提交，核对 wheel SHA256 后写入被 Git 忽略的 `local-dependencies/`。`--no-project` 用于先准备依赖，避免提前同步尚不存在的 wheel；显式 Python 版本避免调用系统旧版解释器。不要用最新 A数达版本替换固定提交。
 
-RQAlpha 默认不安装。只有确认符合其[完整条件许可](docs/rqalpha/RQAlpha-LICENSE.txt)且需要研究原生适配代码时，才使用 `uv sync --locked --extra native`。这个选项仅安装依赖，不补齐真实研究材料；本次没有重新执行原生引擎验证。自有代码的许可状态及其他依赖边界见[许可说明](docs/licensing.md)。
-
-## 运行合成演示
+默认安装可运行下方合成示例、查看 API、注册策略。需要真实研究执行时，先阅读[许可说明](docs/licensing.md)，再安装可选引擎：
 
 ```sh
-uv run --locked --no-dev ashare-quant --db .state/demo.sqlite3 demo
+uv sync --locked --no-dev --extra native
 ```
 
-成功输出包括 `state.run.status="succeeded"`、`state.is_test_double=true`、`state.account.cash="9000.00"`，以及一条合成成交。运行清单的 `real_strategy_executed=false`。默认初始资金为 `10000.00`，此结果只检查预先编写的 fixture 经过任务、worker、数据库和读取接口后的状态。
+安装引擎不会取得行情或配置数据。后续使用 `.venv/bin/` 中的命令，可保留已选择的依赖组合。
 
-同一数据库与默认幂等键会复用同一任务。需要新演示时，使用另一个 `--db` 路径或 `demo --key another-demo`。这些数据库是本地运行输出，不属于源码交付。
+## 快速开始
 
-## 启动本地 API
+以下示例使用仓库自带的人工合成输入，不需要行情包、平台账号或浏览器会话。
 
 ```sh
-uv run --locked --no-dev ashare-quant --db .state/api.sqlite3 serve --port 8805
+.venv/bin/ashare-quant --db .state/demo.sqlite3 demo
 ```
 
-打开 <http://127.0.0.1:8805/api/v1/docs> 查看接口；健康检查为 `/api/v1/health`。服务仅绑定本机，按 Ctrl-C 停止。API 提交任务后，需要另一个终端在同一源码目录、同一数据库上执行 worker：
+预期 JSON 中 `state.run.status` 为 `succeeded`，`state.is_test_double` 为 `true`，`state.account.cash` 为 `9000.00`，`state.fills` 有一笔成交，`manifest.real_strategy_executed` 为 `false`。这演示任务、记录和查询流程，不是一次真实市场回测。相同数据库和默认幂等键重复运行会复用已有结果。
+
+启动本机 API：
 
 ```sh
-uv run --locked --no-dev ashare-quant --db .state/api.sqlite3 worker --once
+.venv/bin/ashare-quant --db .state/demo.sqlite3 serve --port 8807
 ```
 
-公开预览的 M2 catalogue 会明确返回 `M2_JOB_ARTIFACT_UNAVAILABLE`，不会补造结果或自动取数。旧 D0/BR1 数据接口保留其历史 pin，与本预览的数据依赖不同；不要将这些接口视为新安装后的真实数据入口。
-
-## 最小验证
+打开 <http://127.0.0.1:8807/api/v1/docs> 查看接口文档。在另一个终端检查服务与运行列表：
 
 ```sh
-uv sync --locked
-uv run --locked python scripts/smoke_public.py
-uv run --locked python scripts/smoke_http.py
-uv run --locked pytest -q
+curl --fail http://127.0.0.1:8807/api/v1/health
+curl --fail http://127.0.0.1:8807/api/v1/runs
 ```
 
-这些检查仅使用临时目录和小型合成 fixture，不采集行情，不启动原生引擎。HTTP 冒烟只在临时本机端口启动自己的服务，结束后停止。公开测试范围为基本契约、任务控制、fixture API 和缺失研究材料的明确拒绝；原来依赖私有研究材料的完整验收套件未随此快照发布，不能把这里的测试数量当成 dev15 全验收。
+按 `Ctrl+C` 停止服务。数据库保存在 `.state/`，不应提交或随源码分发。未配置真实数据时，`job-catalogue` 返回 `configured=false`，是正常的未配置状态。
 
-构建本地 wheel 可使用 `uv build --wheel`。构建产物不是先前独审的 dev15 wheel；公开预览有独立版本、依赖锁和源码身份。安装结果、导出清单、历史独审边界及尚未满足的发布条件见[交付说明](docs/source-preview.md)。
+## 使用指南
+
+**查看运行。** 从演示输出取得 `run_id`，用 `state RUN_ID`、`manifest RUN_ID`、`logs RUN_ID` 读取状态、身份和日志。命令前使用同一个 `--db` 路径；`ashare-quant --help` 列出全部入口。
+
+**准备数据。** 经固定 A数达接口生成并验证有权使用的数据导出，再配置 Store、导入并查看目录：
+
+```sh
+export ASHARE_QUANT_M2_STORE="$PWD/.state/owner-store"
+.venv/bin/ashare-quant --db .state/research.sqlite3 job-data-import --input /path/to/authorized-product
+.venv/bin/ashare-quant --db .state/research.sqlite3 job-catalogue
+```
+
+窗口、日期、摘要和研究假设以自己的 catalogue 为准。缺项或 BLOCKED 时先处理数据条件；A宽不会自动取数、补行情或把未知事实当作零。任务流程见[研究任务](docs/research.md)。
+
+**注册策略。** 仓库提供[买入持有](examples/python/hold.py)、[现金条件](examples/python/cash.py)、[分段仓位](examples/python/staged.py)及对应 [JSON 规则](examples/rules/hold.json)。注册不会执行源码：
+
+```sh
+.venv/bin/ashare-quant --db .state/research.sqlite3 job-strategy-register-python --file examples/python/hold.py --descriptor examples/python/descriptor.json
+.venv/bin/ashare-quant --db .state/research.sqlite3 job-python-strategies
+```
+
+输入、返回值和资源限制见[策略编写](docs/strategies.md)。真实任务使用 `job-create`、`job-worker --once`、`job-result JOB_ID`，请求与恢复说明见[研究任务](docs/research.md)。
+
+**诊断与开发。** `source-diagnostics-capabilities` 查看配置；只读检查需独立固定的 reader 环境及已有数据，见[数据诊断](docs/diagnostics.md)。测试和发行包构建见[开发与打包](docs/development.md)。
+
+## 限制与说明
+
+- 日频任务服务仍限 `600000.XSHG`、`m2a/w1/w2` 固定窗口及连续前缀、`0/100/200` 股目标。实验入口不自动扩展服务范围。
+- B25、B26、C02、C03 保留实质差异；B12、B14、B17、B27、C01、C05 证据不足。25 项有限目标满足也不等于全部附带字段一致，不能称为全聚宽对齐。
+- 未认证严格历史 PIT、完整公司行动链或任意行情覆盖；不提供持续实时 paper、真实券商接入或全市场任意回测。
+- Python 策略仅供可信自有代码使用。独立进程和超时限制不构成恶意代码沙箱；服务面向本机使用。
+- 为本版本选择新的控制库。旧任务依赖原源码、数据和运行时身份；不自动迁移。保留旧库及同名任务目录，用原固定环境读取。
+- 行情、凭据、浏览器记录和独立验证材料不属于公开包。合成输入仅用于演示和工程测试。
+- 本交付保留现有源码预览许可状态，未新增开源、商业或再分发授权。第三方引擎与数据分别适用各自许可；源码可取得与使用权是不同条件，见[许可来源与范围](docs/licensing.md)。

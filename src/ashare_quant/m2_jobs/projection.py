@@ -13,7 +13,6 @@ from ashare_quant.m2_results.service import (
 )
 
 from .contracts import JobResult
-from .release import EXECUTION_SOURCE_SHA256, EXECUTION_WHEEL_SHA256, RELEASE, RELEASE_SHA256
 
 
 def project(manifest, base, proof, evidence, recovery):
@@ -23,9 +22,11 @@ def project(manifest, base, proof, evidence, recovery):
 
     session = manifest.session
     window = manifest.request.window_id
-    dates = [d.isoformat() for d in manifest.approved_window.scope.trading_dates]
+    dates = [d.isoformat() for d in manifest.execution_scope.trading_dates]
     expected_days = len(dates)
     quality = manifest.approved_window.data_identity.original_quality
+    from ashare_quant.m2.journal import restore_extension
+    restore_extension(base["journal"], expected_session_sha256=manifest.session_sha256)
     state = base["journal"]["m2_state"]
     _require(
         base["journal"]["m2_sha256"] == digest(state)
@@ -152,6 +153,8 @@ def project(manifest, base, proof, evidence, recovery):
         day_rows.append(
             dict(
                 trading_date=t,
+                decision_verification="trusted_python_record.v1" if d.get("python_receipt") else "pure_rule_replay",
+                python_decision=d.get("python_receipt"),
                 previous_open=p,
                 decision_at=d["context"]["logical_at"],
                 decision_id=d["decision_id"],
@@ -225,6 +228,8 @@ def project(manifest, base, proof, evidence, recovery):
     commission = sum((Decimal(f["commission"]) for f in fills), Decimal(0))
     tax = sum((Decimal(f["tax"]) for f in fills), Decimal(0))
     return JobResult(
+        execution_scope=manifest.execution_scope,
+        strategy=manifest.strategy,
         engine_price_reads=prices,
         valuation_bar_query_observed=any(
             d["query"]["operation"] == "valuation_bar" for d in engine_reads
@@ -232,7 +237,7 @@ def project(manifest, base, proof, evidence, recovery):
         job_id=manifest.job_id,
         request=manifest.request,
         scope=manifest.approved_window.scope.model_copy(
-            update={"initial_cash": manifest.request.parameters.initial_cash}
+            update={"initial_cash": manifest.request.parameters.initial_cash, "trading_dates": manifest.execution_scope.trading_dates}
         ),
         summary=dict(
             initial_cash=manifest.request.parameters.initial_cash,
@@ -254,11 +259,9 @@ def project(manifest, base, proof, evidence, recovery):
         account=_account(base["final_native_account"]),
         days=day_rows,
         execution_identity=dict(
-            base_code_commit=RELEASE["base_code_commit"],
-            base_code_tree=RELEASE["base_code_tree"],
-            release_sha256=RELEASE_SHA256,
-            source_sha256=EXECUTION_SOURCE_SHA256,
-            wheel_sha256=EXECUTION_WHEEL_SHA256,
+            backend_version=manifest.service_identity.backend_version,
+            source_sha256=manifest.executor_source_sha256,
+            runtime_sha256=digest(proof["runtime"]),
             native_run_identity=base["identity"],
             session_sha256=base["session_identity"],
         ),
@@ -272,8 +275,8 @@ def project(manifest, base, proof, evidence, recovery):
         limitations=(
             "有限离线条件研究；当前任务与控制层尚未独立验收。",
             "历史PIT、来源真实性及完整性未证；保留A数达原始质量结论与七项条件假设。",
-            "固定600000、日频、原窗口及有限可配置参数；不开放分钟、paper、实盘或任意代码。",
-            "参数执行修订和本次动态任务尚未独立验收；dev11验收仅为基线参考。",
+            "固定600000、日频、原owner窗口内可选结束交易日；Python仅CLI注册可信本地单文件无跨日状态；不开放分钟、paper、实盘或公网上传代码。",
+            "可移植源码修订、本地数据绑定及本次动态任务尚未独立验收。",
             "取消保留原子检查点；终态发布前取消不返回成功结果。",
         ),
     )

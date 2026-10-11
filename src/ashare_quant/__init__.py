@@ -1,3 +1,3 @@
-"""A宽 source preview. Public validation covers synthetic fixture replay only."""
+"""A宽 local research backend with a public synthetic demonstration."""
 
-__version__ = "0.4.0.dev15+sourcepreview1"
+__version__ = "0.11.0.dev14"

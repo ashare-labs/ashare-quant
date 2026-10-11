@@ -20,18 +20,18 @@ def capabilities() -> Capabilities:
     return Capabilities(
         backend_version=__version__, rqalpha_commit=RQALPHA_COMMIT,
         executable_modes=("fixture", "synthetic") if native_installed else ("fixture",),
-        rqalpha_validation=("not_revalidated_in_source_preview" if native_installed
+        rqalpha_validation=("optional_native_installed_use_scoped_m2_catalogue" if native_installed
                            else "optional_dependency_missing"),
         ashare_data_version=ASHARE_VERSION, ashare_data_commit=ASHARE_COMMIT,
         ashare_data_tree=ASHARE_TREE,
         limitations=(
-            "Source preview: fixture replay is validated. Real M2 data, sealed executor/result artifacts and the private owner release receipt are not distributed; installing native dependencies does not supply them.",
-            "Legacy D0/BR1 owner fields below retain the dev3 pin. This preview installs owner 0.7.0.dev1 source at a fixed public commit; use the preserved stable service for D0/BR1 reads.",
-            "Native synthetic evaluation requires the optional native extra and separate license eligibility; it was not rerun or admitted by this source-preview packaging check.",
+            "Portable M2 jobs use installed source and explicit local owner bindings through /api/v1/m2/jobs/catalogue. Market data is not distributed. Fixture mode remains synthetic.",
+            "Legacy D0/BR1 owner fields below retain the dev3 pin. This candidate installs owner 0.8.0.dev2 from explicitly staged fixed candidate source; use the preserved stable service for D0/BR1 reads.",
+            "Native execution requires the fixed native extra and license eligibility. Catalogue and task receipts identify the actually available bounded M2 scope.",
             "The dev3 public listing contract has fixed-scope independent acceptance; backend adapter admission remains pending.",
             "BR1 public snapshot binding and native read interfaces are prepared; no BR1 event loop, fills or recovery experiment is admitted.",
             "Verified PIT, complete corporate actions, verified trade totals and real minute completeness are unavailable.",
-            "RQAlpha is limited to trusted local synthetic CS/bar evaluation; no commercial permission is assumed.",
+            "RQAlpha runs trusted self-owned strategies in local isolated processes; no hostile-code sandbox or commercial permission is assumed.",
             "PostgreSQL and real paper recovery are not validated.",
         ),
     )

@@ -285,7 +285,7 @@ class Capabilities(Contract):
     storage: Literal["sqlite-control-and-projections"] = "sqlite-control-and-projections"
     executable_modes: tuple[Literal["fixture", "synthetic"], ...] = ("fixture", "synthetic")
     real_market_validation: Literal["not_run"] = "not_run"
-    rqalpha_validation: Literal["optional_dependency_missing", "not_revalidated_in_source_preview"]
+    rqalpha_validation: Literal["optional_dependency_missing", "optional_native_installed_use_scoped_m2_catalogue"]
     rqalpha_commit: str
     ashare_data_version: str
     ashare_data_commit: str

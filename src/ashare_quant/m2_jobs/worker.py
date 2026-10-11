@@ -5,6 +5,7 @@ import subprocess
 import time
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.python_strategies.supervision import BoundedOutput, check_phase
 
 from .files import lock, regular
 from .publication import publish
@@ -73,6 +74,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
     invocation = "attempt-" + str(row["attempt_count"])
     process, proof, reference, error = None, None, None, None
     interrupted = False
+    capture = None
 
     def notify(name):
         if stage:
@@ -97,28 +99,40 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                     command,
                     env=jobs.executor.environment(),
                     cwd=root,
-                    stdout=log,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     pass_fds=lock_fds,
                 )
-                jobs.repo.child_started(job_id, token, process.pid)
-                notify("spawned")
-                started, heartbeat = time.monotonic(), 0
-                while process.poll() is None:
-                    notify("poll")
-                    if time.monotonic() - heartbeat >= 0.25:
-                        if jobs.repo.heartbeat(job_id, token):
+                capture = BoundedOutput(process.stdout, log)
+                try:
+                    jobs.repo.child_started(job_id, token, process.pid)
+                    notify("spawned")
+                    started, heartbeat = time.monotonic(), 0
+                    while process.poll() is None:
+                        notify("poll")
+                        if capture.exceeded.is_set():
+                            raise DomainError(
+                                "PYTHON_OUTPUT_LIMIT", "Attempt output exceeded 1 MiB"
+                            )
+                        check_phase(root / (invocation + ".python-phase.json"))
+                        if time.monotonic() - heartbeat >= 0.25:
+                            if jobs.repo.heartbeat(job_id, token):
+                                stop(process)
+                                cancelled = True
+                                break
+                            heartbeat = time.monotonic()
+                        if time.monotonic() - started > 120:
                             stop(process)
-                            cancelled = True
-                            break
-                        heartbeat = time.monotonic()
-                    if time.monotonic() - started > 120:
-                        stop(process)
-                        raise DomainError(
-                            "M2_JOB_EXECUTION_TIMEOUT",
-                            "Bounded native child exceeded its execution timeout",
-                        )
-                    time.sleep(0.03)
+                            raise DomainError(
+                                "M2_JOB_EXECUTION_TIMEOUT",
+                                "Bounded native child exceeded its execution timeout",
+                            )
+                        time.sleep(0.03)
+                finally:
+                    stop(process)
+                    capture.finish()
+                if capture.exceeded.is_set():
+                    raise DomainError("PYTHON_OUTPUT_LIMIT", "Attempt output exceeded 1 MiB")
             notify("child_exited")
             if process.returncode == 0:
                 proof = json.loads(regular(root / (invocation + ".proof.json")))
@@ -128,6 +142,13 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                     "returncode": process.returncode,
                     "message": "Native attempt stopped; only the last committed checkpoint may resume",
                 }
+        if error and process is not None:
+            for error_name in (invocation + ".runner-error.json", invocation + ".failure.json"):
+                error_path = root / error_name
+                if error_path.exists():
+                    reported = json.loads(regular(error_path))
+                    if str(reported.get("code", "")).startswith("PYTHON_"):
+                        error = {**reported, "returncode": process.returncode}
         jobs.repo.heartbeat(job_id, token)
         if proof is None:
             proof = jobs.executor.immediate(
@@ -160,10 +181,24 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
             "code": getattr(exc, "code", "M2_JOB_WORKER_FAILED"),
             "type": type(exc).__name__,
             "message": str(exc)[:500],
+            "details": getattr(exc, "details", None),
         }
         reference = None
     finally:
         stop(process)
+    if proof is None and process is not None:
+        try:
+            proof = jobs.executor.immediate(
+                "inspect",
+                root,
+                manifest.request.window_id,
+                invocation + "-error-inspect",
+                manifest.session_file_sha256,
+                lock_fds=lock_fds,
+            )
+        except Exception as exc:
+            if error is not None:
+                error["inspection_error"] = getattr(exc, "code", type(exc).__name__)
     # Conditional UPDATE under an immediate transaction resolves cancellation
     # versus publication. A stale worker can never turn the row into success.
     jobs.repo.finish(job_id, token, proof=proof, result=reference, error=error)

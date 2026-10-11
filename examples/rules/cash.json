@@ -1,0 +1,1 @@
+{"template":"decision_rules.v1","rules":[{"rule_id":"cash_entry","when_all":[{"field":"prior_cash","operator":"ge","value":"1300"}],"target_shares":100},{"rule_id":"cash_exit","when_all":[{"field":"prior_cash","operator":"lt","value":"300"}],"target_shares":0}]}

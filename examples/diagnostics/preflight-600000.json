@@ -1,0 +1,20 @@
+{
+  "source_alias": "calendar-r1",
+  "security": "600000.XSHG",
+  "trading_dates": [
+    "2026-09-29"
+  ],
+  "price": {
+    "kind": "baostock",
+    "version_id": "d2987835119190d458097a2a0509eabd63d4c3f3755ef9c03ea906da1d949c5a"
+  },
+  "status": {
+    "kind": "baostock",
+    "version_id": "fc0d1dd1088dce4116cb6c480f666144cc4bfb9912f6afd1111664080b4f19ea"
+  },
+  "preclose": {
+    "kind": "baostock",
+    "version_id": "94413c6802e160df78b07d9c5477e58abb9f1aa2a056b829c6fef3b7185b8dc0"
+  },
+  "require_complete": true
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "aq.premarket-owner-pin.v1",
+  "binding_sha256": "3c7867093c634fb3bf57e77805bb22a2df971b7bf79788c73a12a00e1d68254c",
+  "wheel_sha256": "05fdbe3785ce1429e8db2c6f14a56b359db547149071e461e0422a77a32568b0",
+  "version": "0.9.1.dev10",
+  "role": "premarket_reference_reconstruction"
+}

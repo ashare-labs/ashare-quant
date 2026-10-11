@@ -8,9 +8,12 @@ from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from ashare_quant.contracts import SHANGHAI, Identifier
 from ashare_quant.contracts import Contract as BaseContract
+from ashare_quant.python_strategies.spec import PythonDefinition
 
 from .common import decimal_text, digest
+from .execution_dates import ISODate
 from .owner_contracts import OwnerDocuments
+from .rules import RuleStrategyDefinition
 
 Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 Money = Annotated[str, Field(pattern=r"^(0|[1-9][0-9]*)(\.[0-9]{1,8})?$", max_length=32)]
@@ -30,7 +33,7 @@ class Contract(BaseContract):
         return value
 
 
-class StrategyDefinition(Contract):
+class StrategyDefinition(BaseContract):
     template: Literal["buy_hold.v1", "previous_close_band.v1"]
     target_shares: int = Field(strict=True, ge=100, le=200)
     enter_below: Money | None = None
@@ -55,9 +58,12 @@ class StrategyDefinition(Contract):
         return self
 
 
+StrategySpec = Annotated[StrategyDefinition | RuleStrategyDefinition | PythonDefinition, Field(discriminator="template")]
+
+
 class M2StrategyVersion(Contract):
     version_id: Sha
-    definition: StrategyDefinition
+    definition: StrategySpec
     source_sha256: Sha
     parameter_sha256: Sha
     created_at: AwareDatetime
@@ -81,6 +87,7 @@ class AssumptionAck(Contract):
 
 
 class BacktestRequest(Contract):
+    end_date: ISODate | None = None
     contract_version: Literal["m2.daily.v2"] = "m2.daily.v2"
     strategy_version_id: Sha
     data_binding_id: Sha
@@ -135,7 +142,8 @@ class WindowPlan(Contract):
 class DataBinding(Contract):
     owner_version: str = Field(min_length=1, max_length=40)
     owner_commit: str = Field(pattern=r"^[a-f0-9]{40}$")
-    owner_wheel_sha256: Sha
+    owner_wheel_sha256: Sha | None
+    owner_runtime_sha256: Sha | None = None
     dataset_id: Sha
     manifest_sha256: Sha
     use_profile_sha256: Sha
@@ -340,10 +348,21 @@ class ReadEvidence(Contract):
 class Signal(Contract):
     action: Literal["no_change", "target_shares"]
     target_shares: int | None = Field(default=None, strict=True)
-    reason: Literal["hold_template", "enter_threshold", "exit_threshold", "inside_band"]
+    reason: Literal["hold_template", "enter_threshold", "exit_threshold", "inside_band", "rule_matched", "rules_no_match", "python_target", "python_no_change"]
+    rule_index: int | None = Field(default=None, strict=True, ge=0, le=15)
 
     @model_validator(mode="after")
     def shape(self):
+        if (self.reason == "rule_matched") != (self.rule_index is not None):
+            raise ValueError("Only a matched rule has a rule index")
+        if self.reason == "rule_matched" and self.action != "target_shares":
+            raise ValueError("Matched rules produce a target")
+        if self.reason == "rules_no_match" and self.action != "no_change":
+            raise ValueError("Unmatched rules preserve the current target")
+        if self.reason == "python_target" and self.action != "target_shares":
+            raise ValueError("Python target requires a target signal")
+        if self.reason == "python_no_change" and self.action != "no_change":
+            raise ValueError("Python no-change requires no_change")
         if self.action == "no_change" and self.target_shares is not None:
             raise ValueError("no_change is not an executed no_order")
         if self.action == "target_shares" and self.target_shares not in (0, 100, 200):

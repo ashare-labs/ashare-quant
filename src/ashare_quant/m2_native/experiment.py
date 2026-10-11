@@ -22,50 +22,43 @@ def run(args):
     from rqprobe.guards import install_network_guard
     install_network_guard()
     from ashare_data import Store as DataStore
-    from ashare_data.m2_types import canonical_hash
 
     from ashare_quant.identity import source_inventory
     from ashare_quant.m2.common import digest, require
     from ashare_quant.m2.journal import Session
-    from ashare_quant.m2.owner import OwnerClient, prepare
-    from ashare_quant.m2.owner_wire import release, review, verify_runtime
-    from ashare_quant.m2.parameter_policy import BandParameters
-    from ashare_quant.m2.registry import StrategyRegistry
+    from ashare_quant.m2.owner import OwnerClient
+    from ashare_quant.m2.owner_wire import verify_runtime
+    from ashare_quant.m2.parameter_policy import check_strategy, parse_parameters
     from ashare_quant.rq_mod import atomic_json
     from ashare_quant.runtime import runtime_fingerprint
-    from ashare_quant.store import Store
     from rqprobe.runtime import runtime_identity
 
     from .state import runtime
     verify_runtime()
-    review()
     root, data = args.root.resolve(), args.store.resolve()
     root.mkdir(parents=True, exist_ok=True)
     with ExitStack() as locks:
         lock = locks.enter_context((root / 'writer.lock').open('a+b'))
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        registry = StrategyRegistry(Store(root / 'control.sqlite'))
-        run_id = 'm2-native-' + args.window + '-' + digest(str(root))[:12]
-        parameters = BandParameters.model_validate(getattr(args, 'parameters', {}))
-        definition = parameters.definition()
-        if (root / 'session.json').exists():
-            session = Session.model_validate_json((root / 'session.json').read_text())
-            require(session.entry.owner_binding.owner_window_id == args.window and session.strategy.definition == definition and session.request.initial_cash == parameters.initial_cash,
-                    'M2_EXPERIMENT_IDENTITY', 'Cannot change experiment window or strategy on reentry')
-            client = OwnerClient.reopen(DataStore(data), session)
-        else:
-            pin = release()
-            window = next(w for w in pin['windows'] if w['window_id'] == args.window)
-            profile = next(p for p in pin['owner_pins'] if canonical_hash(p) == window['owner_pin_sha256'])['profile_sha256']
-            client = prepare(DataStore(data), registry.register(definition), run_id=run_id,
-                initial_cash=parameters.initial_cash, key=run_id, profile_sha256=profile, window_id=args.window)
-            atomic_json(root / 'session.json', client.session.model_dump(mode='json'))
+        run_id = args.run_id
+        parameters = parse_parameters(getattr(args, 'parameters', {}))
+        require((root / 'session.json').is_file(), 'M2_SESSION_REQUIRED', 'Prepare through the bounded jobs service')
+        session = Session.model_validate_json((root / 'session.json').read_text())
+        check_strategy(parameters, session.strategy)
+        from ashare_quant.python_strategies.spec import task_source
+        task_source(root, session.strategy)
+        require(session.strategy_parameters == getattr(parameters, "strategy_parameters", {}),
+                "PYTHON_PARAMETERS_CHANGED", "Frozen strategy parameters differ")
+        definition = session.strategy.definition
+        require(session.run_id == run_id and session.entry.owner_binding.owner_window_id == args.window and session.strategy.definition == definition and session.request.initial_cash == parameters.initial_cash,
+                'M2_EXPERIMENT_IDENTITY', 'Cannot change experiment window or strategy on reentry')
+        client = OwnerClient.reopen(DataStore(data), session)
         # The same frozen virtual account cannot be opened concurrently from two paths.
         account_locks = Path(tempfile.gettempdir()) / ('ashare-quant-m2-locks-' + str(os.getuid()))
         account_locks.mkdir(mode=0o700, exist_ok=True)
         account_lock = locks.enter_context((account_locks / (client.session.run_id + '.lock')).open('a+b'))
         fcntl.flock(account_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        days = client.session.entry.windows[0].days
+        days = client.session.days
         if args.fault != 'none':
             match = re.fullmatch(r'(before_replace|after_replace|decision_candidate|native_submit|execution_candidate|after_event):([1-9][0-9]*)', args.fault)
             require(match is not None and int(match[2]) <= len(days)*3, 'M2_INVALID_FAULT', 'Only bounded crash hooks are supported')
@@ -74,7 +67,7 @@ def run(args):
             for event, at in [('BEFORE_TRADING','09:00:00'),('BAR','15:00:00'),('AFTER_TRADING','15:01:00')]:
                 records.append(dict(cursor=len(records)+1,event=event,dt=d.trading_date.isoformat()+'T'+at))
         source = Path(__file__).with_name('strategy.py').read_text()
-        rq, runtime_pin = runtime_identity(), runtime_fingerprint()
+        rq, runtime_pin = runtime_identity(), runtime_fingerprint(native=True)
         identity = digest(dict(schema='m2.native.experiment.v1', session=client.session.identity,
             rq=rq, runtime=runtime_pin, backend_sources=source_inventory(), records=records))
         from rqprobe.checkpoint import AtomicFile, Counter
@@ -95,7 +88,8 @@ def run(args):
         generation = len(index)
         index.append({'invocation':args.invocation,'generation':generation,'fault':args.fault})
         atomic_json(index_path,index)
-        runtime.update(client=client,records=records,identity=identity,generation=generation)
+        runtime.update(client=client,records=records,identity=identity,generation=generation,
+                       root=root, invocation=args.invocation)
         import rqalpha.main as native
         import rqalpha.utils.config as config_module
         from rqalpha.environment import Environment
@@ -147,7 +141,7 @@ def run(args):
                 'native_run':True,'generation':generation,'receipt_sha256':digest(final['receipt'])})
         except Exception as exc:
             error = getattr(getattr(exc,'error',None),'exc_val',exc)
-            atomic_json(root/(args.invocation+'.failure.json'), {'type':type(error).__name__,'message':str(error),'identity':identity})
+            atomic_json(root/(args.invocation+'.failure.json'), {'type':type(error).__name__,'message':str(error)[:1000],'code':getattr(error,'code',type(error).__name__),'details':getattr(error,'details',None),'identity':identity})
             raise
         finally:
             mod=runtime.get('mod')
@@ -161,6 +155,7 @@ def run(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root',type=Path,required=True)
+    parser.add_argument('--run-id',required=True)
     parser.add_argument('--store',type=Path,required=True)
     parser.add_argument('--window',choices=['m2a','w1','w2'],required=True)
     parser.add_argument('--invocation',default='baseline')
