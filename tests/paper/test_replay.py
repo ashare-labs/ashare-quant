@@ -253,3 +253,55 @@ def test_real_mode_requires_owner_role_and_explicit_acceptance(tmp_path):
             tmp_path.name,
             accept_model=True,
         )
+
+
+@pytest.mark.parametrize(
+    "scenario,code,text",
+    [
+        ("stale", "PAPER_DATA_STALE_OR_MISSING", "过期"),
+        ("missing", "PAPER_REPLAY_DATA_MISSING", "字段缺口"),
+        ("action", "PAPER_ACTION_TIMING_UNSUPPORTED", "到账阶段"),
+    ],
+)
+def test_data_failures_return_readable_api_actions_without_writes(tmp_path, scenario, code, text):
+    if scenario == "stale":
+        from .fixtures import config, decision
+
+        service = PaperService(tmp_path / "store")
+        cfg = config(tmp_path.name)
+        sid = service.create(cfg)["id"]
+        payload = decision(cfg, 0, (100, 100))
+        payload["rows"][0]["selected_watermark"] = "2023-12-29"
+        suffix = "/decisions"
+    else:
+
+        def change(doc):
+            if scenario == "missing":
+                doc["daily"] = [
+                    r
+                    for r in doc["daily"]
+                    if not (r["date"] == "2020-02-03" and r["security"] == "000651.XSHE")
+                ]
+            else:
+                doc["actions"] = [
+                    {
+                        "security": "000651.XSHE",
+                        "kind": "cash_dividend",
+                        "record_date": "2020-02-03",
+                        "ex_date": "2020-02-04",
+                        "pay_date": "2020-02-04",
+                        "cash_per_share": "1",
+                    }
+                ]
+
+        service, sid = bound(tmp_path, change=change)
+        payload = {"day": "2020-02-03", "expected_parent": None, "reason": "readable gate check"}
+        suffix = "/advance"
+    with TestClient(create_app(service.root)) as api:
+        response = api.post(f"/api/v1/paper/sessions/{sid}" + suffix, json=payload)
+        assert response.status_code == 409
+        error = response.json()["error"]
+        assert error["code"] == code and text in error["message"]
+        assert error["next_action"] and error["retryable"] is False
+    status = service.status(sid)
+    assert status["session"]["head"] is None and not status["days"]
