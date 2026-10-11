@@ -83,6 +83,8 @@ export ASHARE_QUANT_M2_STORE="$PWD/.state/owner-store"
 
 **诊断与开发。** `source-diagnostics-capabilities` 查看配置；只读检查需独立固定的 reader 环境及已有数据，见[数据诊断](docs/diagnostics.md)。测试和发行包构建见[开发与打包](docs/development.md)。
 
+**连续账户基础验收。** 独立的 `python -m ashare_quant.paper` 入口可验证合成日意图、原生跨日账户、故障恢复与风险告警，见[日频连续模拟契约](docs/daily-paper.md)。真实数据、策略调度和人类前端联验仍待接入，能力接口明确返回未完成真实连续模拟验收。
+
 ## 限制与说明
 
 - 日频任务服务仍限 `600000.XSHG`、`m2a/w1/w2` 固定窗口及连续前缀、`0/100/200` 股目标。实验入口不自动扩展服务范围。

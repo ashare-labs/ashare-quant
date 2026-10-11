@@ -1,0 +1,25 @@
+{
+  "schema_version": "paper-session.v1",
+  "account_id": "paper-synthetic-example",
+  "strategy_version": "bc0520c646c4e164ce68559441d19e922635052ea5a62c1578aa6ee19954768b",
+  "scenario_manifest_sha256": "1aa4b24c575462c2e6812881fb1c5ba155cd437783233426a357b01b6731111e",
+  "initial_cash": "10000",
+  "universe": [
+    "000001.XSHE",
+    "600000.XSHG"
+  ],
+  "risk": {
+    "max_gross": "0.80",
+    "max_single": "0.40",
+    "cash_buffer": "0.10",
+    "max_turnover": "1.00",
+    "max_order_value": "50000",
+    "max_holdings": 8,
+    "allow_st": false
+  },
+  "commission_rate": "0.0003",
+  "minimum_commission": "5",
+  "sell_tax_rate": "0.001",
+  "model": "prior-close-frozen-targets-daily-open.v1",
+  "data_mode": "synthetic_fixture"
+}
