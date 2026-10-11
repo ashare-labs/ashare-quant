@@ -9,6 +9,7 @@ from pydantic import AwareDatetime, Field, model_validator
 from ashare_quant.contracts import Contract, Identifier, Money
 
 Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+StrategyId = Literal["equal-weight", "momentum", "trend"]
 Security = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]
 Quantity = Annotated[int, Field(strict=True, ge=0, le=10**9)]
 
@@ -44,10 +45,16 @@ class SessionConfig(Contract):
     model: Literal["prior-close-frozen-targets-daily-open.v1"] = (
         "prior-close-frozen-targets-daily-open.v1"
     )
-    data_mode: Literal["synthetic_fixture"] = "synthetic_fixture"
+    data_mode: Literal["synthetic_fixture", "historical_research"] = "synthetic_fixture"
+    strategy_id: StrategyId | None = None
+    replay_binding_sha256: Sha | None = None
 
     @model_validator(mode="after")
     def scope(self):
+        if (self.strategy_id is None) != (self.replay_binding_sha256 is None):
+            raise ValueError("Strategy and local replay binding must be supplied together")
+        if self.data_mode == "historical_research" and self.strategy_id is None:
+            raise ValueError("Historical replay requires a pinned local owner binding")
         if len(set(self.universe)) != len(self.universe) or Decimal(self.initial_cash) <= 0:
             raise ValueError("Unique securities and positive initial cash required")
         for key in ("commission_rate", "sell_tax_rate"):
@@ -88,7 +95,9 @@ class Decision(Contract):
     strategy_version: Sha
     strategy_receipt_sha256: Sha
     data_manifest_sha256: Sha
-    evidence_kind: Literal["synthetic"] = "synthetic"
+    evidence_kind: Literal["synthetic", "historical_research"] = "synthetic"
+    clock_basis: Literal["synthetic_clock", "retrospective_model"] = "synthetic_clock"
+    strategy_receipt: dict | None = None
     rows: tuple[DecisionRow, ...] = Field(min_length=1, max_length=10)
     targets: dict[Security, Quantity]
     reason: str = Field(min_length=1, max_length=1024)
@@ -123,10 +132,15 @@ class CloseInput(Contract):
     data_manifest_sha256: Sha
     received_at: AwareDatetime
     deadline: AwareDatetime
-    evidence_kind: Literal["synthetic"] = "synthetic"
+    evidence_kind: Literal["synthetic", "historical_research"] = "synthetic"
+    clock_basis: Literal["synthetic_clock", "retrospective_model"] = "synthetic_clock"
     rows: tuple[ExecutionRow, ...] = Field(min_length=1, max_length=10)
 
 
 class ControlAction(Contract):
     reason: str = Field(min_length=1, max_length=1024)
     expected_parent: Sha | None
+
+
+class AdvanceAction(ControlAction):
+    day: date

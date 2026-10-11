@@ -1,5 +1,7 @@
 # 日频连续模拟基础：paper-api.v1
 
+后续整合见 [paper-api.v2 与固定策略收据](paper-integration.md)。本文保留原 v1 基础的设计与验收范围；当前版本额外开放显式历史研究重放，在线执行与真实连续验收仍未准入。
+
 此实现基于 AQ `b6728f93c30a578ba5818a4548b63b21449182bb`，仅开放合成输入的原生连续账户验收。`observed_data_enabled=false`、`continuous_paper_accepted=false` 是可查询的能力边界。真实策略、AD 执行数据及 quant-web 联验尚未完成；没有自动采数、系统定时器、券商或部署入口。
 
 共同真实题面为父任务维护的 `real-strategies/manifest.json`：八股、2020/2022/2024 三窗，等权、动量和趋势三策略。此模块不另选策略或窗口。撮合时间已对齐为前收信息于 D 日 09:00 冻结目标、09:30 原始开盘价成交、15:30 原始收盘价估值。借用 RQAlpha 的 OPEN_AUCTION 事件执行日频开盘研究模型，不主张真实集合竞价队列或流动性。

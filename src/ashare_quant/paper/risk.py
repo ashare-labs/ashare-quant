@@ -4,6 +4,7 @@ from datetime import time
 from decimal import Decimal
 
 from ashare_quant.contracts import SHANGHAI, DomainError
+from ashare_quant.m2_jobs.files import digest
 
 D = Decimal
 
@@ -20,6 +21,13 @@ def indexed(rows, universe):
 
 
 def decision_gate(config, decision):
+    evidence_gate(config, decision)
+    if config.strategy_id:
+        require(
+            decision.strategy_receipt is not None
+            and digest(decision.strategy_receipt) == decision.strategy_receipt_sha256,
+            "PAPER_STRATEGY_RECEIPT_CHANGED",
+        )
     logical = decision.logical_at.astimezone(SHANGHAI)
     require(decision.strategy_version == config.strategy_version, "PAPER_STRATEGY_IDENTITY")
     require(set(decision.targets) == set(config.universe), "PAPER_TARGET_SET")
@@ -64,6 +72,7 @@ def decision_gate(config, decision):
 
 
 def close_gate(config, decision, close):
+    evidence_gate(config, close)
     require(close.trading_date == decision.trading_date, "PAPER_CLOSE_DATE")
     at = close.received_at.astimezone(SHANGHAI)
     require(
@@ -91,6 +100,15 @@ def close_gate(config, decision, close):
             and row.observed_at <= close.received_at,
             "PAPER_CLOSE_NOT_OBSERVED",
         )
+
+
+def evidence_gate(config, value):
+    historical = config.data_mode == "historical_research"
+    require(
+        value.evidence_kind == ("historical_research" if historical else "synthetic")
+        and value.clock_basis == ("retrospective_model" if historical else "synthetic_clock"),
+        "PAPER_EVIDENCE_MODE_MISMATCH",
+    )
 
 
 def pretrade(config, decision, account):

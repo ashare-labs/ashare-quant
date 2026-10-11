@@ -151,11 +151,9 @@ class PaperService:
         )
 
     def alert(self, sid, day, error):
-        value = {
-            "code": getattr(error, "code", "PAPER_FAILURE"),
-            "message": str(error),
-            "next_action": "Inspect inputs and native proof; resume the same frozen day.",
-        }
+        from .errors import error_value
+
+        value = error_value(error)
         with self.db() as db:
             self.event(db, sid, day, "alert", value)
         return value
@@ -204,7 +202,7 @@ class PaperService:
                 sid,
                 None,
                 "session_created",
-                {"identity": identity, "data_mode": "synthetic_fixture"},
+                {"identity": identity, "data_mode": config.data_mode},
             )
         (self.root / sid).mkdir(mode=0o700)
         return self.session(sid)[0]
@@ -222,6 +220,13 @@ class PaperService:
         day = decision.trading_date.isoformat()
         try:
             session, config = self.session(sid)
+            if config.strategy_id:
+                from .replay import build
+
+                expected, _ = build(self, sid, day, decision.expected_parent)
+                require(
+                    canonical(expected) == canonical(decision), "PAPER_STRATEGY_RECEIPT_CHANGED"
+                )
             decision_gate(config, decision)
             encoded = canonical(decision).decode()
             with self.db() as db:
@@ -298,6 +303,15 @@ class PaperService:
             row = self.day(sid, day)
             decision = Decision.model_validate_json(row["decision"])
             require(close.intent_id == row["intent_id"], "PAPER_INTENT_MISMATCH")
+            if config.strategy_id:
+                from .replay import build, close_for
+
+                expected, inputs = build(self, sid, day, decision.expected_parent)
+                require(
+                    canonical(close_for(config, expected, inputs, row["intent_id"]))
+                    == canonical(close),
+                    "PAPER_REPLAY_CLOSE_CHANGED",
+                )
             close_gate(config, decision, close)
             encoded = canonical(close).decode()
             with self.db() as db:
@@ -405,6 +419,78 @@ class PaperService:
             "session": session,
             "days": days,
             "events": events,
+            "observed_data_enabled": False,
+            "continuous_paper_accepted": False,
+        }
+
+    def catalogue(self):
+        with self.db() as db:
+            sessions = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT id,account_id,config,identity,last_day,head,paused FROM paper_sessions "
+                    "ORDER BY account_id"
+                )
+            ]
+        for row in sessions:
+            row["config"] = json.loads(row["config"])
+        return {"sessions": sessions, "continuous_paper_accepted": False}
+
+    def view(self, sid, selected_day=None):
+        """A verified human projection; never derives another cash/position ledger."""
+        status = self.status(sid)
+        session, config = self.session(sid)
+        days = status["days"]
+        selected = next((d for d in days if d["day"] == selected_day), None)
+        if selected_day is None and days:
+            selected = days[-1]
+        decision = json.loads(selected["decision"]) if selected else None
+        report = (
+            self.report(sid, selected["day"])
+            if selected and selected["status"] == "committed"
+            else None
+        )
+        latest = self.report(sid, session["last_day"]) if session["last_day"] else None
+        replay = None
+        if config.strategy_id:
+            from .replay import load, provenance
+
+            binding, inputs = load(self, sid, config)
+            pending = next((d["day"] for d in days if d["status"] != "committed"), None)
+            following = next(
+                (d for d in inputs.days if not session["last_day"] or d > session["last_day"]), None
+            )
+            replay = {
+                **provenance(binding, inputs),
+                "next_day": pending or following,
+                "days": inputs.days,
+            }
+        return {
+            "contract_version": "paper-api.v2",
+            "session_id": sid,
+            "identity": session["identity"],
+            "engine_pin": json.loads(session["engine_pin"]),
+            "config": config.model_dump(mode="json"),
+            "head": session["head"],
+            "last_day": session["last_day"],
+            "paused": bool(session["paused"]),
+            "days": [
+                {
+                    k: v
+                    for k, v in d.items()
+                    if k not in {"decision", "close_input", "token", "lease_until", "session_id"}
+                }
+                for d in days
+            ],
+            "selected_day": selected["day"] if selected else selected_day,
+            "decision": decision,
+            "report": report,
+            "account_as_of": latest["day"] if latest else None,
+            "latest_account": latest["native"]["account"] if latest else None,
+            "events": status["events"],
+            "replay": replay,
+            "historical_pit_verified": False,
+            "execution_permission": False,
             "observed_data_enabled": False,
             "continuous_paper_accepted": False,
         }
@@ -576,10 +662,19 @@ class PaperService:
                         f"{day}：原生成交 {len(receipt['trades'])} 笔；"
                         f"现金 {receipt['account']['total_cash']}，"
                         f"权益 {receipt['account']['nav']}；对账通过；"
-                        f"未完成目标 {len(receipt['target_gaps'])} 项。仅为合成基础验收。"
+                        f"未完成目标 {len(receipt['target_gaps'])} 项。"
+                        + (
+                            "仅为条件历史研究重放。"
+                            if config.data_mode == "historical_research"
+                            else "仅为合成基础验收。"
+                        )
                     ),
                     "real_scenario_acceptance": "pending",
-                    "data_mode": "synthetic_fixture",
+                    "data_mode": config.data_mode,
+                    "strategy_receipt": decision.strategy_receipt,
+                    "strategy_receipt_sha256": decision.strategy_receipt_sha256,
+                    "historical_pit_verified": False,
+                    "execution_permission": False,
                 }
                 if stage:
                     stage("before_publish", process)

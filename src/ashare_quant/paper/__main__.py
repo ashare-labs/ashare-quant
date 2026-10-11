@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from contextlib import nullcontext
 
 from .service import PaperService
 
@@ -12,6 +13,18 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     create = commands.add_parser("create")
     create.add_argument("--input", required=True)
+    replay = commands.add_parser("bind-replay")
+    replay.add_argument("--manifest", required=True)
+    replay.add_argument("--input", required=True)
+    replay.add_argument("--strategy", choices=("equal-weight", "momentum", "trend"), required=True)
+    replay.add_argument("--window", required=True)
+    replay.add_argument("--account", required=True)
+    replay.add_argument("--risk")
+    replay.add_argument("--accept-owner-state-model", action="store_true")
+    advance = commands.add_parser("advance")
+    advance.add_argument("--session", required=True)
+    advance.add_argument("--day", required=True)
+    advance.add_argument("--expected-parent")
     for name in ("prepare", "seal-close", "status", "work", "report", "pause", "resume"):
         sub = commands.add_parser(name)
         sub.add_argument("--session", required=True)
@@ -33,7 +46,26 @@ def main():
         uvicorn.run(create_app(args.root), host="127.0.0.1", port=args.port)
         return
     service = PaperService(args.root)
-    if args.command == "create":
+    if args.command == "bind-replay":
+        from .replay import bind
+
+        with open(args.risk) if args.risk else nullcontext() as stream:
+            risk = json.load(stream) if stream else None
+        result = bind(
+            service,
+            args.manifest,
+            args.input,
+            args.strategy,
+            args.window,
+            args.account,
+            accept_model=args.accept_owner_state_model,
+            risk=risk,
+        )
+    elif args.command == "advance":
+        from .replay import advance
+
+        result = advance(service, args.session, args.day, args.expected_parent)
+    elif args.command == "create":
         with open(args.input) as stream:
             result = service.create(json.load(stream))
     elif args.command in {"prepare", "seal-close"}:

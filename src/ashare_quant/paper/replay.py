@@ -1,0 +1,296 @@
+"""Pinned local research inputs -> shared signals -> the existing paper ledger.
+
+Only the local CLI imports files. HTTP cannot choose paths, code or data providers.
+The archived full window is a signal input; the native worker still receives one
+new day and the previous native checkpoint, never a rerun from an empty account.
+"""
+
+import json
+from pathlib import Path
+
+from ashare_quant.contracts import DomainError
+from ashare_quant.daily_portfolio import signals
+from ashare_quant.daily_portfolio.inputs import Inputs
+from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
+
+from .contracts import CloseInput, Decision, RiskPolicy, SessionConfig
+from .risk import require
+
+
+def strategy_version(manifest, strategy):
+    spec = next((s for s in manifest["strategies"] if s["id"] == strategy), None)
+    require(spec is not None, "PAPER_STRATEGY_UNKNOWN")
+    return digest(
+        {
+            "shared_signals_sha256": sha(Path(signals.__file__).read_bytes()),
+            "strategy": spec,
+            "execution": manifest["execution"],
+        }
+    )
+
+
+def bind(
+    service, manifest_path, input_path, strategy, window, account, *, accept_model=False, risk=None
+):
+    """Freeze copies and config. Repeating an identical import is safe."""
+    manifest_raw, input_raw = regular(Path(manifest_path)), regular(Path(input_path))
+    manifest = json.loads(manifest_raw)
+    scope = next((w for w in manifest["windows"] if w["id"] == window), None)
+    require(scope is not None, "PAPER_WINDOW_UNKNOWN")
+    inputs = Inputs(input_path, manifest, scope)
+    doc = inputs.document
+    if doc["real_market_data"]:
+        require(
+            accept_model,
+            "PAPER_RESEARCH_OPT_IN_REQUIRED",
+            "AD research data requires explicit retrospective state-model acceptance.",
+        )
+        require(doc.get("state_mode") == "retrospective_model", "PAPER_OWNER_STATE_UNKNOWN")
+        owner = doc.get("owner_descriptor", {})
+        require(
+            owner.get("execution_permission") is False
+            and owner.get("historical_pit") is False
+            and owner.get("role") == "daily_strategy_retrospective_research",
+            "PAPER_RESEARCH_ROLE_REQUIRED",
+        )
+    binding = {
+        "schema": "paper-replay-binding.v1",
+        "manifest_sha256": sha(manifest_raw),
+        "input_sha256": sha(input_raw),
+        "strategy_id": strategy,
+        "window": scope,
+        "accept_owner_state_model": accept_model,
+        "real_market_data": doc["real_market_data"],
+    }
+    execution = manifest["execution"]
+    require(
+        execution["gross_target_weight"] == "0.98" and execution["lot_size"] == 100,
+        "PAPER_FROZEN_STRATEGY_PARAMETERS",
+    )
+    fees = execution["fees"]
+    require(
+        fees["buy_commission_rate"] == fees["sell_commission_rate"]
+        and fees["slippage"] == fees["transfer_fee"] == "0",
+        "PAPER_FEE_MODEL_UNSUPPORTED",
+    )
+    config = SessionConfig(
+        account_id=account,
+        strategy_id=strategy,
+        strategy_version=strategy_version(manifest, strategy),
+        scenario_manifest_sha256=sha(manifest_raw),
+        replay_binding_sha256=digest(binding),
+        initial_cash=execution["initial_cash"],
+        universe=tuple(manifest["securities"]),
+        data_mode="historical_research" if doc["real_market_data"] else "synthetic_fixture",
+        commission_rate=fees["buy_commission_rate"],
+        minimum_commission=fees["minimum_commission"],
+        sell_tax_rate=fees["sell_tax_rate"],
+        risk=RiskPolicy.model_validate(risk or {}),
+    )
+    session = service.create(config)
+    root = service.root / session["id"] / "replay"
+    root.mkdir(exist_ok=True)
+    with lock(service.root / session["id"] / "import.lock"):
+        for name, raw in (
+            ("manifest.json", manifest_raw),
+            ("input.json", input_raw),
+            ("binding.json", canonical(binding)),
+        ):
+            path = root / name
+            if path.exists():
+                require(regular(path) == raw, "PAPER_REPLAY_INPUT_CHANGED")
+            else:
+                atomic(path, raw)
+    return {
+        "session_id": session["id"],
+        "identity": session["identity"],
+        "binding": binding,
+        "preflight": inputs.preflight(),
+    }
+
+
+def load(service, sid, config):
+    root = service.root / sid / "replay"
+    require(
+        (root / "binding.json").is_file(),
+        "PAPER_REPLAY_BINDING_MISSING",
+        "Complete the local CLI import before advancing this session.",
+    )
+    binding = json.loads(regular(root / "binding.json"))
+    require(digest(binding) == config.replay_binding_sha256, "PAPER_REPLAY_BINDING_CHANGED")
+    manifest_raw, input_raw = regular(root / "manifest.json"), regular(root / "input.json")
+    require(
+        sha(manifest_raw) == binding["manifest_sha256"] == config.scenario_manifest_sha256
+        and sha(input_raw) == binding["input_sha256"],
+        "PAPER_REPLAY_INPUT_CHANGED",
+    )
+    manifest = json.loads(manifest_raw)
+    require(
+        strategy_version(manifest, config.strategy_id) == config.strategy_version,
+        "PAPER_STRATEGY_IDENTITY",
+    )
+    return binding, Inputs(root / "input.json", manifest, binding["window"])
+
+
+def provenance(binding, inputs):
+    doc = inputs.document
+    return {
+        "binding": binding,
+        "producer": doc["producer"],
+        "source_refs": doc["source_refs"],
+        "owner_binding_sha256": doc.get("owner_descriptor", {}).get("binding_sha256"),
+        "state_mode": doc.get("state_mode", "synthetic_known"),
+        "limitations": doc["limitations"],
+        "assumptions": doc.get("assumptions", []),
+        "clock_basis": "retrospective_model" if doc["real_market_data"] else "synthetic_clock",
+        "historical_pit_verified": False,
+        "execution_permission": False,
+        "preflight": inputs.preflight(),
+    }
+
+
+def build(service, sid, day, parent):
+    _, config = service.session(sid)
+    binding, inputs = load(service, sid, config)
+    require(day in inputs.days, "PAPER_REPLAY_DATE_OUT_OF_SCOPE")
+    require(
+        not inputs.gaps,
+        "PAPER_REPLAY_DATA_MISSING",
+        "Owner export has missing fields: " + json.dumps(inputs.gaps[:12], ensure_ascii=False),
+    )
+    # The continuous worker does not yet carry action receivables/share changes.
+    # Refuse the entire relevant record/ex/credit interval even with zero holdings.
+    for event in inputs.actions:
+        dates = [v for k, v in event.items() if k.endswith("_date") and isinstance(v, str)]
+        require(
+            not min(dates) <= day <= max(dates),
+            "PAPER_ACTION_TIMING_UNSUPPORTED",
+            f"{event['security']} {event['kind']} {min(dates)}..{max(dates)}: "
+            "continuous native action/receivable recovery is not admitted.",
+        )
+    prior = inputs.previous[day]
+    if day == inputs.days[0]:
+        require(parent is None, "PAPER_GENESIS_PARENT")
+        equity, quantities = config.initial_cash, dict.fromkeys(config.universe, 0)
+    else:
+        previous = service.report(sid, prior)
+        require(previous["checkpoint_sha256"] == parent, "PAPER_PARENT_CONFLICT")
+        account = previous["native"]["account"]
+        equity = account["nav"]
+        quantities = {s: p["quantity"] for s, p in account["positions"].items()}
+    history = inputs.history(day)
+    scheduled = signals.scheduled(config.strategy_id, day, prior, day == inputs.days[0])
+    signal = (
+        signals.decide(config.strategy_id, history, equity)
+        if scheduled
+        else {
+            "selected": [],
+            "scores": {},
+            "weights": {},
+            "targets": quantities,
+        }
+    )
+    receipt = {
+        "schema": "paper-strategy-receipt.v1",
+        "strategy_id": config.strategy_id,
+        "strategy_version": config.strategy_version,
+        "manifest_sha256": config.scenario_manifest_sha256,
+        "input_sha256": inputs.sha256,
+        "window_id": binding["window"]["id"],
+        "day": day,
+        "information_cutoff": prior + "T15:00:00+08:00",
+        "history_sha256": digest(history),
+        "history_sessions": 120,
+        "previous_equity": equity,
+        "parent_checkpoint": parent,
+        "scheduled": scheduled,
+        "reason": "scheduled_rebalance" if scheduled else "hold_actual_positions_no_retry",
+        "signal": signal,
+        "provenance": provenance(binding, inputs),
+    }
+    historical = config.data_mode == "historical_research"
+    mode = {
+        "evidence_kind": "historical_research" if historical else "synthetic",
+        "clock_basis": "retrospective_model" if historical else "synthetic_clock",
+    }
+    # These are declared MODEL availability times, not source receipt timestamps.
+    # Original owner provenance remains in the receipt and immutable input file.
+    rows = []
+    for security in config.universe:
+        row = inputs.row(security, day)
+        rows.append(
+            dict(
+                security=security,
+                price_date=prior,
+                previous_close=str(history[security][-1]),
+                observed_at=prior + "T16:00:00+08:00",
+                complete=True,
+                source_watermark=prior,
+                selected_watermark=prior,
+                eligible=True,
+                suspended=row["suspended"],
+                is_st=False,
+                lower_limit=str(row["lower_limit"]),
+                upper_limit=str(row["upper_limit"]),
+                rule_version="explicit-owner-research-model" if historical else "synthetic-rules",
+                actions_known_absent=True,
+                facts_available_at=day + "T09:00:00+08:00",
+            )
+        )
+    decision = Decision(
+        trading_date=day,
+        previous_open=prior,
+        next_open=inputs.calendar[inputs.calendar.index(day) + 1],
+        logical_at=day + "T09:00:00+08:00",
+        received_at=day + "T09:00:01+08:00",
+        calendar_available_at=prior + "T16:00:00+08:00",
+        decision_deadline=day + "T09:05:00+08:00",
+        expected_parent=parent,
+        strategy_version=config.strategy_version,
+        strategy_receipt_sha256=digest(receipt),
+        strategy_receipt=receipt,
+        data_manifest_sha256=inputs.sha256,
+        rows=rows,
+        targets=signal["targets"],
+        reason=receipt["reason"],
+        **mode,
+    )
+    return decision, inputs
+
+
+def close_for(config, decision, inputs, intent):
+    day = decision.trading_date.isoformat()
+    return CloseInput(
+        trading_date=day,
+        intent_id=intent,
+        data_manifest_sha256=inputs.sha256,
+        received_at=day + "T16:10:00+08:00",
+        deadline=day + "T18:00:00+08:00",
+        evidence_kind=decision.evidence_kind,
+        clock_basis=decision.clock_basis,
+        rows=[
+            dict(
+                security=s,
+                trading_date=day,
+                **{k: str(inputs.row(s, day)[k]) for k in ("open", "high", "low", "close")},
+                volume=int(inputs.row(s, day)["volume"]),
+                observed_at=day + "T16:00:00+08:00",
+                complete=True,
+                source_watermark=day,
+                selected_watermark=day,
+            )
+            for s in config.universe
+        ],
+    )
+
+
+def advance(service, sid, day, parent, *, fault=None):
+    try:
+        decision, inputs = build(service, sid, day, parent)
+        row = service.prepare(sid, decision)
+        _, config = service.session(sid)
+        service.seal_close(sid, close_for(config, decision, inputs, row["intent_id"]))
+        return service.work(sid, day, fault=fault)
+    except DomainError as exc:
+        service.alert(sid, day, exc)
+        raise
