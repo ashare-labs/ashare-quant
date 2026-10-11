@@ -46,7 +46,7 @@ from rqprobe.guards import block_rqdata_apis
 
 from .account import install
 from .contracts import CloseInput, Decision, SessionConfig
-from .risk import close_gate, decision_gate, indexed, pretrade, reconcile, require
+from .risk import close_gate, decision_gate, indexed, order_admission, pretrade, reconcile, require
 
 runtime = {}
 __config__ = {"priority": 1000}
@@ -232,13 +232,21 @@ class DaySource(AbstractDataSource):
         return [self.before[sid].is_st] * len(dates)
 
     def get_dividend(self, instrument):
-        require(self.before[instrument.order_book_id].actions_known_absent, "PAPER_ACTIONS_UNKNOWN")
+        row = self.before[instrument.order_book_id]
+        require(
+            row.actions_known_absent or row.action_effect == "zero_entitlement",
+            "PAPER_ACTIONS_UNKNOWN",
+        )
         return None
 
     get_split = get_dividend
 
     def get_share_transformation(self, sid):
-        require(self.before[sid].actions_known_absent, "PAPER_ACTIONS_UNKNOWN")
+        require(
+            self.before[sid].actions_known_absent
+            or self.before[sid].action_effect == "zero_entitlement",
+            "PAPER_ACTIONS_UNKNOWN",
+        )
         return None
 
     def get_exchange_rate(self, trading_date, local, settlement=None):
@@ -289,6 +297,7 @@ def order_projection(order):
         "status": order.status.name,
         "cost": str(order.transaction_cost),
         "average_price": str(order.avg_price),
+        "message": order.message,
     }
 
 
@@ -324,6 +333,15 @@ class IntentGuard(AbstractFrontendValidator):
             h.submitting == (order.order_book_id, order.quantity, order.side.name),
             "PAPER_UNPLANNED_ORDER",
         )
+        if h.session.risk.profile == "target_then_native_cash_v1":
+            check = order_admission(
+                h.session,
+                snapshot(h.env, h.session.universe),
+                order.order_book_id,
+                order.quantity if order.side.name == "BUY" else -order.quantity,
+                order.frozen_price,
+            )
+            return check["message"] if check["status"] == "rejected" else None
         if order.side.name == "BUY":
             cost = Decimal(str(order.frozen_price)) * order.quantity
             fee = max(
@@ -361,6 +379,8 @@ class PaperMod(AbstractMod):
             "before": None,
             "risk": None,
             "submitted": False,
+            "submissions": [],
+            "refusals": [],
         }
         self.owned = {}
         self.submitting = None
@@ -384,6 +404,7 @@ class PaperMod(AbstractMod):
             env.event_bus.add_listener(event, self.observe)
         env.event_bus.add_listener(EVENT.PRE_BAR, self.cancel_unfilled)
         env.event_bus.add_listener(EVENT.TRADE, self.trade)
+        env.event_bus.add_listener(EVENT.ORDER_CREATION_REJECT, self.rejected)
         for event in (
             EVENT.ORDER_CREATION_PASS,
             EVENT.ORDER_CANCELLATION_PASS,
@@ -461,6 +482,15 @@ class PaperMod(AbstractMod):
         )
         fault("inside_native_trade")
 
+    def rejected(self, event):
+        self.state["refusals"].append(
+            {
+                "security": event.order_book_id,
+                "code": "PAPER_NATIVE_ORDER_REJECTED",
+                "message": event.reason,
+            }
+        )
+
     def submit(self):
         from rqalpha.api import order_shares
         from rqalpha.model.order import LimitOrder
@@ -478,12 +508,46 @@ class PaperMod(AbstractMod):
             if not delta:
                 continue
             self.submitting = (sid, abs(delta), "BUY" if delta > 0 else "SELL")
-            limit = facts[sid].upper_limit if delta > 0 else facts[sid].lower_limit
-            result = order_shares(sid, delta, price_or_style=LimitOrder(float(limit)))
+            before_order = snapshot(self.env, self.session.universe)
+            if self.session.risk.profile == "target_then_native_cash_v1":
+                check = order_admission(
+                    self.session, before_order, sid, delta, self.env.price_board.get_last_price(sid)
+                )
+                if check["status"] == "rejected":
+                    self.state["refusals"].append(check)
+                    self.state["submissions"].append(
+                        {**check, "order_id": None, "cash_after": before_order["total_cash"]}
+                    )
+                    self.submitting = None
+                    continue
+                # Native market order is frozen at the available raw open under
+                # the declared daily-open model, matching the fixed strategy runner.
+                result = order_shares(sid, delta)
+            else:
+                limit = facts[sid].upper_limit if delta > 0 else facts[sid].lower_limit
+                result = order_shares(sid, delta, price_or_style=LimitOrder(float(limit)))
             if result is not None:
                 self.owned[result.order_id] = result
             else:
-                self.state.setdefault("refusals", []).append({"security": sid, "quantity": delta})
+                if not self.state["refusals"] or self.state["refusals"][-1]["security"] != sid:
+                    self.state["refusals"].append(
+                        {
+                            "security": sid,
+                            "quantity": delta,
+                            "code": "PAPER_NATIVE_ORDER_REJECTED",
+                            "message": "原生引擎未创建订单",
+                        }
+                    )
+            self.state["submissions"].append(
+                {
+                    "security": sid,
+                    "quantity": delta,
+                    "order_id": result.order_id if result is not None else None,
+                    "cash_before": before_order["total_cash"],
+                    "cash_after": snapshot(self.env, self.session.universe)["total_cash"],
+                    "status": result.status.name if result is not None else "rejected",
+                }
+            )
             self.submitting = None
             fault("inside_native_submit")
         self.state["submitted"] = True
@@ -506,7 +570,7 @@ class PaperMod(AbstractMod):
             "settlement_count": executor.settlement_count,
             "parent_checkpoint": runtime["parent_sha"],
             "identity": self.identity,
-            "evidence_kind": "synthetic",
+            "evidence_kind": self.decision.evidence_kind,
             "native_account_class": type(self.env.portfolio.stock_account).__name__,
             "execution_model": self.session.model,
             "liquidity_claim": False,

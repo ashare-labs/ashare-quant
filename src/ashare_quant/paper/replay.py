@@ -158,15 +158,43 @@ def build(service, sid, day, parent):
         "PAPER_REPLAY_DATA_MISSING",
         "Owner export has missing fields: " + json.dumps(inputs.gaps[:12], ensure_ascii=False),
     )
-    # The continuous worker does not yet carry action receivables/share changes.
-    # Refuse the entire relevant record/ex/credit interval even with zero holdings.
+    # Record-day trading needs no posting. At the posting date an immutable
+    # record-day native account can prove zero entitlement; no action is invented.
+    action_checks = []
+    zero_entitlement = set()
     for event in inputs.actions:
         dates = [v for k, v in event.items() if k.endswith("_date") and isinstance(v, str)]
+        if config.risk.profile == "conservative_v1":
+            require(
+                not min(dates) <= day <= max(dates),
+                "PAPER_ACTION_TIMING_UNSUPPORTED",
+                f"{event['security']} {event['kind']} {min(dates)}..{max(dates)}: "
+                "continuous native action/receivable recovery is not admitted.",
+            )
+            continue
+        if not event["ex_date"] <= day <= max(dates):
+            continue
+        if config.risk.profile == "target_then_native_cash_v1":
+            record = service.report(sid, event["record_date"])
+            quantity = record["native"]["account"]["positions"][event["security"]]["quantity"]
+            if quantity == 0:
+                zero_entitlement.add(event["security"])
+                action_checks.append(
+                    {
+                        "security": event["security"],
+                        "kind": event["kind"],
+                        "record_date": event["record_date"],
+                        "record_checkpoint": record["checkpoint_sha256"],
+                        "record_quantity": 0,
+                        "effect": "zero_entitlement",
+                    }
+                )
+                continue
         require(
-            not min(dates) <= day <= max(dates),
+            False,
             "PAPER_ACTION_TIMING_UNSUPPORTED",
-            f"{event['security']} {event['kind']} {min(dates)}..{max(dates)}: "
-            "continuous native action/receivable recovery is not admitted.",
+            f"{event['security']} {event['kind']} {event['record_date']}..{max(dates)}: "
+            "positive/unknown record entitlement requires native action/receivable continuation.",
         )
     prior = inputs.previous[day]
     if day == inputs.days[0]:
@@ -207,6 +235,7 @@ def build(service, sid, day, parent):
         "reason": "scheduled_rebalance" if scheduled else "hold_actual_positions_no_retry",
         "signal": signal,
         "provenance": provenance(binding, inputs),
+        "action_checks": action_checks,
     }
     historical = config.data_mode == "historical_research"
     mode = {
@@ -233,7 +262,8 @@ def build(service, sid, day, parent):
                 lower_limit=str(row["lower_limit"]),
                 upper_limit=str(row["upper_limit"]),
                 rule_version="explicit-owner-research-model" if historical else "synthetic-rules",
-                actions_known_absent=True,
+                actions_known_absent=security not in zero_entitlement,
+                action_effect="zero_entitlement" if security in zero_entitlement else "none",
                 facts_available_at=day + "T09:00:00+08:00",
             )
         )

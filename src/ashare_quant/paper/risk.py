@@ -1,12 +1,30 @@
 """Strategy-independent input gates and read-only native reconciliation."""
 
 from datetime import time
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from ashare_quant.contracts import SHANGHAI, DomainError
 from ashare_quant.m2_jobs.files import digest
 
 D = Decimal
+
+
+def profiles():
+    from .contracts import RiskPolicy
+
+    return {
+        "conservative_v1": RiskPolicy().model_dump(mode="json"),
+        "target_then_native_cash_v1": RiskPolicy(
+            profile="target_then_native_cash_v1",
+            max_gross="0.98",
+            max_single="0.34",
+            cash_buffer="0",
+            max_turnover="2",
+            max_order_value="1000000",
+            max_order_nav_ratio="0.40",
+            execution_max_single="0.40",
+        ).model_dump(mode="json"),
+    }
 
 
 def require(ok, code, message=None):
@@ -68,7 +86,10 @@ def decision_gate(config, decision):
             and bool(row.rule_version),
             "PAPER_TRADING_RULES_UNKNOWN",
         )
-        require(row.actions_known_absent, "PAPER_ACTION_COVERAGE_UNSUPPORTED")
+        require(
+            row.actions_known_absent or row.action_effect == "zero_entitlement",
+            "PAPER_ACTION_COVERAGE_UNSUPPORTED",
+        )
 
 
 def close_gate(config, decision, close):
@@ -112,6 +133,13 @@ def evidence_gate(config, value):
 
 
 def pretrade(config, decision, account):
+    with localcontext(prec=50):
+        return _pretrade(config, decision, account)
+
+
+def _pretrade(config, decision, account):
+    if config.risk.profile == "target_then_native_cash_v1":
+        return target_pretrade(config, decision, account)
     rows, risk = indexed(decision.rows, config.universe), config.risk
     nav, available = D(account["nav"]), D(account["available_cash"])
     require(nav > 0 and available >= 0, "PAPER_ACCOUNT_INVALID")
@@ -133,7 +161,7 @@ def pretrade(config, decision, account):
         require(delta >= 0 or -delta <= pos["sellable"], "PAPER_T1_LIMIT")
         require(delta % rows[sid].round_lot == 0 or delta < 0 and target == 0, "PAPER_LOT_LIMIT")
         notional = abs(delta) * upper
-        require(notional <= D(risk.max_order_value), "PAPER_ORDER_VALUE_LIMIT")
+        limit(notional, D(risk.max_order_value), "PAPER_ORDER_VALUE_LIMIT", sid, "涨停价预算")
         turnover += notional
         if delta > 0:
             buys += notional + max(
@@ -151,7 +179,125 @@ def pretrade(config, decision, account):
     }
 
 
+def limit(measured, cap, code, security=None, basis=""):
+    require(measured <= cap, code, f"{security or '组合'}：{basis} {measured} > 上限 {cap} CNY")
+
+
+def target_pretrade(config, decision, account):
+    """Check the frozen target at its signal price, not two concurrent portfolios.
+
+    Existing drift never prevents selling or an unchanged holding day. Execution
+    still checks actual native cash, fees and exposure for every new buy.
+    """
+    rows, risk = indexed(decision.rows, config.universe), config.risk
+    nav = D(account["nav"])
+    require(nav > 0 and D(account["available_cash"]) >= 0, "PAPER_ACCOUNT_INVALID")
+    gross = turnover = D(0)
+    holdings = 0
+    increasing = False
+    for sid in config.universe:
+        pos = account["positions"].get(sid, {"quantity": 0, "sellable": 0})
+        target, qty, price = decision.targets[sid], pos["quantity"], D(rows[sid].previous_close)
+        delta = target - qty
+        require(delta >= 0 or -delta <= pos["sellable"], "PAPER_T1_LIMIT")
+        require(delta % rows[sid].round_lot == 0 or delta < 0 and target == 0, "PAPER_LOT_LIMIT")
+        gross += target * price
+        turnover += abs(delta) * price
+        holdings += target > 0
+        if delta > 0:
+            increasing = True
+            limit(
+                target * price,
+                nav * D(risk.max_single),
+                "PAPER_CONCENTRATION_LIMIT",
+                sid,
+                "前收目标市值",
+            )
+            limit(
+                delta * price,
+                min(D(risk.max_order_value), nav * D(risk.max_order_nav_ratio)),
+                "PAPER_ORDER_VALUE_LIMIT",
+                sid,
+                "前收买单金额",
+            )
+    require(holdings <= risk.max_holdings, "PAPER_HOLDINGS_LIMIT")
+    if increasing:
+        limit(gross, nav * D(risk.max_gross), "PAPER_GROSS_LIMIT", basis="前收目标总市值")
+    limit(turnover, nav * D(risk.max_turnover), "PAPER_TURNOVER_LIMIT", basis="双边前收换手金额")
+    return {
+        "status": "passed",
+        "profile": risk.profile,
+        "target_value": str(gross),
+        "target_cap": str(nav * D(risk.max_gross)),
+        "two_sided_turnover": str(turnover),
+        "cash_admission": "per_order_native_cash_after_actual_fills",
+        "existing_drift_does_not_block_reductions": True,
+    }
+
+
+def order_admission(config, account, security, delta, price):
+    """Read-only assessment immediately before native submission; no shadow book."""
+    with localcontext(prec=50):
+        nav, price = D(account["nav"]), D(str(price))
+        cash, cost = D(account["available_cash"]), abs(delta) * price
+        risk = config.risk
+        result = {
+            "security": security,
+            "quantity": delta,
+            "price": str(price),
+            "cash_before": str(cash),
+            "nav_before": str(nav),
+            "notional": str(cost),
+            "status": "passed",
+            "code": None,
+            "message": "原生可用现金及风险检查通过",
+        }
+        pos = account["positions"].get(security, {"quantity": 0, "sellable": 0})
+        if delta < 0:
+            require(-delta <= pos["sellable"], "PAPER_T1_LIMIT")
+            return result
+        fee = max(D(config.minimum_commission), cost * D(config.commission_rate))
+        cash_cap = cash - nav * D(risk.cash_buffer)
+        pending = sum(
+            o["remaining"]
+            for o in account["open_orders"]
+            if o["security"] == security and o["side"] == "BUY"
+        )
+        checks = [
+            (
+                cost,
+                min(D(risk.max_order_value), nav * D(risk.max_order_nav_ratio)),
+                "PAPER_ORDER_VALUE_LIMIT",
+                "实际开盘买单金额",
+            ),
+            (
+                (pos["quantity"] + pending + delta) * price,
+                nav * D(risk.execution_max_single),
+                "PAPER_CONCENTRATION_LIMIT",
+                "执行后单股市值",
+            ),
+            (cost + fee, cash_cap, "PAPER_CASH_BUFFER", "买入金额与费用"),
+        ]
+        for measured, cap, code, name in checks:
+            if measured > cap:
+                result.update(
+                    status="rejected",
+                    code=code,
+                    measured=str(measured),
+                    cap=str(cap),
+                    fee=str(fee),
+                    message=f"{security}：{name} {measured} > 可用上限 {cap} CNY；拒绝本笔，保留已成交结果",
+                )
+                break
+        return result
+
+
 def reconcile(before, after, trades):
+    with localcontext(prec=50):
+        return _reconcile(before, after, trades)
+
+
+def _reconcile(before, after, trades):
     expected_cash = D(before["total_cash"])
     quantities = {s: p["quantity"] for s, p in before["positions"].items()}
     seen = set()
@@ -164,7 +310,7 @@ def reconcile(before, after, trades):
             quantities.get(trade["security"], 0) + sign * trade["quantity"]
         )
     residual = D(after["total_cash"]) - expected_cash
-    require(abs(residual) <= D("0.01"), "PAPER_CASH_RECONCILIATION")
+    require(abs(residual) <= D("0.000001"), "PAPER_CASH_RECONCILIATION")
     require(D(after["available_cash"]) >= 0 and D(after["frozen_cash"]) >= 0, "PAPER_NEGATIVE_CASH")
     value = D(after["total_cash"])
     for sid, pos in after["positions"].items():
@@ -173,5 +319,5 @@ def reconcile(before, after, trades):
             "PAPER_POSITION_RECONCILIATION",
         )
         value += D(pos["market_value"])
-    require(abs(D(after["nav"]) - value) <= D("0.01"), "PAPER_NAV_RECONCILIATION")
+    require(abs(D(after["nav"]) - value) <= D("0.000001"), "PAPER_NAV_RECONCILIATION")
     return {"status": "passed", "cash_residual": str(residual), "fill_count": len(trades)}

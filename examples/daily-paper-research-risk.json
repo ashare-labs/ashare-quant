@@ -1,0 +1,12 @@
+{
+  "profile": "target_then_native_cash_v1",
+  "max_gross": "0.98",
+  "max_single": "0.34",
+  "cash_buffer": "0",
+  "max_turnover": "2",
+  "max_order_value": "1000000",
+  "max_order_nav_ratio": "0.40",
+  "execution_max_single": "0.40",
+  "max_holdings": 8,
+  "allow_st": false
+}

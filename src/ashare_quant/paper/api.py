@@ -8,7 +8,14 @@ from fastapi.responses import JSONResponse
 
 from ashare_quant.contracts import DomainError
 
-from .contracts import AdvanceAction, CloseInput, ControlAction, Decision, SessionConfig
+from .contracts import (
+    AdvanceAction,
+    CloseInput,
+    ControlAction,
+    Decision,
+    ForkSimulation,
+    SessionConfig,
+)
 from .errors import error_value
 from .risk import require
 from .service import PaperService
@@ -83,6 +90,30 @@ def create_app(root):
     @app.get("/api/v1/paper/sessions")
     def catalogue():
         return service.catalogue()
+
+    @app.get("/api/v1/paper/risk-profiles")
+    def risk_profiles():
+        from .risk import profiles
+
+        return profiles()
+
+    @app.post("/api/v1/paper/sessions/{sid}/fork", status_code=201)
+    def fork(sid: str, body: ForkSimulation):
+        from .replay import bind, load
+
+        _, config = service.session(sid)
+        binding, _ = load(service, sid, config)
+        directory = service.root / sid / "replay"
+        return bind(
+            service,
+            directory / "manifest.json",
+            directory / "input.json",
+            config.strategy_id,
+            binding["window"]["id"],
+            body.account_id,
+            accept_model=binding["accept_owner_state_model"],
+            risk=body.risk.model_dump(mode="json"),
+        )
 
     @app.post("/api/v1/paper/sessions", status_code=201)
     def create(body: SessionConfig):

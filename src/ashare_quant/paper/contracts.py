@@ -15,6 +15,7 @@ Quantity = Annotated[int, Field(strict=True, ge=0, le=10**9)]
 
 
 class RiskPolicy(Contract):
+    profile: Literal["conservative_v1", "target_then_native_cash_v1"] = "conservative_v1"
     max_gross: Money = "0.80"
     max_single: Money = "0.40"
     cash_buffer: Money = "0.10"
@@ -22,12 +23,28 @@ class RiskPolicy(Contract):
     max_order_value: Money = "50000"
     max_holdings: int = Field(strict=True, ge=1, le=10, default=8)
     allow_st: Literal[False] = False
+    max_order_nav_ratio: Money = "0.40"
+    execution_max_single: Money = "0.40"
 
     @model_validator(mode="after")
     def ratios(self):
-        for key in ("max_gross", "max_single", "cash_buffer", "max_turnover"):
+        for key in (
+            "max_gross",
+            "max_single",
+            "cash_buffer",
+            "max_order_nav_ratio",
+            "execution_max_single",
+        ):
             if not 0 <= Decimal(getattr(self, key)) <= 1:
                 raise ValueError("Risk ratios must be in [0,1]")
+        if (
+            not 0
+            <= Decimal(self.max_turnover)
+            <= (2 if self.profile == "target_then_native_cash_v1" else 1)
+        ):
+            raise ValueError("Two-sided turnover is bounded by 2 for unlevered target simulation")
+        if Decimal(self.max_order_value) <= 0:
+            raise ValueError("Positive order ceiling required")
         return self
 
 
@@ -78,6 +95,7 @@ class DecisionRow(Contract):
     upper_limit: Money | None
     rule_version: str | None
     actions_known_absent: bool = Field(strict=True)
+    action_effect: Literal["none", "zero_entitlement"] = "none"
     facts_available_at: AwareDatetime
     round_lot: Literal[100] = 100
 
@@ -144,3 +162,8 @@ class ControlAction(Contract):
 
 class AdvanceAction(ControlAction):
     day: date
+
+
+class ForkSimulation(Contract):
+    account_id: Identifier
+    risk: RiskPolicy
