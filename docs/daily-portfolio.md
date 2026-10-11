@@ -13,6 +13,10 @@ PYTHONPATH=src .venv/bin/python -B -m ashare_quant.daily_portfolio \
 
 先加 `--preflight` 检查逐证券、日期和字段缺口。缺价、缺历史停牌/涨跌停状态、未覆盖公司行动会中止并写 preflight；不会填零、删证券或换窗口。输入只接受 `ad-daily-portfolio.v1` 的不可变 AD 导出（合成测试必须明确 `real_market_data=false`）。字段包括 producer、source_refs、limitations、securities、calendar、daily、actions、action_coverage、listing_coverage、price_basis=raw、volume_unit=share；daily 每行保留 date/security/raw OHLC/volume/suspended/upper_limit/lower_limit。源证据和导出只留本地，不能随公开代码分发。
 
+通过独立 AD 环境中的公共 `DailyResearchView` 准备输入：把本 AQ 的 `src` 和已验收 AD 的 `src` 加入该进程 `PYTHONPATH`，运行 `python -B -m ashare_quant.daily_portfolio.owner_export --binding /path/to/binding.json --binding-sha256 SHA256 --window w2020 --output /path/to/ad-export.json`。此转换只调用 AD 公共 history/opening/closing/state/corporate_actions/read_window，不采集或重建数据层。保留每次调用摘要并逐日将 AQ 信号历史与 AD 查询结果摘要对账。
+
+历史盘前状态缺失时，默认严格路径保留空值并阻止执行。需要显式研究模型时，导出和运行两步均加 `--accept-owner-state-model`。结果保留 `state_mode=retrospective_model`、完整假设和 `economic_acceptance=conditional_research_only`；这是对有限研究范围的选择，不能解释为已取得真实历史盘前状态或严格 PIT。停牌前收盘延用只能来自 AD 有独立公告支持的明确标记行，不能由 AQ 填充。
+
 每次输出保留题面与源码清单、运行时版本、输入摘要、逐日信号和输入摘要、目标、订单、成交、原生账户、权益 CSV 和独立审计。原生数值字符串与展示保留不同职责：不能仅用两位小数判断一致。浮点账本核算容差固定为 `0.000001 CNY`。
 
 公司行动使用明确的研究模型：在来源除息日确认税前应收，在来源派息日到账，股息扣税固定为零；不声称符合个人实际税率。股票变动要求入账、可交易与除权日一致，零碎股四舍五入。非相邻登记/除息日、配股、换股和其他事件拒绝进入。源覆盖不足仍为数据缺口；没有把旧历史研究假设提升成严格 PIT。原生账本与独立只读计算分别核对现金、应收、股数和权益。
