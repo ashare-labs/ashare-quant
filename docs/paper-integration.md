@@ -51,4 +51,4 @@ PYTHONPATH=src /path/to/native/python -B -m ashare_quant.paper --root /path/to/s
 
 旧保守门禁复现：`PYTHONPATH=src /path/to/native/python -B scripts/verify_paper_integration.py --output <新目录> [--owner-input-dir <目录>]`。新全窗模拟：`PYTHONPATH=src /path/to/native/python -B scripts/verify_paper_research.py --output <新目录> --owner-input-dir <固定AD导出目录> --reference-dir <固定真实策略baseline目录>`。两者都保留全部八证券、三策略、三窗，不跳过失败日。新矩阵每天检查四个新事件、日结计数、成交ID唯一、信号、成交/费用、可卖持仓、现金及NAV，并验证最终日重复请求的完整报告相等。
 
-先前整合完成八组完整窗口及2022等权前26日；该基线保留在历史交接中。当前修订消费 AD 400ebcf0 与 AQ 90f6ce9，补齐有权益现金分红和单日交付，具体契约与复现见 [paper-execution.md](paper-execution.md)。验证产物记录每次完整运行，不把旧统计用于新版本，也不将模型回归等同于在线已验或跨平台完全一致。
+先前整合完成八组完整窗口及2022等权前26日；该基线保留在历史交接中。当前修订消费 AD dc0198bc/dev13 与 AQ 90f6ce9，补齐有权益现金分红和单日交付，具体契约与复现见 [paper-execution.md](paper-execution.md)。验证产物记录每次完整运行，不把旧统计用于新版本，也不将模型回归等同于在线已验或跨平台完全一致。
