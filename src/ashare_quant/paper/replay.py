@@ -157,7 +157,7 @@ def load(service, sid, config):
     return binding, Inputs(root / "input.json", manifest, binding["window"])
 
 
-def provenance(binding, inputs):
+def provenance(binding, inputs, *, through_day=None):
     doc = inputs.document
     result = {
         "binding": binding,
@@ -174,6 +174,10 @@ def provenance(binding, inputs):
     }
     if hasattr(inputs, "deliveries"):
         received = inputs.deliveries()
+        # A daily intent must not change when a later input is appended. Keep
+        # live views current, but freeze receipt provenance at its trading day.
+        if through_day is not None:
+            received = [entry for entry in received if entry["day"] <= through_day]
         result["delivery"] = {
             "mode": "sealed_historical_source_increment",
             "received": received,
@@ -314,7 +318,7 @@ def build(service, sid, day, parent):
         "scheduled": scheduled,
         "reason": "scheduled_rebalance" if scheduled else "hold_actual_positions_no_retry",
         "signal": signal,
-        "provenance": provenance(binding, inputs),
+        "provenance": provenance(binding, inputs, through_day=day),
         "action_checks": action_checks,
         "input_delivery": (
             {

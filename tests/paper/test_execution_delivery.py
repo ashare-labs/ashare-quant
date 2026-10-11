@@ -95,9 +95,15 @@ def test_real_ad_day_append_restart_and_native_recovery_are_idempotent(tmp_path)
         ingest(service, sid, "2020-02-04", parent, fault="after_packet_commit")
     repeat = ingest(PaperService(service.root), sid, "2020-02-04", parent)
     assert repeat["already_received"]
+    # A later admitted input must not alter an earlier frozen daily intent,
+    # including when that later input has not yet executed.
+    assert advance(PaperService(service.root), sid, "2020-02-03", None) == report
+    assert service.status(sid)["session"]["head"] == parent
     second = advance(service, sid, "2020-02-04", parent)
     assert second["native"]["cursor"] == 8 and second["native"]["settlement_count"] == 2
     assert not second["native"]["trades"]
+    assert advance(PaperService(service.root), sid, "2020-02-03", None) == report
+    assert service.status(sid)["session"]["head"] == second["checkpoint_sha256"]
     receipts = [e for e in service.view(sid)["events"] if e["kind"] == "ad_day_received"]
     assert len(receipts) == 2
 
