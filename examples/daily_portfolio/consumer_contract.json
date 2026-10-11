@@ -1,0 +1,71 @@
+{
+  "schema": "aq.daily-portfolio.consumer-contract.v1",
+  "implementation_status": "contract_only_http_route_and_ui_not_registered",
+  "purpose": "Read-only presentation of one committed native ledger and separately attributed reference differences",
+  "sources": {
+    "result": "aq-daily-portfolio-result.v1",
+    "comparison": "aq-jq-daily-portfolio-comparison.v1",
+    "owner_input": "ad-daily-portfolio.v1",
+    "initial_cash": "manifest.execution.initial_cash"
+  },
+  "identity_checks": [
+    "SHA256(result bytes) equals comparison.identities.aq_result_sha256",
+    "SHA256(owner input bytes) equals comparison.identities.owner_input_sha256",
+    "SHA256(manifest bytes) equals comparison.identities.manifest_sha256",
+    "Comparison strategy and window match the committed result",
+    "A recovered or reopened identity does not append the same dates, orders or trades twice"
+  ],
+  "account_snapshot": {
+    "source": "result.accounts[date]",
+    "phase": "15:30 Asia/Shanghai declared daily research close",
+    "money_encoding": "Retain native decimal strings; round only for display",
+    "cash": "cash",
+    "positions": "positions keyed by canonical security",
+    "market_value": "sum(positions[*].value), read-only aggregate",
+    "dividend_receivable": "sum(positions[*].dividend_receivable), read-only aggregate",
+    "equity": "equity",
+    "equation": "abs(cash + market_value + dividend_receivable - equity) <= 0.000001 CNY",
+    "return": "equity / manifest.execution.initial_cash - 1, from this same committed snapshot",
+    "final_check": "The last committed close equals final_account within the same tolerance",
+    "reference_return": "A platform callback returns attribute is not assumed current with its total_value"
+  },
+  "position_fields": {
+    "quantity": "Native quantity, never the decision target",
+    "sellable": "Native sellable quantity; cash dividends do not create shares",
+    "price": "Native mark with snapshot phase, not an ex-price formula",
+    "average_price": "Native cost basis; a cash-matched alternative need not have the same cost",
+    "value": "Native market value",
+    "dividend_receivable": "Native unpaid entitlement, separate from available cash"
+  },
+  "actions": {
+    "gross_entitlement_per_share": "owner_input.actions[*].cash_per_share",
+    "record_date": "owner_input.actions[*].record_date",
+    "ex_date": "owner_input.actions[*].ex_date",
+    "payment_date": "owner_input.actions[*].pay_date",
+    "reference_price_deduction": "owner_input.actions[*].source_event.ex_price_cash_deduction",
+    "payment_time": "owner_input.actions[*].source_event.payment_time; null remains unknown",
+    "policy": "result.corporate_action_policy; distinguish source dates from the consumer's model phase",
+    "action_cash_flow": "Result v1 has no standalone dividend posting table. A balance difference is a derived reconciliation, never an invented native transaction.",
+    "tax_deduction": "Require explicit native or source evidence. A gross-to-net residual remains labeled as an inference.",
+    "share_tradability": "For a cash-only action, new share credit and tradability are not applicable; native sellable still follows T+1."
+  },
+  "reference_status": {
+    "same_input_calculation": "Report signal and schedule differences separately",
+    "independent_source": "Report observed field coverage; equality to modeled state is not source certification",
+    "end_to_end": "Keep daily cash/equity, quantity, sellable, cost and value differences",
+    "explained_difference": "Attribution does not erase a difference or imply economic equivalence",
+    "missing_reference": "Missing capture is unavailable, never a zero difference",
+    "overall": "No single passed flag may collapse native accounting, conditional research, JQ economic equivalence and UI acceptance"
+  },
+  "always_visible": [
+    "result.real_market_data",
+    "result.historical_pit_verified",
+    "result.state_mode",
+    "result.economic_acceptance",
+    "result.assumptions",
+    "result.limitations",
+    "result.action_coverage",
+    "The actual source and phase of each dividend or tax figure"
+  ],
+  "write_authority": "None: presentation and reconciliation cannot adjust cash, replay orders or replace owner facts"
+}
