@@ -89,6 +89,7 @@ include = [
   "/docs/compatibility.md", "/docs/research.md", "/docs/strategies.md",
   "/docs/diagnostics.md", "/docs/development.md", "/docs/licensing.md",
   "/docs/second-batch.md",
+  "/docs/daily-portfolio.md",
   "/docs/rqalpha/RQAlpha-LICENSE.txt",
 ]
 

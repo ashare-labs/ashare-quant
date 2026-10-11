@@ -1,0 +1,9 @@
+{
+  "id": "momentum",
+  "title": "横截面动量选股轮换",
+  "holdings": 3,
+  "schedule": "first output session, then first exchange session of each ISO week",
+  "formula": "score_i = C_i[p]/C_i[p-60]-1; top 3, descending score then ascending security id for ties; each weight 0.98/3; all others zero",
+  "lookback_sessions": 61,
+  "negative_scores": "still choose top 3, no tuned cutoff"
+}
