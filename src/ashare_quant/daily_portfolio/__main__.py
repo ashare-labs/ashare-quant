@@ -9,6 +9,7 @@ import re
 import runpy
 import subprocess
 import sys
+from decimal import Decimal
 from importlib import metadata
 from pathlib import Path
 
@@ -115,6 +116,13 @@ def run(args):
         from rqalpha.model.trade import Trade
 
         execution = manifest["execution"]
+        volume_ratio = execution.get("volume_ratio")
+        if volume_ratio is not None:
+            volume_ratio = Decimal(str(volume_ratio))
+            require(
+                volume_ratio.is_finite() and 0 < volume_ratio <= 1,
+                "INVALID_VOLUME_RATIO",
+            )
         require(
             execution["fees"]
             == {
@@ -151,7 +159,8 @@ def run(args):
                     "matching_type": "current_bar",
                     "signal": False,
                     "price_limit": True,
-                    "volume_limit": False,
+                    "volume_limit": volume_ratio is not None,
+                    **({"volume_percent": float(volume_ratio)} if volume_ratio is not None else {}),
                     "inactive_limit": False,
                     "slippage": 0,
                     "management_fee": [],
@@ -246,7 +255,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--manifest", required=True, type=Path)
     p.add_argument("--input", required=True, type=Path)
-    p.add_argument("--strategy", required=True, choices=["equal-weight", "momentum", "trend"])
+    p.add_argument(
+        "--strategy", required=True,
+        choices=["equal-weight", "momentum", "trend", "weekly-reversal", "daily-equal-weight"],
+    )
     p.add_argument("--window", required=True)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--invocation", default="first")

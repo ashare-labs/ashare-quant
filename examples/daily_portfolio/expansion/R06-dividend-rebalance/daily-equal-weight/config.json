@@ -1,0 +1,5 @@
+{
+  "id": "daily-equal-weight",
+  "title": "双家电日度等权跨分红",
+  "formula": "each security weight=0.49; rebalance daily using prior committed equity and prior raw close; native gross dividend, zero withholding, 09:00 payment-date credit"
+}

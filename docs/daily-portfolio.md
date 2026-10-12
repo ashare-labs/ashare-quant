@@ -1,8 +1,17 @@
 # 日频多股整链验收入口
 
+新增有界策略入口：`weekly-reversal` 每周首个交易日选过去五个收盘收益间隔跌幅前两名，
+并按代码打破并列；`daily-equal-weight` 每交易日对传入证券等权。两者总目标权重均为98%，
+目标仍仅由前一已提交权益与前收盘换算整手，使用相同原生账户和卖后买顺序。
+`execution.volume_ratio` 可显式设置在 `(0, 1]` 内的日线成交参与率，通过原生撮合器的
+`volume_limit/volume_percent` 生效；未设置或为null时保持原来的不限制行为。该参数引用
+完整日线成交量，是事后日频研究模型，不证明开盘可成交数量或盘口队列。部分成交余量
+由原生经纪模块日终撤销，下一次调仓重新根据实际持仓计算目标差。
+这些扩充的本地历史回测已执行；聚宽新参考受浏览器环境阻塞，尚未得到双端一致结论。
+
 入口为 `python -m ashare_quant.daily_portfolio`。这是独立的有界本机研究入口，使用一个 RQAlpha 原生账户和共享现金，不改变现有 `m2-jobs.v6` 单股协议，也不接入持续模拟或券商。
 
-题面见 [manifest](../examples/daily_portfolio/manifest.json)。三个可信纯函数策略只接收截至前一开市日的 120 个原始收盘价和前一已提交权益。98% 目标权重按前收盘换成整手数量，调仓先卖后买。日频开盘价撮合不宣称开盘集合竞价排队、成交容量或真实可交易性。没有读取当日成交量决定开盘容量。
+原三策略题面见 [manifest](../examples/daily_portfolio/manifest.json)，新增小批题面见 [expansion](../examples/daily_portfolio/expansion/selection.json)。可信纯函数策略只接收截至前一开市日的 120 个原始收盘价和前一已提交权益。98% 目标权重按前收盘换成整手数量，调仓先卖后买。日频开盘价撮合不宣称开盘集合竞价排队、成交容量或真实可交易性。原三题默认不限制当日成交量；新增可选限量模式具有上文说明的事后研究边界。
 
 ```sh
 PYTHONPATH=src .venv/bin/python -B -m ashare_quant.daily_portfolio \

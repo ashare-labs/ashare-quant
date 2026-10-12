@@ -68,3 +68,23 @@ def test_native_decimal_context_cannot_change_a_frozen_signal():
     expected = decide("equal-weight", history, "1000000.00000001")
     with localcontext(prec=10):
         assert decide("equal-weight", history, "1000000.00000001") == expected
+
+
+def test_weekly_reversal_five_intervals_bottom_two_and_ties():
+    history = {s: ["20"] * 120 for s in reversed(IDS[:4])}
+    for values in history.values():
+        values[-1] = "10"
+        values[-5] = "999"  # Five return intervals require six closing prices.
+    history[IDS[3]][-1] = "30"
+    signal = decide("weekly-reversal", history, "10000")
+    assert signal["selected"] == IDS[:2]
+    assert signal["scores"][IDS[0]] == "-0.5"
+    assert signal["targets"] == {IDS[0]: 400, IDS[1]: 400, IDS[2]: 0, IDS[3]: 0}
+    assert scheduled("weekly-reversal", "2020-02-03", "2020-01-23", False)
+    assert not scheduled("weekly-reversal", "2020-02-04", "2020-02-03", False)
+
+
+def test_daily_equal_weight_varied_universe_and_high_price_lot():
+    history = {"A": ["10"] * 120, "B": ["1000"] * 120}
+    assert decide("daily-equal-weight", history, "10000")["targets"] == {"A": 400, "B": 0}
+    assert scheduled("daily-equal-weight", "2020-02-04", "2020-02-03", False)

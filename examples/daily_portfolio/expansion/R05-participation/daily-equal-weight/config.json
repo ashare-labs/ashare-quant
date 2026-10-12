@@ -1,0 +1,5 @@
+{
+  "id": "daily-equal-weight",
+  "title": "日度等权与低成交参与率",
+  "formula": "each security weight=0.98/4; rebalance daily; native daily volume participation ratio 0.0001; end-of-day cancellation, next session recompute from actual holdings"
+}

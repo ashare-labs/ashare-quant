@@ -1,0 +1,5 @@
+{
+  "id": "weekly-reversal",
+  "title": "周度五日短期反转轮动",
+  "formula": "score=C[p]/C[p-5]-1; choose bottom 2 ascending score then security; each weight 0.49; first session then first ISO-week exchange session"
+}

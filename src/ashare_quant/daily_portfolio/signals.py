@@ -5,12 +5,12 @@ from decimal import ROUND_FLOOR, Decimal, localcontext
 
 
 def scheduled(strategy, day, previous, first):
-    if first or strategy == "trend":
+    if first or strategy in {"trend", "daily-equal-weight"}:
         return True
     today, prior = date.fromisoformat(day), date.fromisoformat(previous)
     if strategy == "equal-weight":
         return (today.year, today.month) != (prior.year, prior.month)
-    if strategy == "momentum":
+    if strategy in {"momentum", "weekly-reversal"}:
         return today.isocalendar()[:2] != prior.isocalendar()[:2]
     raise ValueError("UNKNOWN_STRATEGY")
 
@@ -38,8 +38,13 @@ def _decide(strategy, history, equity):
     if not equity.is_finite() or equity < 0:
         raise ValueError("INVALID_PRIOR_EQUITY")
     scores = {}
-    if strategy == "equal-weight":
+    if strategy in {"equal-weight", "daily-equal-weight"}:
         chosen, denominator = ids, len(ids)
+    elif strategy == "weekly-reversal":
+        if len(ids) < 2:
+            raise ValueError("REVERSAL_REQUIRES_TWO_SECURITIES")
+        scores = {s: prices[s][-1] / prices[s][-6] - 1 for s in ids}
+        chosen, denominator = sorted(ids, key=lambda s: (scores[s], s))[:2], 2
     elif strategy == "momentum":
         if len(ids) < 3:
             raise ValueError("MOMENTUM_REQUIRES_THREE_SECURITIES")
