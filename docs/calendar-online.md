@@ -8,7 +8,7 @@ projections of the native checkpoint.
 
 The owner-only entry point is `python -m ashare_quant.paper.online_cli`. It
 requires explicit AD interpreter/source/store paths and pins the full AD source
-inventory separately from AQ/native runtime identity. No installed dependency
+inventory and the bundled issuer-review evidence separately from AQ/native runtime identity. No installed dependency
 is upgraded. `calendar_fixture` APIs exist for development; their evidence and
 clock labels cannot enter a `calendar_observed` identity.
 
@@ -16,7 +16,7 @@ clock labels cannot enter a `calendar_observed` identity.
 
 1. Before D 09:00 Shanghai, AD must have actually received P daily history,
    exchange calendar, and effective D eligibility, ST, suspension, limits and
-   complete corporate-action absence coverage. D 09:00–09:05 freezes the existing
+   a verified, bounded corporate-action review with actual entitlement checks. D 09:00–09:05 freezes the existing
    equal-weight strategy, native parent, and targets. First-day sizing uses the
    declared initial capital. Later rebalances use the previous native NAV;
    non-rebalance days retain actual native quantities, including prior refusals.
@@ -59,21 +59,39 @@ OS registration, broker endpoint or timer is installed.
 The pilot uses the original three SSE main-board securities, round lot 100 and
 T+1. Costs are explicit model parameters inherited from `SessionConfig`, not a
 claim about a real brokerage account's fee schedule. Corporate actions remain
-`reject`: this adapter requires verified absence and does not infer zero
-entitlement or post share/dividend transformations itself.
+`reject` for any required posting/transformation. An owner-reviewed historical
+cash event can have zero entitlement when its record date precedes the actual
+native genesis and its ex date precedes the decision. That evidence is recorded
+explicitly as `zero_entitlement`, never as absent actions.
 
-## Current admission remains closed
+## Bounded owner review and actual acceptance
 
-The AD `phase_observation` reader currently produces diagnostics and opening
-observations but no execution permission. Its missing effective-date state and
-all-action coverage cannot be supplied as caller JSON. The CLI therefore records
-`PAPER_CURRENT_ADMISSION_BLOCKED` before creating any real intent. A reviewed AD
-owner coverage implementation, followed by an explicit new pin/identity policy,
-is still necessary to admit real execution. The staged native engine is
-implemented; live orders and actual two-day continuation are not yet accepted.
+AD v3 now binds a sealed three-issuer corpus for October 13–14, 2026 and rereads
+all reviewed text pages plus the complete current catalog before each decision.
+The baseline is part of the AD code/evidence pin. AQ verifies the per-security
+proof hash, security/day/genesis, and continuity with every prior native decision.
+Changing a body, adding an unreviewed notice, losing a source or crossing the
+reviewed date scope rejects; a zero account balance cannot fill an evidence gap.
+Legacy v1/v2 phase receipts do not gain permission from newer code.
+
+The live path can admit only if those action checks and all current market gates
+succeed in the real pre-open window. No nightly refresh or fixture result counts
+as live admission. In particular, current-day quote and formal-limit timestamps
+remain required and must be observed in the morning. Actual two-day native
+continuation is still pending. An owner/runtime change requires an explicit
+review; `migrate-empty` is only valid before any intent/native account, preserves
+the exact old state, and cannot reset an existing account.
 
 Validation: `tests/paper/test_online.py` exercises separated arrivals, delayed
 valuation, three-day continuation, native/controller SIGKILL, idempotency,
 source revision, evidence tamper, window rejection, T+1, and independent cash
 rejection retaining earlier native fills. These are labelled fixtures, not real
 calendar observations. The existing historical paper suite must also pass.
+
+The cross-owner fixture uses the original issuer corpus through AD's production
+reader, then clearly labels the resulting native run `calendar_fixture`. Run it
+with `ASHARE_CALENDAR_AD_SOURCE` pointing at the tested AD worktree's src and
+`ASHARE_CALENDAR_AD_PYTHON` pointing at its interpreter; neither variable affects
+live identity permissions. It verifies first-day three-security fills, second-day
+holdings/cash continuation, T+1 sellability, checkpoint restoration, and duplicate
+publication without claiming real-calendar completion.

@@ -25,9 +25,13 @@ class OwnerReader:
     phase_store: Path
 
     def pin(self):
+        package = self.source / "ashare_data"
+        evidence = package / "pilot_evidence"
         inventory = {
             str(p.relative_to(self.source)): sha(regular(p))
-            for p in sorted((self.source / "ashare_data").rglob("*.py"))
+            for p in sorted(
+                set(package.rglob("*.py")) | {p for p in evidence.rglob("*") if p.is_file()}
+            )
         }
         require(inventory, "PAPER_OWNER_READER_MISSING")
         return digest(inventory)
@@ -62,13 +66,14 @@ class OwnerReader:
         return json.loads(result.stdout)
 
 
-def scoped_action_effect(state, fact, day):
+def scoped_action_effect(state, fact, day, *, require_binding=False):
     """Zero pre-genesis entitlement is distinct from absent corporate actions.
 
-    The live owner still has to supply its missing price/share/code review. This
-    consumer cannot manufacture that source evidence from a zero account balance.
+    The owner supplies its finite issuer review, refreshed in the real pre-open
+    window. Native genesis and prior decision receipts bind the entitlement and
+    review continuity; a zero balance cannot create evidence of absent actions.
     """
-    if fact["actions_known_absent"] is True:
+    if fact["actions_known_absent"] is True and not require_binding:
         return "none", {"basis": "owner_actions_known_absent"}
     scope = fact.get("action_scope", {})
     review = scope.get("price_share_code_review")
@@ -81,6 +86,29 @@ def scoped_action_effect(state, fact, day):
         "PAPER_ACTION_SCOPE_REVIEW_MISSING",
     )
     genesis = min(state.get("days", {}), default=day)
+    if require_binding:
+        require(review.get("baseline_sha256") is not None, "PAPER_ACTION_BASELINE_REQUIRED")
+    if review.get("baseline_sha256") is not None:
+        require(
+            scope.get("security") == fact["security"]
+            and review.get("security") == fact["security"]
+            and review.get("day") == day
+            and scope["from_day"] <= genesis <= day
+            and len(review["baseline_sha256"]) == 64,
+            "PAPER_ACTION_SCOPE_IDENTITY",
+        )
+        proof = {k: v for k, v in review.items() if k not in {"status", "source_sha256"}}
+        require(review["source_sha256"] == digest(proof), "PAPER_ACTION_PROOF_CHANGED")
+        # A later day cannot silently adopt a different reviewed corpus. Changes
+        # require an explicit reviewed migration, never a hand-edited receipt.
+        for prior in state.get("days", {}).values():
+            old = prior["decision"]["strategy_receipt"]["action_adjudications"][fact["security"]]
+            require(
+                old["genesis"] == genesis
+                and old["action_scope"]["price_share_code_review"]["baseline_sha256"]
+                == review["baseline_sha256"],
+                "PAPER_ACTION_BASELINE_CHANGED",
+            )
     inventory = fact.get("cash_inventory", {})
     events = inventory.get("events", [])
     require(
@@ -155,7 +183,9 @@ def decision_from_owner(config, state, previous, reader, capture, admission):
     receipt["action_adjudications"] = {}
     for sid in UNIVERSE:
         item, fact = daily["securities"][sid], mapping[sid]
-        action_effect, action_evidence = scoped_action_effect(state, fact, day)
+        action_effect, action_evidence = scoped_action_effect(
+            state, fact, day, require_binding=config.data_mode == "calendar_observed"
+        )
         receipt["action_adjudications"][sid] = action_evidence
         if fact.get("reference_close") is not None:
             require(
