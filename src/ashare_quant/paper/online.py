@@ -29,6 +29,43 @@ def now():
     return datetime.now(timezone.utc)
 
 
+def published_open_consistency(payload, opened, opening_payload, row, base):
+    """Closing is a continuation of the published open, never a replay of it."""
+    state = json.loads(payload["states"]["mod_paper"])
+    cursor = json.loads(payload["states"]["event_source"])["cursor"]
+    require(
+        state["day"] == row["day"]
+        and state["input_id"] == row["input_id"]
+        and base + 2 <= cursor <= base + 4,
+        "PAPER_PUBLISHED_OPEN_ROLLBACK",
+    )
+    for key in (
+        "trades",
+        "before",
+        "opening_before",
+        "opening_reconciliation",
+        "risk",
+        "submitted",
+        "submissions",
+        "refusals",
+    ):
+        require(state[key] == opened[key], "PAPER_PUBLISHED_OPEN_CHANGED", key)
+    require(
+        state["events"][:2] == opened["events"]
+        and payload["extras"]["ids"] == opening_payload["extras"]["ids"],
+        "PAPER_PUBLISHED_OPEN_CHANGED",
+    )
+    require(set(state["orders"]) == set(opened["orders"]), "PAPER_PUBLISHED_OPEN_CHANGED")
+    for oid, order in state["orders"].items():
+        for key in ("id", "security", "side", "quantity", "filled", "cost", "average_price"):
+            require(order[key] == opened["orders"][oid][key], "PAPER_PUBLISHED_OPEN_CHANGED")
+    if payload["receipt"]:
+        require(
+            payload["receipt"]["parent_checkpoint"] == row["decision"]["expected_parent"],
+            "PAPER_PARENT_CONFLICT",
+        )
+
+
 class OnlineService:
     def __init__(self, root):
         self.root = Path(root).resolve()
@@ -73,6 +110,46 @@ class OnlineService:
                 events=[],
             )
             self._save(state, "session_created", data_mode=config.data_mode)
+            return state
+
+    def migrate_empty(self, owner_pin, expected_state_sha256, reason):
+        """Explicit new code identity only before any intent or native account."""
+        require(bool(reason.strip()), "PAPER_RECOVERY_REASON")
+        with lock(self.root / "writer.lock"):
+            raw = regular(self.path)
+            state, old_config = self._load(verify=False)
+            require(sha(raw) == expected_state_sha256, "PAPER_MIGRATION_STATE_CHANGED")
+            require(
+                state["days"] == {}
+                and state["head"] is None
+                and state["last_day"] is None
+                and not list(self.root.rglob("*.chk"))
+                and not list(self.root.glob("????-??-??"))
+                and not list(self.root.rglob("request.json")),
+                "PAPER_MIGRATION_REQUIRES_EMPTY_ACCOUNT",
+            )
+            config = OnlineSession.model_validate(
+                {**old_config.model_dump(mode="json"), "admission_reader_sha256": owner_pin}
+            )
+            backup = self.root / "migrations" / (expected_state_sha256 + ".json")
+            backup.parent.mkdir(exist_ok=True, mode=0o700)
+            if backup.exists():
+                require(regular(backup) == raw, "PAPER_MIGRATION_BACKUP_CHANGED")
+            else:
+                atomic(backup, raw)
+            prior_identity = state["identity"]
+            state["config"] = config.model_dump(mode="json")
+            state["engine_pin"] = engine_pin()
+            state["identity"] = digest({"config": state["config"], "engine": state["engine_pin"]})
+            self._save(
+                state,
+                "explicit_empty_identity_migration",
+                reason=reason,
+                previous_identity=prior_identity,
+                previous_state_sha256=expected_state_sha256,
+                new_identity=state["identity"],
+                archive=str(backup),
+            )
             return state
 
     @staticmethod
@@ -245,6 +322,11 @@ class OnlineService:
         )
         if phase == "closing":
             require(native["close_sha256"] == digest(row["close"]), "PAPER_PHASE_PROOF")
+            opened = self._report(state, day, "opening")
+            opening_payload, _ = read_checkpoint(
+                root / "opening.chk", state["identity"], opened["checkpoint_sha256"]
+            )
+            published_open_consistency(payload, opened["native"], opening_payload, row, base)
         return report
 
     def report(self, day, phase):
@@ -287,7 +369,7 @@ class OnlineService:
                 previous = self._report(state, previous_day, "closing")
                 require(previous["checkpoint_sha256"] == parent, "PAPER_PARENT_CONFLICT")
                 base = previous["native"]["cursor"]
-                if not (root / "native.chk").exists():
+                if phase == "opening" and not (root / "native.chk").exists():
                     atomic(root / "native.chk", regular(self.root / previous_day / "closing.chk"))
             request = dict(
                 online=True,
@@ -312,6 +394,18 @@ class OnlineService:
             self._save(state, "worker_started", day, phase=phase)
             try:
                 done = False
+                opened = opening_payload = None
+                if phase == "closing":
+                    opened = self._report(state, day, "opening")
+                    opening_payload, _ = read_checkpoint(
+                        root / "opening.chk", state["identity"], opened["checkpoint_sha256"]
+                    )
+                    if not (root / "native.chk").exists():
+                        atomic(root / "native.chk", regular(root / "opening.chk"))
+                    working, _ = read_checkpoint(root / "native.chk", state["identity"])
+                    published_open_consistency(
+                        working, opened["native"], opening_payload, row, base
+                    )
                 if (root / "native.chk").exists():
                     payload, _ = read_checkpoint(root / "native.chk", state["identity"])
                     receipt = payload["receipt"]
@@ -347,6 +441,10 @@ class OnlineService:
                         )
                     self._spawn(request_path, serial, writer, fault, stage)
                 payload, checkpoint_sha = read_checkpoint(root / "native.chk", state["identity"])
+                if phase == "closing":
+                    published_open_consistency(
+                        payload, opened["native"], opening_payload, row, base
+                    )
                 native = completed_proof(
                     payload,
                     {**row, "decision": canonical(row["decision"]).decode()},

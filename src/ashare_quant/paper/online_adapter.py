@@ -62,6 +62,45 @@ class OwnerReader:
         return json.loads(result.stdout)
 
 
+def scoped_action_effect(state, fact, day):
+    """Zero pre-genesis entitlement is distinct from absent corporate actions.
+
+    The live owner still has to supply its missing price/share/code review. This
+    consumer cannot manufacture that source evidence from a zero account balance.
+    """
+    if fact["actions_known_absent"] is True:
+        return "none", {"basis": "owner_actions_known_absent"}
+    scope = fact.get("action_scope", {})
+    review = scope.get("price_share_code_review")
+    require(
+        isinstance(review, dict)
+        and review.get("status") == "proven"
+        and review.get("source_sha256")
+        and len(review["source_sha256"]) == 64
+        and scope.get("from_day", "9999") <= day <= scope.get("through_day", ""),
+        "PAPER_ACTION_SCOPE_REVIEW_MISSING",
+    )
+    genesis = min(state.get("days", {}), default=day)
+    inventory = fact.get("cash_inventory", {})
+    events = inventory.get("events", [])
+    require(
+        inventory.get("cash_history_complete") is True
+        and not inventory.get("unresolved")
+        and events
+        and all(
+            e["type"] == "cash_dividend" and e["record_date"] < genesis and e["ex_date"] < day
+            for e in events
+        ),
+        "PAPER_ACTION_ENTITLEMENT_UNSUPPORTED",
+    )
+    return "zero_entitlement", dict(
+        basis="record_date_before_native_account_genesis",
+        genesis=genesis,
+        events=events,
+        action_scope=scope,
+    )
+
+
 def decision_from_owner(config, state, previous, reader, capture, admission):
     daily = reader.read(config, "daily", capture)
     facts = reader.read(config, "admission", admission)
@@ -113,9 +152,16 @@ def decision_from_owner(config, state, previous, reader, capture, admission):
         targets=targets,
     )
     rows = []
+    receipt["action_adjudications"] = {}
     for sid in UNIVERSE:
         item, fact = daily["securities"][sid], mapping[sid]
-        require(fact["actions_known_absent"] is True, "PAPER_ACTION_COVERAGE_UNSUPPORTED")
+        action_effect, action_evidence = scoped_action_effect(state, fact, day)
+        receipt["action_adjudications"][sid] = action_evidence
+        if fact.get("reference_close") is not None:
+            require(
+                Decimal(fact["reference_close"]) == Decimal(item["rows"][-1]["close"]),
+                "PAPER_REFERENCE_CLOSE_CHANGED",
+            )
         rows.append(
             dict(
                 security=sid,
@@ -131,7 +177,8 @@ def decision_from_owner(config, state, previous, reader, capture, admission):
                 lower_limit=fact["lower_limit"],
                 upper_limit=fact["upper_limit"],
                 rule_version=fact["rule_version"],
-                actions_known_absent=True,
+                actions_known_absent=fact["actions_known_absent"],
+                action_effect=action_effect,
                 facts_available_at=facts["completed_at"],
             )
         )

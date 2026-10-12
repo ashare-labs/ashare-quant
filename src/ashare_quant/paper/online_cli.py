@@ -36,6 +36,9 @@ def main():
     advance.add_argument("--day", required=True)
     advance.add_argument("--phase", required=True, choices=["opening", "closing"])
     sub.add_parser("resume").add_argument("--reason", required=True)
+    migrate = sub.add_parser("migrate-empty")
+    migrate.add_argument("--state-sha", required=True)
+    migrate.add_argument("--reason", required=True)
     args = parser.parse_args()
     reader = OwnerReader(args.ad_python, args.ad_source, args.ad_store, args.phase_store)
     service = OnlineService(args.root)
@@ -60,6 +63,8 @@ def main():
                     admission_reader_sha256=reader.pin(),
                 )
             )
+        elif args.command == "migrate-empty":
+            result = service.migrate_empty(reader.pin(), args.state_sha, args.reason)
         elif args.command == "status":
             if not service.path.exists():
                 result = dict(
