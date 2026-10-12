@@ -5,11 +5,18 @@ from datetime import date, datetime, time, timedelta
 
 import numpy as np
 import pandas as pd
-from rqalpha.const import INSTRUMENT_TYPE, MARKET, POSITION_DIRECTION, TRADING_CALENDAR_TYPE
+from rqalpha.const import (
+    INSTRUMENT_TYPE,
+    MARKET,
+    ORDER_TYPE,
+    POSITION_DIRECTION,
+    TRADING_CALENDAR_TYPE,
+)
 from rqalpha.core.events import EVENT
 from rqalpha.data.data_proxy import DataProxy
 from rqalpha.interface import AbstractDataSource, AbstractMod, AbstractPriceBoard, ExchangeRate
 from rqalpha.mod.rqalpha_mod_sys_simulation.matcher import DefaultBarMatcher
+from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderCancelled, OrderNotMatchable
 from rqalpha.model.instrument import Instrument
 
 from rqprobe.checkpoint import AtomicFile, StrictHelper, kill_at
@@ -17,6 +24,7 @@ from rqprobe.events import RecordedEventSource
 from rqprobe.guards import block_rqdata_apis
 
 from .inputs import digest, require
+from .participation import strict_lot_capacity
 from .signals import order_plan, scheduled
 
 runtime = {}
@@ -212,6 +220,24 @@ class Matcher(DefaultBarMatcher):
         require(self.host.phase == "EXECUTE" and not open_auction, "DAILY_OPEN_MATCH_PHASE")
         return float(self.host.data.row(order.order_book_id, self.host.day)["open"])
 
+    def _get_liquidity_limited_fill(self, order, instrument, open_auction=False):
+        native_fill = super()._get_liquidity_limited_fill(order, instrument, open_auction)
+        if not self._volume_limit:
+            return native_fill
+        require(not open_auction and self.host.phase == "EXECUTE", "DAILY_VOLUME_MATCH_PHASE")
+        # Keep the independently supplied decimal share volume, not its float bar copy.
+        cap = strict_lot_capacity(
+            self.host.data.row(order.order_book_id, self.host.day)["volume"],
+            runtime["manifest"]["execution"]["volume_ratio"],
+            instrument.round_lot,
+            self._turnover[order.order_book_id],
+        )
+        if cap == 0:
+            if order.type == ORDER_TYPE.MARKET:
+                raise OrderCancelled("Strict whole-lot participation budget exhausted")
+            raise OrderNotMatchable("Strict whole-lot participation budget exhausted")
+        return min(native_fill, cap)
+
 
 class Helper(StrictHelper):
     def restore(self, event=None):
@@ -234,6 +260,7 @@ class Mod(AbstractMod):
             [],
             [],
         )
+        self.order_events, self.observations = [], []
         env.set_event_source(RecordedEventSource(env, runtime["records"]))
         env.set_data_source(Source(self))
         env.set_price_board(Board(self))
@@ -308,6 +335,7 @@ class Mod(AbstractMod):
         require(decision["date"] == self.day, "COMMITTED_DECISION_DATE_MISMATCH")
         if not decision["rebalance"]:
             return
+        self.observe("before_orders")
         actual = {
             s: int(self.env.portfolio.get_position(s, POSITION_DIRECTION.LONG).quantity)
             for s in self.data.ids
@@ -321,16 +349,19 @@ class Mod(AbstractMod):
             self.submissions.append(
                 {
                     "date": self.day,
+                    "at": str(self.env.trading_dt),
                     "security": sid,
                     "quantity": quantity,
                     "order_id": str(result.order_id) if result is not None else None,
                     "returned_none": result is None,
+                    "returned_order": dict(self.orders[str(result.order_id)]) if result else None,
                     "cash_before": before["cash"],
                     "cash_after": self.account()["cash"],
                     "suspended": self.data.row(sid, self.day)["suspended"],
                 }
             )
             kill_at("native_submit", self.env.event_source.cursor + 1)
+        self.observe("after_orders")
 
     def project_order(self, order):
         row = {
@@ -349,6 +380,29 @@ class Mod(AbstractMod):
         order = getattr(event, "order", None)
         if order is not None:
             self.project_order(order)
+            self.order_events.append(
+                {
+                    "seq": len(self.order_events) + 1,
+                    "at": str(self.env.trading_dt),
+                    "phase": self.phase,
+                    "event": event.event_type.name,
+                    "order": dict(self.orders[str(order.order_id)]),
+                    "open_order_ids": [str(o.order_id) for o in self.env.broker.get_open_orders()],
+                }
+            )
+
+    def observe(self, label):
+        self.observations.append(
+            {
+                "label": label,
+                "at": str(self.env.trading_dt),
+                "phase": self.phase,
+                "account": self.account(),
+                "frozen_cash": repr(float(self.env.portfolio.stock_account.frozen_cash)),
+                "orders": [dict(o) for o in self.orders.values() if o["date"] == self.day],
+                "open_order_ids": [str(o.order_id) for o in self.env.broker.get_open_orders()],
+            }
+        )
 
     def trade(self, event):
         t = event.trade
@@ -394,6 +448,7 @@ class Mod(AbstractMod):
             pos = self.env.portfolio.get_position(sid, POSITION_DIRECTION.LONG)
             pos.update_last_price(float(self.data.row(sid, self.day)["close"]))
         self.accounts.append(self.account())
+        self.observe("day_close")
 
     def get_state(self):
         return json.dumps(
@@ -407,6 +462,8 @@ class Mod(AbstractMod):
                     "trades",
                     "accounts",
                     "submissions",
+                    "order_events",
+                    "observations",
                 )
             },
             sort_keys=True,
@@ -435,6 +492,8 @@ class Mod(AbstractMod):
             "trades": self.trades,
             "accounts": self.accounts,
             "submissions": self.submissions,
+            "order_events": self.order_events,
+            "observations": self.observations,
             "final_account": self.account(),
             "limitations": self.data.document["limitations"],
             "corporate_action_policy": runtime["manifest"]["execution"].get(

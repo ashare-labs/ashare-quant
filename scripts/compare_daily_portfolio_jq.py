@@ -8,9 +8,10 @@ import argparse
 import hashlib
 import json
 from collections import Counter
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
+from ashare_quant.daily_portfolio.reference_audit import primary_audit
 from ashare_quant.daily_portfolio.signals import decide, scheduled
 
 TOL = Decimal("0.000001")
@@ -28,7 +29,7 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def compare(reference, aq_result, owner_input, manifest):
+def _compare_observed_legacy(reference, aq_result, owner_input, manifest):
     events = [
         json.loads(line, parse_float=Decimal) for line in Path(reference).read_text().splitlines()
     ]
@@ -280,7 +281,7 @@ def compare(reference, aq_result, owner_input, manifest):
             open_diffs.append(
                 {"date": day, "security": sid, "jq": e["market"]["day_open"], "ad": row["open"]}
             )
-        modeled = row.get("research_state", {})
+        modeled = row if "upper_limit" in row else row.get("research_state", {})
         for jf, af in (
             ("paused", "suspended"),
             ("high_limit", "upper_limit"),
@@ -357,11 +358,97 @@ def compare(reference, aq_result, owner_input, manifest):
         "limitations": [
             "Historical native reference is not historical availability/PIT evidence.",
             "State comparison is JQ reference versus an explicit AD model, not certification of the model.",
-            "Only submitted opens and held-position closing marks are observed; no claim of full independent OHLC equivalence.",
+            "The original limited comparison uses submitted opens and held closes; primary_comparison separately requires complete raw daily and order observations.",
             "Reference commission is a platform total; separate statutory fee components are not inferred.",
             "Native cash residuals require corporate-action/tax attribution; they are not silently copied into AQ.",
         ],
     }
+
+
+def compare(reference, aq_result, owner_input, manifest):
+    with localcontext(prec=50):
+        return _compare(reference, aq_result, owner_input, manifest)
+
+
+def _compare(reference, aq_result, owner_input, manifest):
+    events = [
+        json.loads(line, parse_float=Decimal) for line in Path(reference).read_text().splitlines()
+    ]
+    aq, owner, spec = load(aq_result), load(owner_input), load(manifest)
+    try:
+        primary = primary_audit(events, aq, owner, spec)
+    except (KeyError, TypeError, ValueError, IndexError, InvalidOperation) as exc:
+        primary = {
+            "differences": [],
+            "contract_differences": [],
+            "evidence_complete": False,
+            "eligible_for_alignment": False,
+            "evidence_gaps": [{"code": "MALFORMED_PRIMARY_EVIDENCE", "detail": str(exc)}],
+        }
+    try:
+        report = _compare_observed_legacy(reference, aq_result, owner_input, manifest)
+    except (KeyError, TypeError, ValueError, IndexError, AssertionError, InvalidOperation) as exc:
+        report = {
+            "schema": "aq-jq-daily-portfolio-comparison.v1",
+            "identities": {
+                "jq_jsonl_sha256": digest(reference),
+                "aq_result_sha256": digest(aq_result),
+                "owner_input_sha256": digest(owner_input),
+                "manifest_sha256": digest(manifest),
+            },
+        }
+        primary["evidence_gaps"].append(
+            {"code": "LEGACY_REFERENCE_INCOMPLETE_OR_INVALID", "detail": str(exc)}
+        )
+    # Preserve the original bounded comparison without treating missing new fields
+    # as equal. Existing captures do not acquire daily_raw observations retroactively.
+    old_difference_keys = {
+        "same_input_calculation": ("signal_differences", "schedule_differences"),
+        "independent_source": (
+            "unique_history_value_differences",
+            "history_calendar_differences",
+            "submission_open_differences",
+            "held_position_close_differences",
+            "conditional_state_model_differences",
+        ),
+        "end_to_end": (
+            "decision_differences",
+            "unmatched_aq_trades",
+            "unmatched_jq_trades",
+            "daily_account_differences",
+            "daily_quantity_differences",
+            "daily_cost_basis_differences",
+            "daily_sellable_differences",
+            "daily_position_value_differences",
+        ),
+        "native_jq_readonly_audit": (
+            "fee_model_differences",
+            "account_equation_differences",
+            "sell_before_buy_ordering_differences",
+        ),
+    }
+    legacy_count = sum(
+        len(report.get(section, {}).get(key, []))
+        for section, keys in old_difference_keys.items()
+        for key in keys
+    )
+    count = legacy_count + len(primary["differences"]) + len(primary["contract_differences"])
+    missing = len(primary["evidence_gaps"])
+    primary["evidence_complete"] = not missing
+    primary["eligible_for_alignment"] = not (count or missing)
+    report["primary_comparison"] = primary
+    report["acceptance"] = {
+        "status": "DIFFERENCES_OBSERVED"
+        if count
+        else ("EVIDENCE_INSUFFICIENT" if missing else "OBSERVED_FIELDS_ALIGNED"),
+        "evidence_complete": not missing,
+        "eligible_for_alignment": not (count or missing),
+        "difference_count": count,
+        "evidence_gap_count": missing,
+        "legacy_bounded_difference_count": legacy_count,
+        "scope": "Only the supplied observed fields; no historical PIT or unseen platform behavior claim",
+    }
+    return report
 
 
 def main():
@@ -374,7 +461,11 @@ def main():
     a = p.parse_args()
     result = compare(a.reference, a.aq_result, a.owner_input, a.manifest)
     Path(a.output).write_text(json.dumps(result, default=str, indent=2, ensure_ascii=False) + "\n")
+    status = result["acceptance"]["status"]
+    return (
+        0 if status == "OBSERVED_FIELDS_ALIGNED" else (2 if status == "DIFFERENCES_OBSERVED" else 3)
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

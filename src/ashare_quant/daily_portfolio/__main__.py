@@ -88,13 +88,14 @@ def run(args):
         previous = checkpoint.read()
         if previous and previous["complete"]:
             atomic_json(root / "result.json", previous["receipt"])
-            write_report(root, previous["receipt"], audit(previous["receipt"], data, manifest))
+            report = audit(previous["receipt"], data, manifest)
+            write_report(root, previous["receipt"], report)
             print(
                 json.dumps(
                     {"status": "completed_reentry", "identity": identity, "native_run": False}
                 )
             )
-            return 0
+            return 0 if report["passed"] else 3
         receipt = root / (args.invocation + ".manifest.json")
         require(not receipt.exists(), "INVOCATION_EXISTS_USE_NEW_LABEL")
         atomic_json(receipt, identity_details)
@@ -227,18 +228,21 @@ def run(args):
             atomic_json(root / "result.json", final["receipt"])
             report = audit(final["receipt"], data, manifest)
             write_report(root, final["receipt"], report)
-            require(report["passed"], "ACCOUNTING_AUDIT_FAILED:see_audit.json")
+            require(report["accounting_passed"], "ACCOUNTING_AUDIT_FAILED:see_audit.json")
             print(
                 json.dumps(
                     {
-                        "status": "completed",
+                        "status": "completed"
+                        if report["passed"]
+                        else "completed_with_contract_difference",
+                        "acceptance_passed": report["passed"],
                         "identity": identity,
                         "native_run": True,
                         "trades": len(final["receipt"]["trades"]),
                     }
                 )
             )
-            return 0
+            return 0 if report["passed"] else 3
         except Exception as exc:
             error = getattr(getattr(exc, "error", None), "exc_val", exc)
             atomic_json(
@@ -256,7 +260,8 @@ def main():
     p.add_argument("--manifest", required=True, type=Path)
     p.add_argument("--input", required=True, type=Path)
     p.add_argument(
-        "--strategy", required=True,
+        "--strategy",
+        required=True,
         choices=["equal-weight", "momentum", "trend", "weekly-reversal", "daily-equal-weight"],
     )
     p.add_argument("--window", required=True)

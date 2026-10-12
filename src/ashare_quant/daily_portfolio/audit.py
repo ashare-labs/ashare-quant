@@ -2,7 +2,7 @@
 
 import csv
 import json
-from decimal import ROUND_HALF_UP, Decimal, localcontext
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal, localcontext
 from pathlib import Path
 
 from .inputs import digest
@@ -71,9 +71,29 @@ def _audit(result, data, manifest):
         receivables = [(pay, amount) for pay, amount in receivables if pay > day]
         start_quantities = quantities.copy()
         trades = [t for t in result["trades"] if t["date"] == day]
+        traded_by_security = {}
         for trade in trades:
             sid, q, price = trade["security"], trade["quantity"], Decimal(trade["price"])
             order = orders.get(trade["order_id"])
+            traded_by_security[sid] = traded_by_security.get(sid, 0) + q
+            ratio = manifest["execution"].get("volume_ratio")
+            if ratio is not None:
+                cap = (
+                    int(
+                        (
+                            Decimal(str(data.row(sid, day)["volume"])) * Decimal(str(ratio)) / 100
+                        ).to_integral_value(ROUND_FLOOR)
+                    )
+                    * 100
+                )
+                check(
+                    traded_by_security[sid] <= cap,
+                    "STRICT_VOLUME_CAP",
+                    date=day,
+                    security=sid,
+                    filled=traded_by_security[sid],
+                    cap=cap,
+                )
             check(
                 order is not None and order["security"] == sid and order["side"] == trade["side"],
                 "TRADE_ORDER_LINK",
@@ -158,10 +178,36 @@ def _audit(result, data, manifest):
             "NO_ACTIVE_TERMINAL_ORDER",
             order=order["id"],
         )
+    contract_differences, contract_evidence_gaps = [], []
+    if "session end" in manifest["execution"].get("unfilled", "").lower():
+        for order in result["orders"]:
+            if order["status"] != "CANCELLED" or order["filled"] >= order["quantity"]:
+                continue
+            observed = [
+                e
+                for e in result.get("order_events", [])
+                if e["order"]["id"] == order["id"] and e["order"]["status"] == "CANCELLED"
+            ]
+            if not observed:
+                contract_evidence_gaps.append(
+                    {"code": "CANCELLATION_TIME_MISSING", "order": order["id"]}
+                )
+            elif observed[0]["phase"] == "EXECUTE":
+                contract_differences.append(
+                    {
+                        "code": "CANCELLED_BEFORE_SESSION_END",
+                        "order": order["id"],
+                        "observed_at": observed[0]["at"],
+                        "expected": manifest["execution"]["unfilled"],
+                    }
+                )
     return {
         "schema": "aq-daily-audit.v1",
-        "passed": not errors,
+        "passed": not errors and not contract_differences and not contract_evidence_gaps,
+        "accounting_passed": not errors,
         "errors": errors,
+        "contract_differences": contract_differences,
+        "contract_evidence_gaps": contract_evidence_gaps,
         "economic_scope": "cash_quantity_and_gross_action_replay",
         "gross_dividend_entitlement": str(dividend_total),
         "commission": str(fee_total),
