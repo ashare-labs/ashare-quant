@@ -58,7 +58,7 @@ def read_checkpoint(path, identity, expected_sha=None):
         ) from exc
 
 
-def completed_proof(payload, row, parent, base_cursor):
+def completed_proof(payload, row, parent, base_cursor, *, complete=True):
     from decimal import Decimal
 
     from jsonpickle.ext import numpy as jsonpickle_numpy
@@ -66,11 +66,11 @@ def completed_proof(payload, row, parent, base_cursor):
 
     receipt = payload["receipt"]
     require(
-        payload["complete"]
+        payload["complete"] is complete
         and receipt["input_id"] == row["input_id"]
         and receipt["day"] == row["day"]
         and receipt["parent_checkpoint"] == parent
-        and receipt["cursor"] == base_cursor + 4,
+        and receipt["cursor"] == base_cursor + (4 if complete else 2),
         "PAPER_COMPLETION_PROOF",
     )
     state = json.loads(payload["states"]["mod_paper"])
@@ -79,14 +79,29 @@ def completed_proof(payload, row, parent, base_cursor):
     executor = json.loads(payload["states"]["executor"])
     require(
         cursor == receipt["cursor"]
-        and executor["settled"] == row["day"]
-        and executor["count"] == receipt["settlement_count"] == base_cursor // 4 + 1,
+        and executor["settled"]
+        == (
+            row["day"]
+            if complete
+            else json.loads(row["decision"])["previous_open"]
+            if base_cursor
+            else None
+        )
+        and executor["count"] == receipt["settlement_count"] == base_cursor // 4 + int(complete),
         "PAPER_NATIVE_CURSOR_OR_SETTLEMENT",
     )
     jsonpickle_numpy.register_handlers()
     portfolio = jsonpickle.decode(payload["states"]["portfolio"].decode(), keys=False)
     account = portfolio["accounts"]["STOCK"]["native"]
     reported = receipt["account"]
+    decision_type = Decision
+    if json.loads(row["decision"]).get("evidence_kind") in {
+        "live_local_capture",
+        "calendar_fixture",
+    }:
+        from .online_contracts import OnlineDecision
+
+        decision_type = OnlineDecision
     require(
         Decimal(str(account["total_cash"])) == Decimal(reported["total_cash"])
         and Decimal(str(account["frozen_cash"])) == Decimal(reported["frozen_cash"]),
@@ -122,7 +137,7 @@ def completed_proof(payload, row, parent, base_cursor):
         == reconcile_opening(
             receipt["opening_before"],
             receipt["before"],
-            Decision.model_validate(json.loads(row["decision"])),
+            decision_type.model_validate(json.loads(row["decision"])),
         ),
         "PAPER_ACTION_PROOF_CONFLICT",
     )
@@ -203,6 +218,13 @@ class PaperService:
 
     def create(self, config):
         config = SessionConfig.model_validate(config)
+        # Pydantic accepts subclass instances without revalidating Literal fields.
+        # The calendar controller must not enter this historical/local API via
+        # an OnlineSession Python object either.
+        require(
+            config.data_mode in {"synthetic_fixture", "historical_research"},
+            "PAPER_SESSION_MODE_UNSUPPORTED",
+        )
         pin = engine_pin()
         identity = digest({"config": config.model_dump(mode="json"), "engine": pin})
         sid = "paper-" + identity[:32]

@@ -40,6 +40,7 @@ from rqalpha.model.instrument import Instrument
 from rqalpha.model.order import Order
 from rqalpha.model.trade import Trade
 
+from ashare_quant.contracts import SHANGHAI
 from ashare_quant.m2_jobs.files import atomic, digest
 from rqprobe.checkpoint import AtomicFile, Counter, StrictHelper
 from rqprobe.guards import block_rqdata_apis
@@ -126,10 +127,18 @@ class DayEvents(AbstractEventSource):
             ),
             1,
         ):
+            if runtime.get("phase") == "opening" and offset == 3:
+                # End the process at a committed native event boundary. Returning
+                # from RQ's event iterator would run end-of-day settlement early.
+                self.env.mod_dict["paper"].emit_receipt(complete=False)
+                os._exit(0)
             cursor = self.base + offset
             if cursor <= self.cursor:
                 continue
             at = datetime.fromisoformat(f"{self.day}T{clock}")
+            if runtime.get("online") and offset >= 2:
+                packet = runtime["opening"] if offset == 2 else runtime["close"]
+                at = packet.received_at.astimezone(SHANGHAI).replace(tzinfo=None)
             yield Event(EVENT[kind], calendar_dt=at, trading_dt=at)
             self.cursor = cursor
             self.env.persist_helper.persist()
@@ -141,14 +150,14 @@ class DaySource(AbstractDataSource):
         self.env, self.config, self.decision = env, config, decision
         self.before, self.after = (
             indexed(decision.rows, config.universe),
-            indexed(close.rows, config.universe),
+            indexed((close or runtime["opening"]).rows, config.universe),
         )
         # Synthetic instrument facts only; the observed-data gateway remains closed.
         self.instruments = {
             sid: Instrument(
                 dict(
                     order_book_id=sid,
-                    symbol="SYNTHETIC",
+                    symbol="SCOPED_PAPER" if runtime.get("online") else "SYNTHETIC",
                     type="CS",
                     exchange=sid.split(".")[1],
                     round_lot=100,
@@ -199,7 +208,9 @@ class DaySource(AbstractDataSource):
 
     def get_open_auction_bar(self, instrument, dt):
         require(
-            dt.date() == self.decision.trading_date and dt.hour == 9 and dt.minute == 30,
+            dt.date() == self.decision.trading_date
+            and dt.hour == 9
+            and (30 <= dt.minute <= 35 if runtime.get("online") else dt.minute == 30),
             "PAPER_OPEN_ROLE",
         )
         sid = instrument.order_book_id
@@ -607,11 +618,15 @@ class PaperMod(AbstractMod):
         self.state["submitted"] = True
 
     def finish(self, _):
+        self.emit_receipt(complete=True)
+
+    def emit_receipt(self, *, complete):
         self.get_state()
         after = snapshot(self.env, self.session.universe)
         reconciliation = reconcile(self.state["before"], after, self.state["trades"])
         require(
-            not after["open_orders"]
+            not complete
+            or not after["open_orders"]
             and abs(Decimal(after["frozen_cash"])) <= Decimal("0.00000001"),
             "PAPER_UNFINISHED_DAY_ORDERS",
         )
@@ -634,10 +649,17 @@ class PaperMod(AbstractMod):
                 if self.decision.targets[sid] != after["positions"][sid]["quantity"]
             },
         }
+        if runtime.get("online"):
+            result.update(
+                phase="closing" if complete else "opening",
+                opening_sha256=digest(runtime["opening"]),
+                close_sha256=digest(self.close) if complete else None,
+                native_clock_timezone="Asia/Shanghai",
+            )
         self.env.persist_helper.receipt = result
-        self.env.persist_helper.complete = True
+        self.env.persist_helper.complete = complete
         self.env.persist_helper.persist()
-        fault("after_complete_checkpoint")
+        fault("after_complete_checkpoint" if complete else "after_opening_checkpoint")
         atomic(Path(self.config.result), result)
 
     def tear_down(self, code, exception=None):
@@ -674,19 +696,38 @@ def main():
             time.sleep(0.2)
 
     threading.Thread(target=orphan_watchdog, daemon=True).start()
-    session = SessionConfig.model_validate(request["session"])
-    decision = Decision.model_validate(request["decision"])
-    close = CloseInput.model_validate(request["close"])
-    decision_gate(session, decision)
-    close_gate(session, decision, close)
-    require(
-        request["input_id"]
-        == digest(
+    online = request.get("online", False)
+    opening = None
+    if online:
+        from .online_contracts import OnlineClose, OnlineDecision, OnlineSession, OpeningInput
+        from .online_gates import closing_gate, opening_gate
+
+        session = OnlineSession.model_validate(request["session"])
+        decision = OnlineDecision.model_validate(request["decision"])
+        opening = OpeningInput.model_validate(request["opening"])
+        close = OnlineClose.model_validate(request["close"]) if request["close"] else None
+        require(request["phase"] in {"opening", "closing"}, "PAPER_PHASE")
+        require((request["phase"] == "closing") == (close is not None), "PAPER_PHASE_INPUT")
+        opening_gate(session, decision, opening)
+        if close:
+            closing_gate(session, decision, opening, close)
+        expected = digest(
+            {"decision": digest(decision), "opening": digest(opening), "intent": opening.intent_id}
+        )
+    else:
+        session = SessionConfig.model_validate(request["session"])
+        decision = Decision.model_validate(request["decision"])
+        close = CloseInput.model_validate(request["close"])
+        close_gate(session, decision, close)
+        expected = digest(
             {"decision": digest(decision), "close": digest(close), "intent": close.intent_id}
-        ),
-        "PAPER_INPUT_CHANGED",
-    )
+        )
+    decision_gate(session, decision)
+    require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
     runtime.update(
+        online=online,
+        phase=request.get("phase"),
+        opening=opening,
         session=session,
         decision=decision,
         close=close,

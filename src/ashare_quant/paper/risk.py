@@ -154,7 +154,8 @@ def close_gate(config, decision, close):
         and at.time() >= time(15, 5)
         and close.received_at <= close.deadline
         and close.deadline.astimezone(SHANGHAI).date() == close.trading_date
-        and close.deadline.astimezone(SHANGHAI).time() <= time(18),
+        and close.deadline.astimezone(SHANGHAI).time()
+        <= (time(18, 45) if config.data_mode.startswith("calendar_") else time(18)),
         "PAPER_CLOSE_DEADLINE",
     )
     for row in indexed(close.rows, config.universe).values():
@@ -177,10 +178,14 @@ def close_gate(config, decision, close):
 
 
 def evidence_gate(config, value):
-    historical = config.data_mode == "historical_research"
+    evidence, clock = {
+        "historical_research": ("historical_research", "retrospective_model"),
+        "synthetic_fixture": ("synthetic", "synthetic_clock"),
+        "calendar_observed": ("live_local_capture", "wall_clock"),
+        "calendar_fixture": ("calendar_fixture", "fixture_clock"),
+    }[config.data_mode]
     require(
-        value.evidence_kind == ("historical_research" if historical else "synthetic")
-        and value.clock_basis == ("retrospective_model" if historical else "synthetic_clock"),
+        value.evidence_kind == evidence and value.clock_basis == clock,
         "PAPER_EVIDENCE_MODE_MISMATCH",
     )
 

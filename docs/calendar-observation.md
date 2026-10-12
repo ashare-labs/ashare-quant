@@ -16,3 +16,7 @@ PYTHONPATH=src python -B -m ashare_quant.paper.observation --root /独立候选�
 此入口是在线运行的前置检查，不是在线撮合实现。现有 `PaperService` 原生单账本和历史接口保持原样；`observed_data_enabled`/`continuous_paper_accepted`保持false。缺当日及时状态、限价及公司行动覆盖，另缺已验在线原生接口，因此候选始终 `execution_admitted=false`，CLI退出2。status按实际当前时间显示等待证据或错过窗口，不以永久的旧状态文件冒充当前健康。
 
 接续实现须在真实09:00之前取得当日证据并冻结订单意图，之后才消费09:30以后撮合价格；仅有收盘后日线不可追认当日交易状态。提交原生账户前还需复用现有独立风控、幂等槽位和原生父检查点；禁止把候选改名为历史回放来获得成功交易。首批至少实际观察两个相邻交易日，并保存同一原生账户的现金/持仓、接续检查点和真实源时刻，才能另行讨论在线验收。
+# 后续入口
+
+本文件描述保留的第一轮前瞻候选；新的分阶段原生入口见
+[calendar-online.md](calendar-online.md)。候选本身依旧不是订单或账户。
