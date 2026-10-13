@@ -1,6 +1,6 @@
 # 任务服务可靠性与运维
 
-本服务仍执行 `m2-jobs.v6` 固定研究任务。HTTP 请求、任务视图、策略版本、manifest 和结果的 v6 字段不变。新只读 `GET /api/v1/m2/jobs/service` / CLI `job-service` 使用独立 `m2-job-service.v1`，暴露服务策略摘要、各状态计数、过期租约数、未入库准备目录数和剩余待处理容量。quant-web 可以继续使用原接口，不需要发送新字段。完整和 M2 scoped OpenAPI 均包含新接口。
+本服务仍执行 `m2-jobs.v6` 固定研究任务。HTTP 请求、任务视图、策略版本、manifest 和结果的 v6 字段不变。新只读 `GET /api/v1/m2/jobs/service` / CLI `job-service` 使用独立 `m2-job-service.v1`，暴露服务策略摘要、各状态计数、过期租约数、未入库准备目录数和剩余待处理容量。相对 AQ `ad34f32` 的 v6 接口，本批次不添加必填请求字段。旧 quant-web `a1d211b` 仍固定 `m2-jobs.v1` / AQ `0.4.0.dev14`，不能直接使用本服务；须由前端更新契约和固定服务身份后接入。`data_binding_sha256` 在当前 v6 创建请求中必填，缺失返回 422。不能通过降低服务版本、移除输入摘要或关闭身份校验兼容旧客户端。完整和 M2 scoped OpenAPI 均包含新只读接口。
 
 ## 排队与并发
 
@@ -25,7 +25,7 @@ export ASHARE_QUANT_JOB_POLICY='{"max_workers":2,"max_pending":16}'
 
 默认预算：执行 120 秒、准备/检查 60 秒、单次 stdout/stderr 合计 1 MiB、每文件 64 MiB、进程峰值 RSS 1 GiB、CPU 120 秒、打开文件 256 个。准备/检查输出也经过同一有界 drain。RSS 每 100ms 抽样，允许抽样间瞬时超额；CPU、文件大小和文件描述符采用子进程内 `setrlimit`，不会改变 API 进程限制。资源 watchdog 会留下 `resource-limit.json`，注明墙钟、RSS、CPU 或文件上限原因；数据库失败历史也保留这一错误。不能把这些界限理解为恶意代码沙箱、全机资源配额或任意外部进程的约束。本机可信策略边界不变。
 
-待处理量和每任务尝试数有界；已完成档案由操作者保留，服务不会自动删除旧结果或无限重试失败任务。空间不足或损坏应先保留证据，修复后按下面恢复流程处理。准备阶段中断但尚未入库的目录保留 `submission.json` 和已写证据；其数量也以 `max_pending` 为上限，达到上限拒绝继续创建并报告 `M2_JOB_PREPARATION_RESIDUE_LIMIT`。操作者确认目录未入库、且没有服务/worker 使用它之后，才可自行归档，服务不会猜测并删除。
+待处理量和每任务尝试数有界；已完成档案由操作者保留，服务不会自动删除旧结果或无限重试失败任务。API 和 CLI 的容量错误（ENOSPC、EDQUOT、SQLITE_FULL）返回 `STORAGE_FULL`，只读/权限错误返回 `STORAGE_PERMISSION_DENIED`，其它文件 I/O 错误返回 `STORAGE_UNAVAILABLE`。HTTP 为 JSON 503（`Retry-After: 2` / `Cache-Control: no-store`），CLI 为 JSON、退出码 2，均提供原幂等键重试说明；SQLite 锁竞争为 `DATABASE_BUSY`，其它 SQLite 拒绝为 409 `DATABASE_OPERATION_REFUSED`。错误响应不能证明先前提交一定失败：先修复空间/权限，再重发原始输入和原幂等键，已接受任务会复用，不能换键重建账户。空间不足或损坏应先保留证据，修复后按下面恢复流程处理。准备阶段中断但尚未入库的目录保留 `submission.json` 和已写证据；其数量也以 `max_pending` 为上限，达到上限拒绝继续创建并报告 `M2_JOB_PREPARATION_RESIDUE_LIMIT`。操作者确认目录未入库、且没有服务/worker 使用它之后，才可自行归档，服务不会猜测并删除。
 
 ## 崩溃与恢复
 
@@ -38,7 +38,13 @@ export ASHARE_QUANT_JOB_POLICY='{"max_workers":2,"max_pending":16}'
 
 ## 数据库兼容与升级
 
-启动先在临时副本检查数据库及 WAL/journal。旧 v3/v4/v5 清单返回 HTTP 409 / CLI 2 `M2_DATABASE_VERSION_INCOMPATIBLE`；空的旧式任务表、未知控制 schema、损坏 SQLite 也给出结构化拒绝，不在原库建表。同为 v6 但源码身份不同返回 `M2_DATABASE_EXECUTOR_INCOMPATIBLE`。SQLite `user_version=3` 是控制表版本，不等于任务清单 v3。
+启动只打开临时副本检查数据库及 WAL/journal，执行全库 `integrity_check`、外键检查，以及保留表、约束和索引 DDL 的结构比较。视图占用表名、缺索引、约束或列变化、控制版本 1/2、零字节现有文件均拒绝，不在原库执行启动 DDL、切换 journal mode 或自动 ALTER。原有完整 v3 控制表布局仍受支持；缺少服务表的旧库必须走显式新目录升级。
+
+新库路径必须尚不存在；在同目录私有临时文件完成所有表与索引、WAL 配置、验证和 fsync 后，用 create-only 硬链接发布。检查或 DDL 失败不会留下半成品原库，竞争者创建的目标不会被覆盖或继续初始化。发布后目录 fsync 若失败，可能留下完整的新库，须先检查再沿用同一路径，不宣称发布回滚。已有库和固定策略的正常重启也不打开原件 SQLite 连接。首次固定策略的写入是校验通过后的独立事务。
+
+本版 Store 的所有连接与启动检查共享每数据库文件锁：检查/首次策略入库持独占锁，业务连接持共享锁，SQLite 继续负责业务写事务互斥。锁保存在当前用户系统临时目录，服务不删除锁文件；运行期间不能清理这些锁或使用不同 TMPDIR 启动同库实例。文件锁不约束旧版服务或外部 SQLite 工具，这些工具须在启动检查/升级前停止，运行期间不要手工改库或经硬链接别名启动第二实例。副本复制和校验前后检查数据库/WAL/journal 文件签名，发现变化重试后拒绝；无法承诺阻止不参与锁的外部程序在任意时刻改写文件。已打开的 Store 还核实数据库设备/文件身份，删除或替换后返回 `DATABASE_FILE_CHANGED`，使用 `mode=rw` 连接，绝不静默重建。
+
+旧 v3/v4/v5 清单返回 HTTP 409 / CLI 2 `M2_DATABASE_VERSION_INCOMPATIBLE`；空的旧式任务表、未知控制 schema、损坏 SQLite 也给出结构化拒绝，不在原库建表。同为 v6 但源码身份不同返回 `M2_DATABASE_EXECUTOR_INCOMPATIBLE`。SQLite `user_version=3` 是控制表版本，不等于任务清单 v3。
 
 不可把旧 manifest 版本号直接改成 v6，或把旧任务的源码摘要替换成新摘要。不同策略/输入/执行身份必须创建新任务。升级命令把保留历史与新任务运行环境放在同一新目录，不承诺把旧 native checkpoint 转换为新执行核心：
 
@@ -61,10 +67,12 @@ export ASHARE_QUANT_JOB_POLICY='{"max_workers":2,"max_pending":16}'
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
 ASHARE_QUANT_TEST_M2_COMPONENTS=/path/to/components \
-.venv/bin/python -m pytest -q tests/test_job_service.py tests/test_database_compat.py \
+.venv/bin/python -m pytest -q tests/test_job_service.py tests/test_database_compat.py tests/test_database_admission.py \
   tests/portable/test_service_reliability.py tests/portable/test_recovery_process.py \
   tests/portable/test_native.py tests/portable/test_python_native.py \
-  tests/portable/test_service_http.py
+  tests/portable/test_service_http.py tests/portable/test_storage_recovery.py
 ```
 
 负载用例固定为八次提交、五个独立账户、最多三个并行提交线程和两个执行槽；检查满队列、幂等冲突、取消、并发峰值、结果一致和封存身份，输出 `load-evidence.json`。资源用例单次最多申请 96 MiB，并有 12 秒外部截止。故障用例覆盖 worker SIGKILL、被暂停的孤儿子进程、发布前死亡、四个原生 checkpoint 提交边界、KeyboardInterrupt 和 Python 失败，恢复后验证账户与成交不重复。另有真实 loopback HTTP + 两个独立 CLI worker 的 API SIGKILL/重启用例，以及结果提交事务失败、取消写事务拒绝和发布后取消竞争；失败事务不制造成功状态。HTTP 测试需允许本机监听。
+
+补充回归涵盖非 manifest B-tree 损坏、保留名视图、索引/列/版本不支持、失败建表和 fsync、新库路径竞争、校验后 schema 变化、初始化与写事务相互等待、双进程不同服务策略竞争、删除/替换库、只读目录与容量拒绝；均仅在隔离临时副本进行。四类存储故障修复后按原键提交并实际执行，确认保留准备证据、只接受一个账户、成交 ID 不重复。

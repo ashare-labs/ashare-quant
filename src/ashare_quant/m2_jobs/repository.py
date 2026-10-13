@@ -1,4 +1,4 @@
-"""Additive control tables in the existing SQLite database, no account ledger."""
+"""Task control operations over an already verified database, no account ledger."""
 
 import json
 import time
@@ -17,38 +17,8 @@ LEASE_SECONDS = 15
 class Repository:
     def __init__(self, store, policy=None):
         self.store = store
-        with store.connection() as db:
-            db.executescript("""
-                CREATE TABLE IF NOT EXISTS m2_jobs (
-                    job_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE,
-                    request_hash TEXT NOT NULL, request TEXT NOT NULL,
-                    manifest TEXT NOT NULL, manifest_sha256 TEXT NOT NULL,
-                    account_id TEXT NOT NULL UNIQUE,
-                    status TEXT NOT NULL CHECK(status IN
-                        ('queued','running','cancelling','cancelled','failed','succeeded')),
-                    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-                    attempt_count INTEGER NOT NULL DEFAULT 0,
-                    lease_token TEXT, lease_until REAL,
-                    cancellation_requested_at TEXT,
-                    committed_cursor INTEGER NOT NULL DEFAULT 0,
-                    checkpoint_complete INTEGER NOT NULL DEFAULT 0,
-                    checkpoint_sha256 TEXT,
-                    result TEXT, error TEXT
-                );
-                CREATE TABLE IF NOT EXISTS m2_job_logs (
-                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                    job_id TEXT NOT NULL REFERENCES m2_jobs(job_id),
-                    at TEXT NOT NULL, event TEXT NOT NULL, details TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS m2_jobs_queue ON m2_jobs(status,created_at);
-                CREATE INDEX IF NOT EXISTS m2_logs_job ON m2_job_logs(job_id,sequence);
-                CREATE TABLE IF NOT EXISTS m2_job_service (
-                    singleton INTEGER PRIMARY KEY CHECK(singleton=1),
-                    policy TEXT NOT NULL, policy_sha256 TEXT NOT NULL
-                );
-            """)
-        with store.connection(transaction=True) as db:
-            row = db.execute("SELECT policy,policy_sha256 FROM m2_job_service WHERE singleton=1").fetchone()
+        with store.initialization() as snapshot:
+            row = snapshot.execute("SELECT policy,policy_sha256 FROM m2_job_service WHERE singleton=1").fetchone()
             if row:
                 try:
                     accepted = ServicePolicy.model_validate_json(row[0])
@@ -60,8 +30,11 @@ class Repository:
                 self.policy = accepted
             else:
                 self.policy = policy or ServicePolicy()
-                db.execute("INSERT INTO m2_job_service VALUES(1,?,?)",
-                           (canonical(self.policy).decode(), digest(self.policy)))
+                # The exclusive initialization lock still protects the preflight and
+                # first admission. Existing policies never open the original to write.
+                with store._connection(transaction=True) as db:
+                    db.execute("INSERT INTO m2_job_service VALUES(1,?,?)",
+                               (canonical(self.policy).decode(), digest(self.policy)))
 
     def capacity(self, db=None):
         if db is None:

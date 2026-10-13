@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ from .data import capabilities
 from .engine import specifications
 from .research import ResearchCoverageQuery, ResearchQuery, ResearchReader
 from .service import Service
+from .storage_errors import storage_error
 from .store import Store
 from .worker import work_one
 
@@ -289,6 +291,9 @@ def main(argv=None) -> int:
         return 0
     except DomainError as exc:
         emit({"error": exc.body()})
+        return 2
+    except (OSError, sqlite3.Error) as exc:
+        emit({"error": storage_error(exc).body()})
         return 2
     except ValidationError as exc:
         emit({"error": {"code": "INVALID_INPUT", "message": str(exc)}})

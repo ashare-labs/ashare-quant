@@ -29,8 +29,8 @@ class ActionRequest(Contract):
     pass
 
 
-def mount(app, store, configuration=None):
-    jobs = Jobs(store, configuration)
+def mount(app, store, configuration=None, *, jobs=None):
+    jobs = jobs or Jobs(store, configuration)
     app.state.m2_jobs = jobs
 
     @app.middleware("http")

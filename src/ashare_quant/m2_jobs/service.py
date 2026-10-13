@@ -41,11 +41,11 @@ from .repository import Repository
 class Jobs:
     def __init__(self, store, configuration=None):
         self.config = configuration or Configuration.environment()
-        self.repo = Repository(store, self.config.policy)
-        self.strategies = StrategyRegistry(store)
         self.root = store.path.with_name(store.path.name + ".m2-jobs")
         require(not self.root.is_symlink())
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.repo = Repository(store, self.config.policy)
+        self.strategies = StrategyRegistry(store)
         self.source = source_sha256()
         self.executor = Executor(self.root, self.config, self.repo.policy)
 

@@ -64,6 +64,7 @@ from .research import (
 )
 from .rq_specs import rq_specifications
 from .service import Service
+from .storage_errors import storage_error
 from .store import Store
 
 
@@ -77,15 +78,20 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     try:
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
-    except DomainError as exc:
-        app.state.database_error = exc.body()
+        from .m2_jobs.service import Jobs
+
+        jobs = Jobs(store, m2_jobs_configuration)
+    except (DomainError, OSError, sqlite3.Error) as exc:
+        error = exc if isinstance(exc, DomainError) else storage_error(exc)
+        app.state.database_error = error.body()
+        app.state.database_error_status = error.status
 
         @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
                        status_code=409, response_model=ErrorResponse)
         def incompatible_database(path: str):
-            return JSONResponse(status_code=409, content={
+            return JSONResponse(status_code=app.state.database_error_status, content={
                 "error": app.state.database_error, "api_version": "v1",
-            }, headers={"Cache-Control": "no-store"})
+            }, headers={"Cache-Control": "no-store", "Retry-After": "2"})
 
         return app
     service = Service(store)
@@ -95,7 +101,7 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     from .m2_results.api import mount as mount_m2_results
     mount_m2_results(app)
     from .m2_jobs.api import mount as mount_m2_jobs
-    mount_m2_jobs(app, store, m2_jobs_configuration)
+    mount_m2_jobs(app, store, m2_jobs_configuration, jobs=jobs)
     from .diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
     roots = dict(research_stores) if research_stores is not None else json.loads(os.getenv("ASHARE_QUANT_RESEARCH_STORES", "{}"))
@@ -114,13 +120,11 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
         })
 
     @app.exception_handler(sqlite3.Error)
-    async def storage_error(_, exc):
-        busy = getattr(exc, "sqlite_errorcode", 0) & 0xff in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
-        return JSONResponse(status_code=503 if busy else 409, content={"api_version": "v1", "error": {
-            "code": "DATABASE_BUSY" if busy else "DATABASE_OPERATION_REFUSED",
-            "message": "Database busy; retry later" if busy else "Database operation refused; preserve the database for inspection",
-            "details": None,
-        }}, headers={"Retry-After": "2", "Cache-Control": "no-store"})
+    @app.exception_handler(OSError)
+    async def local_storage_error(_, exc):
+        error = storage_error(exc)
+        return JSONResponse(status_code=error.status, content={"api_version": "v1", "error": error.body()},
+                            headers={"Retry-After": "2", "Cache-Control": "no-store"})
 
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:
