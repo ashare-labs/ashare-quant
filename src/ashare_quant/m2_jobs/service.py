@@ -40,14 +40,14 @@ from .repository import Repository
 
 class Jobs:
     def __init__(self, store, configuration=None):
-        self.repo = Repository(store)
-        self.strategies = StrategyRegistry(store)
         self.config = configuration or Configuration.environment()
+        self.repo = Repository(store, self.config.policy)
+        self.strategies = StrategyRegistry(store)
         self.root = store.path.with_name(store.path.name + ".m2-jobs")
         require(not self.root.is_symlink())
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.source = source_sha256()
-        self.executor = Executor(self.root, self.config)
+        self.executor = Executor(self.root, self.config, self.repo.policy)
 
     def identity(self):
         return JobServiceIdentity(backend_version=__version__, source_sha256=self.source)
@@ -120,7 +120,7 @@ class Jobs:
         self.guard()
         self.config.check()
         binding = bind_dataset(DataStore(self.config.owner_store), dataset_id)
-        with lock(self.root / "creation.lock", blocking=True):
+        with lock(self.root / "creation.lock", timeout=self.repo.policy.admission_wait_seconds):
             self.guard()
             atomic(self.root / "data-binding.json", binding)
         return self.catalogue()
@@ -250,14 +250,28 @@ class Jobs:
                 )
         return manifest
 
+    def unaccepted_directories(self):
+        accepted = {row["job_id"] for row in self.repo.rows()}
+        return sum(path.name not in accepted for path in self.root.glob("m2job-*"))
+
+    def service_status(self):
+        self.guard()
+        return self.repo.status().model_copy(update={
+            "unaccepted_task_directories": self.unaccepted_directories(),
+        })
+
     def create(self, request):
         self.guard()
         # Creation is infrequent and bounded. Serializing preparation avoids two
         # sessions/accounts for concurrent duplicate idempotency keys.
-        with lock(self.root / "creation.lock", blocking=True):
+        with lock(self.root / "creation.lock", timeout=self.repo.policy.admission_wait_seconds):
             existing = self.repo.existing(request)
             if existing:
                 return self.view(existing)
+            self.repo.capacity()
+            if self.unaccepted_directories() >= self.repo.policy.max_pending:
+                raise DomainError("M2_JOB_PREPARATION_RESIDUE_LIMIT",
+                                  "Unaccepted preparation directories reached the budget; preserve and inspect them before creating more tasks", 503)
             self.config.check()
             binding = self.binding()
             require(
@@ -288,6 +302,7 @@ class Jobs:
             job_id = "m2job-" + uuid.uuid4().hex
             root = self.directory(job_id)
             root.mkdir(mode=0o700)
+            atomic(root / "submission.json", request)
             atomic(root / "parameters.json", request.parameters)
             atomic(root / "strategy.json", strategy)
             if is_python(strategy):
@@ -377,15 +392,20 @@ class Jobs:
     def resume(self, job_id):
         row = self.repo.row(job_id)
         manifest = self.check(row, execution=True)
-        with lock(self.directory(job_id) / "host-writer.lock") as writer:
+        with lock(self.root / "creation.lock", timeout=self.repo.policy.admission_wait_seconds), \
+                lock(self.directory(job_id) / "host-writer.lock") as writer:
             row = self.repo.row(job_id)
             if row["status"] == "queued":
                 return self.view(row)
+            require(row["attempt_count"] < self.repo.policy.max_attempts,
+                    "M2_JOB_ATTEMPT_LIMIT", "Attempt budget exhausted; preserve evidence for review")
             require(
                 self.repo.view(row).can_resume,
                 "M2_JOB_NOT_RESUMABLE",
                 "Task is still active or already succeeded",
             )
+            if row["status"] in {"failed", "cancelled"}:
+                self.repo.capacity()
             proof = None
             if row["attempt_count"]:
                 proof = self.executor.immediate(

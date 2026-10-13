@@ -49,6 +49,8 @@
 
 HTTP 任务入口为 `/api/v1/m2/jobs`，任务 OpenAPI 为 `/api/v1/m2/openapi.json`，全量文档为 `/api/v1/docs`。合成演示的 `/api/v1/runs` 与真实研究任务是不同入口。
 
+并发预算、队列满处理、故障恢复与保留历史的升级操作见[任务服务可靠性](task-service.md)。
+
 ## 数据库、恢复和搬迁
 
 任务清单为 `m2-job-manifest.v6`。SQLite 表结构版本不足以判断任务兼容性。旧 v3/v4/v5 任务库会在初始化写入前拒绝，HTTP 409 / CLI 2，错误 `M2_DATABASE_VERSION_INCOMPATIBLE`。保留旧库与同名 `.m2-jobs` 目录，用原固定后端读取；为当前版本选新控制库。同为 v6 也不代表源码、依赖和任务身份可互换。

@@ -4,26 +4,31 @@ import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.identity import source_sha256
+from ashare_quant.python_strategies.supervision import BoundedOutput
 from ashare_quant.runtime import runtime_fingerprint
 
-from .files import regular, require, sha
+from .files import lock, regular, require, sha
+from .policy import ServicePolicy
+from .process import stop
 from .release import EXECUTION_SOURCE_SHA256, EXECUTION_VERSION
 
 
 @dataclass(frozen=True)
 class Configuration:
     owner_store: Path | None
+    policy: ServicePolicy | None = None
 
     @classmethod
     def environment(cls):
         value = os.environ.get("ASHARE_QUANT_M2_STORE")
-        return cls(Path(value).expanduser().resolve() if value else None)
+        return cls(Path(value).expanduser().resolve() if value else None, ServicePolicy.environment())
 
     def check(self):
         if self.owner_store is None:
@@ -43,8 +48,9 @@ def runner_sha():
 
 
 class Executor:
-    def __init__(self, root, config):
+    def __init__(self, root, config, policy=None):
         self.root, self.config = Path(root), config
+        self.policy = policy or config.policy or ServicePolicy()
 
     def package(self):
         require(
@@ -88,11 +94,16 @@ class Executor:
             runner_sha256=runner_sha(),
             fault=fault,
             control=control,
+            resource_limits=self.policy.model_dump(mode="json"),
+            parent_pid=os.getpid(),
         )
         bootstrap = (
             "import hashlib,json,runpy,sys; p,r,a=json.loads(sys.argv[1]); "
             "assert hashlib.sha256(open(r,'rb').read()).hexdigest()==a['runner_sha256']; "
-            "sys.path[:0]=p; runpy.run_path(r,init_globals={'TASK_ARGUMENTS':a},run_name='__main__')"
+            "sys.path[:0]=p; from ashare_quant.m2_jobs.process import child_limits; "
+            "child_limits(a['resource_limits'],a['parent_pid'],a['action'], "
+            "a['root']+'/'+a['invocation']+'.resource-limit.json'); "
+            "runpy.run_path(r,init_globals={'TASK_ARGUMENTS':a},run_name='__main__')"
         )
         return [
             sys.executable,
@@ -117,24 +128,32 @@ class Executor:
 
     def immediate(self, action, job_dir, window, invocation, session_file_sha=None, *, lock_fds=()):
         command = self.command(action, job_dir, window, invocation, session_file_sha)
-        with (job_dir / (invocation + ".runner.log")).open("wb") as log:
-            try:
-                process = subprocess.run(
-                    command,
-                    env=self.environment(),
-                    cwd=job_dir,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    timeout=60,
-                    check=False,
-                    pass_fds=lock_fds,
-                )
-            except subprocess.TimeoutExpired:
-                raise DomainError(
-                    "M2_JOB_PREFLIGHT_TIMEOUT", "Fixed executor preparation timed out", 503
-                ) from None
+        with lock(self.root / "preparation.lock", timeout=self.policy.admission_wait_seconds) as preparation:
+            with (job_dir / (invocation + ".runner.log")).open("wb") as log:
+                process = subprocess.Popen(command, env=self.environment(), cwd=job_dir,
+                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                           pass_fds=(*lock_fds, preparation.fileno()), start_new_session=True)
+                capture = BoundedOutput(process.stdout, log, self.policy.output_bytes)
+                started = time.monotonic()
+                try:
+                    while process.poll() is None:
+                        if capture.exceeded.is_set():
+                            raise DomainError("M2_JOB_OUTPUT_LIMIT", "Preparation output limit exceeded", 503)
+                        if time.monotonic() - started > self.policy.preparation_seconds:
+                            raise DomainError("M2_JOB_PREFLIGHT_TIMEOUT", "Fixed executor preparation timed out", 503)
+                        time.sleep(0.03)
+                finally:
+                    stop(process)
+                    try:
+                        capture.finish()
+                    finally:
+                        process.stdout.close()
+                if capture.exceeded.is_set():
+                    raise DomainError("M2_JOB_OUTPUT_LIMIT", "Preparation output limit exceeded", 503)
         if process.returncode:
-            error_file = job_dir / (invocation + ".runner-error.json")
+            error_file = job_dir / (invocation + ".resource-limit.json")
+            if not error_file.exists():
+                error_file = job_dir / (invocation + ".runner-error.json")
             error = json.loads(regular(error_file)) if error_file.exists() else {}
             raise DomainError(
                 "M2_JOB_PREFLIGHT_REFUSED",

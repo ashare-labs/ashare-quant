@@ -1,4 +1,4 @@
-"""One native process at a time, fenced leases and retained atomic checkpoints."""
+"""Bounded native process slots, fenced leases and retained atomic checkpoints."""
 
 import json
 import subprocess
@@ -7,18 +7,9 @@ import time
 from ashare_quant.contracts import DomainError
 from ashare_quant.python_strategies.supervision import BoundedOutput, check_phase
 
-from .files import lock, regular
+from .files import lock, regular, worker_slot
+from .process import stop
 from .publication import publish
-
-
-def stop(process):
-    if process is not None and process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
 
 
 def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
@@ -28,7 +19,7 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
     if not ids:
         return None
     try:
-        with lock(jobs.root / "worker.lock") as serial:
+        with worker_slot(jobs.root, jobs.repo.policy.max_workers) as serial:
             for candidate in ids:
                 try:
                     with lock(jobs.directory(candidate) / "host-writer.lock") as writer:
@@ -102,8 +93,9 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     pass_fds=lock_fds,
+                    start_new_session=True,
                 )
-                capture = BoundedOutput(process.stdout, log)
+                capture = BoundedOutput(process.stdout, log, jobs.repo.policy.output_bytes)
                 try:
                     jobs.repo.child_started(job_id, token, process.pid)
                     notify("spawned")
@@ -112,7 +104,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                         notify("poll")
                         if capture.exceeded.is_set():
                             raise DomainError(
-                                "PYTHON_OUTPUT_LIMIT", "Attempt output exceeded 1 MiB"
+                                "PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit"
                             )
                         check_phase(root / (invocation + ".python-phase.json"))
                         if time.monotonic() - heartbeat >= 0.25:
@@ -121,7 +113,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                                 cancelled = True
                                 break
                             heartbeat = time.monotonic()
-                        if time.monotonic() - started > 120:
+                        if time.monotonic() - started > jobs.repo.policy.execution_seconds:
                             stop(process)
                             raise DomainError(
                                 "M2_JOB_EXECUTION_TIMEOUT",
@@ -130,9 +122,12 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                         time.sleep(0.03)
                 finally:
                     stop(process)
-                    capture.finish()
+                    try:
+                        capture.finish()
+                    finally:
+                        process.stdout.close()
                 if capture.exceeded.is_set():
-                    raise DomainError("PYTHON_OUTPUT_LIMIT", "Attempt output exceeded 1 MiB")
+                    raise DomainError("PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit")
             notify("child_exited")
             if process.returncode == 0:
                 proof = json.loads(regular(root / (invocation + ".proof.json")))
@@ -143,12 +138,15 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                     "message": "Native attempt stopped; only the last committed checkpoint may resume",
                 }
         if error and process is not None:
-            for error_name in (invocation + ".runner-error.json", invocation + ".failure.json"):
+            for error_name in (invocation + ".resource-limit.json", invocation + ".runner-error.json", invocation + ".failure.json"):
                 error_path = root / error_name
                 if error_path.exists():
                     reported = json.loads(regular(error_path))
-                    if str(reported.get("code", "")).startswith("PYTHON_"):
+                    if str(reported.get("code", "")).startswith("PYTHON_") or reported.get("code") in {
+                        "M2_JOB_RESOURCE_LIMIT", "M2_JOB_PARENT_LOST",
+                    }:
                         error = {**reported, "returncode": process.returncode}
+                        break
         jobs.repo.heartbeat(job_id, token)
         if proof is None:
             proof = jobs.executor.immediate(

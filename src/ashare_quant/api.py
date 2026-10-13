@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 from typing import Annotated
 
 from fastapi import FastAPI, Path, Query, Request, Response
@@ -52,7 +53,6 @@ from .d1_codec import BR1BindRequest, FrozenBindingReport, FrozenBR1Reader
 from .d1_result_contracts import BR1ResultDetail, BR1ResultList
 from .d1_results import canonical, digest, list_results, result_detail
 from .data import PinnedAshareData, capabilities
-from .database_compat import DatabaseCompatibilityError
 from .engine import specifications
 from .research import (
     ResearchCoverage,
@@ -70,12 +70,14 @@ from .store import Store
 def create_app(db_path: str | None = None, research_stores: dict[str, str] | None = None, m2_jobs_configuration=None, diagnostics_configuration=None) -> FastAPI:
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
-                  responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse},
+                  responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse},
+                             409: {"model": ErrorResponse}, 429: {"model": ErrorResponse},
+                             503: {"model": ErrorResponse},
                              422: {"model": ErrorResponse | ValidationResponse}})
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     try:
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
-    except DatabaseCompatibilityError as exc:
+    except DomainError as exc:
         app.state.database_error = exc.body()
 
         @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
@@ -110,6 +112,15 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
         return JSONResponse(status_code=exc.status, content={
             "error": exc.body(), "api_version": "v1",
         })
+
+    @app.exception_handler(sqlite3.Error)
+    async def storage_error(_, exc):
+        busy = getattr(exc, "sqlite_errorcode", 0) & 0xff in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
+        return JSONResponse(status_code=503 if busy else 409, content={"api_version": "v1", "error": {
+            "code": "DATABASE_BUSY" if busy else "DATABASE_OPERATION_REFUSED",
+            "message": "Database busy; retry later" if busy else "Database operation refused; preserve the database for inspection",
+            "details": None,
+        }}, headers={"Retry-After": "2", "Cache-Control": "no-store"})
 
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:

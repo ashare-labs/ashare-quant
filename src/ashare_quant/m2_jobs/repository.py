@@ -9,12 +9,13 @@ from ashare_quant.store import now
 
 from .contracts import JobCreate, JobManifest, JobView, ResultReference
 from .files import canonical, digest, require
+from .policy import ServicePolicy, ServiceStatus
 
 LEASE_SECONDS = 15
 
 
 class Repository:
-    def __init__(self, store):
+    def __init__(self, store, policy=None):
         self.store = store
         with store.connection() as db:
             db.executescript("""
@@ -39,7 +40,44 @@ class Repository:
                     job_id TEXT NOT NULL REFERENCES m2_jobs(job_id),
                     at TEXT NOT NULL, event TEXT NOT NULL, details TEXT NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS m2_jobs_queue ON m2_jobs(status,created_at);
+                CREATE INDEX IF NOT EXISTS m2_logs_job ON m2_job_logs(job_id,sequence);
+                CREATE TABLE IF NOT EXISTS m2_job_service (
+                    singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+                    policy TEXT NOT NULL, policy_sha256 TEXT NOT NULL
+                );
             """)
+        with store.connection(transaction=True) as db:
+            row = db.execute("SELECT policy,policy_sha256 FROM m2_job_service WHERE singleton=1").fetchone()
+            if row:
+                try:
+                    accepted = ServicePolicy.model_validate_json(row[0])
+                except ValueError as exc:
+                    raise DomainError("M2_JOB_POLICY_CHANGED", "Stored service policy is invalid") from exc
+                require(digest(accepted) == row[1], "M2_JOB_POLICY_CHANGED", "Stored service policy differs")
+                require(policy is None or policy == accepted, "M2_JOB_POLICY_CHANGED",
+                        "Use this database's fixed service policy; choose a new database to change limits")
+                self.policy = accepted
+            else:
+                self.policy = policy or ServicePolicy()
+                db.execute("INSERT INTO m2_job_service VALUES(1,?,?)",
+                           (canonical(self.policy).decode(), digest(self.policy)))
+
+    def capacity(self, db=None):
+        if db is None:
+            with self.store.connection() as connection:
+                return self.capacity(connection)
+        pending = db.execute("SELECT COUNT(*) FROM m2_jobs WHERE status IN ('queued','running','cancelling')").fetchone()[0]
+        if pending >= self.policy.max_pending:
+            raise DomainError("M2_JOB_QUEUE_FULL", "Pending task capacity reached; retry after completion or cancellation", 429,
+                              details={"max_pending": self.policy.max_pending})
+
+    def status(self):
+        with self.store.connection() as db:
+            counts = {r[0]: r[1] for r in db.execute("SELECT status,COUNT(*) FROM m2_jobs GROUP BY status")}
+            recovery = db.execute("SELECT COUNT(*) FROM m2_jobs WHERE status IN ('running','cancelling') AND COALESCE(lease_until,0)<=?", (time.time(),)).fetchone()[0]
+        return ServiceStatus(policy=self.policy, policy_sha256=digest(self.policy), counts=counts,
+                             recovery_required=recovery, available_pending=max(0, self.policy.max_pending - sum(counts.get(k, 0) for k in ('queued','running','cancelling'))))
 
     @staticmethod
     def _log(db, job_id, event, details=None):
@@ -61,6 +99,13 @@ class Repository:
 
     @staticmethod
     def manifest(row):
+        try:
+            return Repository._manifest(row)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise DomainError("M2_JOB_IDENTITY_CONFLICT", "Stored task identity is malformed", 409) from exc
+
+    @staticmethod
+    def _manifest(row):
         value = JobManifest.model_validate_json(row["manifest"])
         require(
             digest(value) == row["manifest_sha256"]
@@ -72,6 +117,12 @@ class Repository:
         return value
 
     def view(self, row):
+        try:
+            return self._view(row)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise DomainError("M2_JOB_STATE_INVALID", "Stored task state requires operator inspection", 409) from exc
+
+    def _view(self, row):
         manifest = self.manifest(row)
         expired = (
             row["status"] in {"running", "cancelling"} and (row["lease_until"] or 0) <= time.time()
@@ -91,7 +142,8 @@ class Repository:
             checkpoint_complete=bool(row["checkpoint_complete"]),
             cancellation_requested_at=row["cancellation_requested_at"],
             recovery_required=expired,
-            can_resume=row["status"] in {"failed", "cancelled"} or expired,
+            can_resume=(row["status"] in {"failed", "cancelled"} or expired)
+            and row["attempt_count"] < self.policy.max_attempts,
             result=ResultReference.model_validate_json(row["result"]) if row["result"] else None,
             error=json.loads(row["error"]) if row["error"] else None,
         )
@@ -113,6 +165,7 @@ class Repository:
     def insert(self, manifest):
         stamp = now()
         with self.store.connection(transaction=True) as db:
+            self.capacity(db)
             db.execute(
                 """INSERT INTO m2_jobs(job_id,idempotency_key,request_hash,request,manifest,
                 manifest_sha256,account_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'queued',?,?)""",
@@ -135,13 +188,15 @@ class Repository:
                 {
                     "manifest_sha256": digest(manifest),
                     "owner_preflight": "accepted_conditional_only",
+                    "service_policy_sha256": digest(self.policy),
+                    "service_policy": self.policy.model_dump(mode="json"),
                 },
             )
         return self.row(manifest.job_id)
 
     def rows(self):
         with self.store.connection() as db:
-            return [dict(r) for r in db.execute("SELECT * FROM m2_jobs ORDER BY created_at,job_id")]
+            return [dict(r) for r in db.execute("SELECT * FROM m2_jobs ORDER BY created_at,rowid")]
 
     def candidates(self):
         with self.store.connection() as db:
@@ -149,7 +204,7 @@ class Repository:
                 r[0]
                 for r in db.execute(
                     "SELECT job_id FROM m2_jobs WHERE status='queued' OR "
-                    "(status IN ('running','cancelling') AND lease_until<=? AND error IS NULL) ORDER BY created_at",
+                    "(status IN ('running','cancelling') AND lease_until<=? AND error IS NULL) ORDER BY created_at,rowid",
                     (time.time(),),
                 )
             ]
@@ -183,6 +238,10 @@ class Repository:
                 "M2_JOB_NOT_RESUMABLE",
                 "Task is still active or already succeeded",
             )
+            if row["status"] in {"failed", "cancelled"}:
+                self.capacity(db)
+            require(row["attempt_count"] < self.policy.max_attempts, "M2_JOB_ATTEMPT_LIMIT",
+                    "Attempt budget exhausted; preserve evidence and create a new task after review")
             db.execute(
                 "UPDATE m2_jobs SET status='queued',lease_token=NULL,lease_until=NULL,"
                 "cancellation_requested_at=NULL,error=NULL,result=NULL,updated_at=? WHERE job_id=?",
@@ -209,6 +268,12 @@ class Repository:
             )
             if not eligible:
                 return None
+            if row["attempt_count"] >= self.policy.max_attempts:
+                error = {"code": "M2_JOB_ATTEMPT_LIMIT", "message": "Attempt budget exhausted; operator review required"}
+                db.execute("UPDATE m2_jobs SET status='failed',lease_token=NULL,lease_until=NULL,error=?,updated_at=? WHERE job_id=?",
+                           (canonical(error).decode(), now(), job_id))
+                self._log(db, job_id, "attempt_limit", error)
+                return None
             token = uuid.uuid4().hex
             status = "cancelling" if row["cancellation_requested_at"] else "running"
             db.execute(
@@ -221,6 +286,7 @@ class Repository:
                 "writer_claimed",
                 {
                     "attempt": row["attempt_count"] + 1,
+                    "service_policy_sha256": digest(self.policy),
                     "recovered_expired_lease": row["status"] != "queued",
                 },
             )
