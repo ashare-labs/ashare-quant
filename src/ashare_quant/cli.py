@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ from .data import capabilities
 from .engine import specifications
 from .research import ResearchCoverageQuery, ResearchQuery, ResearchReader
 from .service import Service
+from .storage_errors import storage_error
 from .store import Store
 from .worker import work_one
 
@@ -62,6 +64,8 @@ def main(argv=None) -> int:
     sub.add_parser("job-create").add_argument("--request", required=True)
     for name in ("job-status", "job-manifest", "job-logs", "job-cancel", "job-resume", "job-result"):
         sub.add_parser(name).add_argument("job_id")
+    sub.add_parser("job-service")
+    sub.add_parser("database-upgrade").add_argument("--destination", required=True)
     task_worker = sub.add_parser("job-worker")
     task_worker.add_argument("--job-id")
     task_worker.add_argument("--once", action="store_true")
@@ -107,6 +111,10 @@ def main(argv=None) -> int:
     serve.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
     try:
+        if args.command == "database-upgrade":
+            from .database_upgrade import upgrade_copy
+            emit(upgrade_copy(args.db, args.destination))
+            return 0
         if args.command in ("source-diagnostics-capabilities", "source-diagnostics"):
             from .diagnostics.contracts import DiagnosticQuery
             from .diagnostics.service import Diagnostics
@@ -124,6 +132,8 @@ def main(argv=None) -> int:
             jobs = Jobs(Store(args.db))
             if args.command == "jobs":
                 emit(jobs.list())
+            elif args.command == "job-service":
+                emit(jobs.service_status())
             elif args.command == "job-strategy-register-python":
                 from .python_strategies.spec import PythonDescriptor
                 emit(jobs.register_python(args.file, PythonDescriptor.model_validate_json(Path(args.descriptor).read_text())))
@@ -281,6 +291,9 @@ def main(argv=None) -> int:
         return 0
     except DomainError as exc:
         emit({"error": exc.body()})
+        return 2
+    except (OSError, sqlite3.Error) as exc:
+        emit({"error": storage_error(exc).body()})
         return 2
     except ValidationError as exc:
         emit({"error": {"code": "INVALID_INPUT", "message": str(exc)}})

@@ -20,7 +20,8 @@ from .contracts import (
     StateView,
     StrategyVersion,
 )
-from .database_compat import require_compatible_database
+from .database_compat import compatible_snapshot, require_compatible_database
+from .database_lifecycle import database_lock, file_identity, initialize_database
 
 
 def now() -> str:
@@ -40,101 +41,46 @@ def digest(value) -> str:
 class Store:
     def __init__(self, path: str | Path):
         self.path = Path(path).expanduser().resolve()
-        require_compatible_database(self.path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.connection() as db:
-            version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3):
-                raise DomainError("SCHEMA_VERSION", f"Unsupported database schema {version}")
-            if version in (1, 2):
-                self._check_migration(db)
-            db.execute("PRAGMA journal_mode=WAL")
-            db.executescript("""
-                CREATE TABLE IF NOT EXISTS strategies (
-                    version_id TEXT PRIMARY KEY, body TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS m2_strategies (
-                    version_id TEXT PRIMARY KEY, body TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS m2_python_sources (
-                    version_id TEXT PRIMARY KEY REFERENCES m2_strategies(version_id), source BLOB NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS runs (
-                    run_id TEXT PRIMARY KEY,
-                    idempotency_key TEXT NOT NULL UNIQUE,
-                    request_hash TEXT NOT NULL,
-                    strategy_version_id TEXT NOT NULL REFERENCES strategies(version_id),
-                    account_id TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN
-                        ('queued','running','succeeded','failed','cancelled')),
-                    manifest TEXT NOT NULL,
-                    cursor INTEGER NOT NULL DEFAULT 0,
-                    checkpoint TEXT,
-                    lease_token TEXT,
-                    lease_until REAL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    error TEXT
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS one_active_engine_per_account
-                    ON runs(account_id) WHERE status IN ('queued','running');
-                CREATE TABLE IF NOT EXISTS events (
-                    run_id TEXT NOT NULL REFERENCES runs(run_id),
-                    sequence INTEGER NOT NULL,
-                    body TEXT NOT NULL,
-                    PRIMARY KEY(run_id, sequence)
-                );
-                CREATE TABLE IF NOT EXISTS logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id TEXT NOT NULL REFERENCES runs(run_id),
-                    observed_at TEXT NOT NULL, level TEXT NOT NULL, message TEXT NOT NULL
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS engine_fill_once
-                    ON events(run_id, json_extract(body, '$.fill.fill_id'))
-                    WHERE json_extract(body, '$.fill.fill_id') IS NOT NULL;
-                CREATE UNIQUE INDEX IF NOT EXISTS engine_action_once
-                    ON events(run_id, json_extract(body, '$.action_id'))
-                    WHERE json_extract(body, '$.action_id') IS NOT NULL;
-                CREATE TABLE IF NOT EXISTS native_receipts (
-                    run_id TEXT PRIMARY KEY REFERENCES runs(run_id), body TEXT NOT NULL
-                );
-            """)
-            # Additive migration: never rewrite accepted manifests or historical events.
-            db.execute("BEGIN IMMEDIATE")
-            if version in (1, 2):
-                self._check_migration(db)
-            columns = {r[1] for r in db.execute("PRAGMA table_info(runs)")}
-            for name, declaration in {
-                "cancel_requested_at": "TEXT",
-                "reconciliation_required": "INTEGER NOT NULL DEFAULT 0",
-                "native_started": "INTEGER NOT NULL DEFAULT 0",
-                "native_reconcile_only": "INTEGER NOT NULL DEFAULT 0",
-            }.items():
-                if name not in columns:
-                    db.execute(f"ALTER TABLE runs ADD COLUMN {name} {declaration}")
-            if "reconciliation_required" not in columns:
-                db.execute("UPDATE runs SET reconciliation_required=1 WHERE "
-                           "json_extract(manifest,'$.engine.engine_id')='rqalpha'")
-            db.execute("PRAGMA user_version=3")
-            db.commit()
+        with database_lock(self.path, exclusive=True):
+            if not self.path.exists():
+                initialize_database(self.path)
+            require_compatible_database(self.path)
+            self._identity = file_identity(self.path)
 
-    @staticmethod
-    def _check_migration(db):
-        from . import __version__
-        from .identity import source_sha256
-        accepted = [json.loads(row[0]) for row in db.execute(
-            "SELECT manifest FROM runs WHERE status IN ('queued','running')")]
-        if accepted and any(m["backend_version"] != __version__ or
-                            m["backend_source_sha256"] != source_sha256() for m in accepted):
-            raise DomainError("SCHEMA_MIGRATION_BLOCKED", "Use the original pinned backend to handle active historical runs before upgrading this database")
+    @contextmanager
+    def initialization(self):
+        """Serialize validation and policy admission with all cooperating connections.
+
+        The yielded connection belongs to a disposable copy. Only an accepted first
+        policy may open the original through _connection while holding this lock.
+        """
+        with database_lock(self.path, exclusive=True):
+            self._require_identity()
+            with compatible_snapshot(self.path) as snapshot:
+                yield snapshot
+
+    def _require_identity(self):
+        if file_identity(self.path) != self._identity:
+            raise DomainError("DATABASE_FILE_CHANGED",
+                              "Database was removed or replaced; stop this instance and inspect it", 409)
 
     @contextmanager
     def connection(self, *, transaction: bool = False):
-        db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA synchronous=FULL")
+        with database_lock(self.path):
+            with self._connection(transaction=transaction) as db:
+                yield db
+
+    @contextmanager
+    def _connection(self, *, transaction=False):
+        self._require_identity()
+        # Never recreate a removed database or perform DDL on an existing database.
+        db = sqlite3.connect(self.path.as_uri() + "?mode=rw", uri=True,
+                             timeout=10, isolation_level=None)
         try:
+            self._require_identity()
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA synchronous=FULL")
             if transaction:
                 db.execute("BEGIN IMMEDIATE")
             yield db

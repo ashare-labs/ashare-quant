@@ -1,6 +1,9 @@
 """Local task control endpoints, separate from the closed general backtest gate."""
 
+from urllib.parse import urlsplit
+
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 
 from ashare_quant.contracts import Contract, DomainError
 from ashare_quant.m2.contracts import Sha, StrategyVersion
@@ -18,6 +21,7 @@ from .contracts import (
     JobView,
 )
 from .files import digest
+from .policy import ServiceStatus
 from .service import Jobs
 
 
@@ -25,13 +29,33 @@ class ActionRequest(Contract):
     pass
 
 
-def mount(app, store, configuration=None):
-    jobs = Jobs(store, configuration)
+def mount(app, store, configuration=None, *, jobs=None):
+    jobs = jobs or Jobs(store, configuration)
     app.state.m2_jobs = jobs
 
     @app.middleware("http")
     async def task_no_store(request, call_next):
+        if request.url.path.startswith("/api/v1/m2/") and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            origin = request.headers.get("origin")
+            try:
+                parsed = urlsplit(origin) if origin else None
+            except ValueError:
+                parsed = None
+            trusted = (not origin and request.headers.get("sec-fetch-site") != "cross-site") or (
+                parsed and parsed.scheme in {"http", "https"}
+                and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+                and not parsed.username and not parsed.password
+                and parsed.path == "" and not parsed.query and not parsed.fragment
+            )
+            if not trusted:
+                return JSONResponse(status_code=403, content={"api_version": "v1", "error": {
+                    "code": "M2_JOB_ORIGIN_REFUSED",
+                    "message": "Mutations require a trusted local client or loopback browser origin",
+                    "details": None,
+                }}, headers={"Cache-Control": "no-store"})
         response = await call_next(request)
+        if response.status_code in {429, 503}:
+            response.headers["Retry-After"] = "2"
         if request.url.path.startswith("/api/v1/m2/"):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -95,6 +119,11 @@ def mount(app, store, configuration=None):
     def listing(request: Request) -> JobList:
         closed_query(request)
         return jobs.list()
+
+    @app.get("/api/v1/m2/jobs/service")
+    def service_status(request: Request) -> ServiceStatus:
+        closed_query(request)
+        return jobs.service_status()
 
     @app.get("/api/v1/m2/jobs/{job_id}")
     def get(job_id: JobID, request: Request) -> JobView:
