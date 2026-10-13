@@ -43,10 +43,17 @@ def _audit_run(root, *, enforce_strict_cap=True):
     doc = json.loads((root / "input.json").read_text())
     cfg = manifest["config"]
     mode = cfg.get("matching", "next_open")
+    jq_lifecycle = cfg.get("lifecycle") == "jq_minute"
+    jq_capacity = cfg.get("capacity_policy") == "jq_daily_initial"
     require(mode in {"next_open", "jq_current"}, "unknown matching model")
     require(not result["is_test_double"], "native ledger required")
     require(
-        result["native_classes"]["account"] == "rqalpha.portfolio.account.Account",
+        result["native_classes"]["account"]
+        == (
+            "ashare_quant.second_batch.reservation.BudgetAccount"
+            if jq_capacity
+            else "rqalpha.portfolio.account.Account"
+        ),
         "native account required",
     )
     rows, by_day = {}, defaultdict(list)
@@ -62,10 +69,19 @@ def _audit_run(root, *, enforce_strict_cap=True):
     for values in by_day.values():
         values.sort(key=lambda r: r["end"])
     states = {(s["security"], s["date"]): s for s in doc["states"]}
+    observations = doc.get("session_observations", {})
+    opening = {(r["security"], r["date"]): r for r in observations.get("opening_prices", [])}
+    closing = {(r["security"], r["date"]): r for r in observations.get("closing_marks", [])}
+    daily = {(r["security"], r["date"]): r for r in observations.get("daily", [])}
     orders = {o["order_id"]: o for o in result["orders"]}
     cash = number(cfg["initial_cash"])
     qty, basis, bought_today, consumed = [defaultdict(int) for _ in range(4)]
-    order_value, order_fee = defaultdict(Decimal), defaultdict(Decimal)
+    order_value, order_fee, order_tax = (
+        defaultdict(Decimal),
+        defaultdict(Decimal),
+        defaultdict(Decimal),
+    )
+    origin_cost = {}
     order_states, filled, checks, day = {}, defaultdict(int), 0, None
     initial_reserve = {}
     ledger, budgets, violations, event_trades = [], {}, [], []
@@ -77,9 +93,22 @@ def _audit_run(root, *, enforce_strict_cap=True):
         visible = [
             r for r in by_day[sid, str(now.date())] if r["end"] <= now and r["visible"] <= now
         ]
-        return number(
-            visible[-1]["close"] if visible else states[sid, str(now.date())]["previous_close"]
-        )
+        if visible:
+            return number(visible[-1]["close"])
+        quote = opening.get((sid, str(now.date())))
+        if quote and timestamp(quote.get("available_at") or quote["replay_available_at"]) <= now:
+            return number(quote["price"])
+        return number(states[sid, str(now.date())]["previous_close"])
+
+    def remaining_reserve(oid, order):
+        remaining = order["amount"] - max(order["filled"], filled[oid])
+        if jq_capacity and order["is_buy"] and order["price"]:
+            return (
+                max(Decimal(0), initial_reserve[oid] - order_value[oid] - order_fee[oid])
+                if remaining
+                else Decimal(0)
+            )
+        return initial_reserve[oid] * remaining / order["amount"]
 
     def reservation():
         # Native Account reserves the initial request's notional/estimated fees,
@@ -87,7 +116,7 @@ def _audit_run(root, *, enforce_strict_cap=True):
         # creation and trade events; observer totals are never the authority.
         return sum(
             (
-                initial_reserve[oid] * (o["amount"] - max(o["filled"], filled[oid])) / o["amount"]
+                remaining_reserve(oid, o)
                 for oid, o in order_states.items()
                 if o["status"] in {"new", "held"}
             ),
@@ -119,7 +148,15 @@ def _audit_run(root, *, enforce_strict_cap=True):
                 "closeable inventory mismatch",
             )
             near(p["avg_cost"], basis[sid] / qty[sid], "holding cost mismatch")
+            if "today_amount" in p and not isinstance(p["today_amount"], dict):
+                require(p["today_amount"] == bought_today[sid], "today inventory mismatch")
             mark = visible_price(sid, now)
+            quote = closing.get((sid, str(now.date())))
+            if (
+                quote
+                and timestamp(quote.get("available_at") or quote["replay_available_at"]) <= now
+            ):
+                mark = number(quote["price"])
             near(p["price"], mark, "event price clock mismatch")
             near(p["value"], mark * qty[sid], "event position value mismatch")
             market_value += mark * qty[sid]
@@ -135,19 +172,33 @@ def _audit_run(root, *, enforce_strict_cap=True):
         if e["kind"] == "order_event":
             order_states[e["order_id"]] = e
             if e["order_id"] not in initial_reserve:
+                origin_cost[e["order_id"]] = (
+                    basis[e["security"]] / qty[e["security"]] if qty[e["security"]] else Decimal(0)
+                )
                 price = number(e["price"]) or visible_price(e["security"], now)
                 gross = price * e["amount"]
                 fee = max(number(cfg["min_commission"]), gross * number(cfg["commission_rate"]))
                 initial_reserve[e["order_id"]] = (
-                    gross + fee if e["is_buy"] else fee + gross * number(cfg["sell_tax"])
+                    gross
+                    if jq_capacity and e["is_buy"] and e["price"]
+                    else (gross + fee if e["is_buy"] else fee + gross * number(cfg["sell_tax"]))
                 )
         elif e["kind"] == "trade":
             event_trades.append(e)
             sid, oid, amount = e["security"], e["order_id"], e["amount"]
-            o, bar = orders[oid], rows[sid, now]
+            o, bar = orders[oid], rows.get((sid, now))
             submitted = timestamp(o["add_time"])
-            require(bar["visible"] <= now and bar["end"] <= now, "fill before bar is visible")
-            require(amount > 0 and amount % 100 == 0, "invalid stock fill quantity")
+            require(
+                (bar is not None and bar["visible"] <= now and bar["end"] <= now)
+                or (
+                    jq_capacity and now == submitted and now.strftime("%H:%M") in {"09:30", "13:00"}
+                ),
+                "fill before bar is visible",
+            )
+            require(
+                type(amount) is int and amount > 0 and (jq_capacity or amount % 100 == 0),
+                "invalid stock fill quantity",
+            )
             if mode == "next_open":
                 require(
                     now > submitted and bar["start"] >= submitted,
@@ -155,7 +206,9 @@ def _audit_run(root, *, enforce_strict_cap=True):
                 )
                 near(e["price"], bar["open"], "next-open fill price mismatch")
             elif now == submitted:
-                near(e["price"], bar["close"], "immediate fill differs from visible close")
+                near(
+                    e["price"], visible_price(sid, now), "immediate fill differs from visible close"
+                )
             else:
                 require(
                     now > submitted and bar["start"] >= submitted and o["price"] > 0,
@@ -175,14 +228,17 @@ def _audit_run(root, *, enforce_strict_cap=True):
                     else (e["price"] >= o["price"]),
                     "fill violated order limit",
                 )
-            key = (sid, e["at"])
+            key = (sid, e["at"], oid) if jq_capacity else (sid, e["at"])
             consumed[key] += amount
-            raw_cap = Fraction(str(bar["volume"])) * Fraction(str(cfg["volume_percent"]))
-            cap = int(raw_cap // 100) * 100
+            volume = (
+                daily[sid, date]["volume"] if jq_capacity and submitted == now else bar["volume"]
+            )
+            raw_cap = Fraction(str(volume)) * Fraction(str(cfg["volume_percent"]))
+            cap = int(raw_cap) if jq_capacity and submitted != now else int(raw_cap // 100) * 100
             budgets[key] = dict(
                 security=sid,
                 at=e["at"],
-                source_volume=bar["volume"],
+                source_volume=volume,
                 ratio=cfg["volume_percent"],
                 strict_cap=cap,
                 filled=consumed[key],
@@ -194,7 +250,7 @@ def _audit_run(root, *, enforce_strict_cap=True):
                         "excess_over_raw_budget": str(Fraction(consumed[key]) - raw_cap),
                     }
                 )
-                require(not enforce_strict_cap, "exact minute participation capacity exceeded")
+                require(not enforce_strict_cap, "declared participation capacity exceeded")
             value = number(amount) * number(e["price"])
             order_value[oid] += value
             due = max(
@@ -203,6 +259,7 @@ def _audit_run(root, *, enforce_strict_cap=True):
             fee = max(Decimal(0), due - order_fee[oid])
             order_fee[oid] += fee
             tax = value * number(cfg["sell_tax"]) if e["side"] == "SELL" else Decimal(0)
+            order_tax[oid] += tax
             near(e["commission"], fee, "cumulative native commission mismatch")
             near(e["tax"], tax, "native sell tax mismatch")
             filled[oid] += amount
@@ -241,9 +298,24 @@ def _audit_run(root, *, enforce_strict_cap=True):
         elif e["kind"] == "account":
             check_account(e, e["positions"], now)
             checks += 1
-        elif e["kind"] == "log" and e["message"].startswith("AQMIN_JSON "):
-            row = json.loads(e["message"].removeprefix("AQMIN_JSON "))
+        elif e["kind"] == "log" and e["message"].startswith(("AQMIN_JSON ", "AQGAP_JSON ")):
+            gap = e["message"].startswith("AQGAP_JSON ")
+            row = json.loads(e["message"].split(" ", 1)[1])
             require(timestamp(row["time"]) == now, "AQ observer/native event clock mismatch")
+            if gap and row["kind"] == "submit":
+                row = {**row, "api": "order", "value": row["amount"]}
+            if gap and row["kind"] == "return":
+                require(
+                    pending is not None and row["label"] == pending["label"],
+                    "AQ gap return binding",
+                )
+                row = {
+                    **row,
+                    "kind": "order_return",
+                    "api": "order",
+                    "security": pending["security"],
+                    "returned_none": row["order"] is None,
+                }
             if row["kind"] == "submit":
                 require(pending is None, "AQ missing observer return")
                 pending, native_request, native_return = row, None, None
@@ -283,7 +355,11 @@ def _audit_run(root, *, enforce_strict_cap=True):
                     require(
                         all(
                             order[k] == expected[k]
-                            for k in ("security", "amount", "is_buy", "price")
+                            for k in (
+                                ("security", "amount", "is_buy")
+                                if jq_lifecycle
+                                else ("security", "amount", "is_buy", "price")
+                            )
                         ),
                         "AQ returned order identity/quantity differs",
                     )
@@ -291,8 +367,23 @@ def _audit_run(root, *, enforce_strict_cap=True):
                         order["filled"] == filled[oid],
                         "AQ return fill amount differs from native trades",
                     )
+                    if jq_lifecycle:
+                        price = (
+                            round(float(order_value[oid] / filled[oid]), 3) if filled[oid] else 0
+                        )
+                        near(order["price"], price, "AQ JQ order price projection mismatch")
+                        near(
+                            order["avg_cost"],
+                            price if order["is_buy"] else origin_cost[oid],
+                            "AQ JQ order cost projection mismatch",
+                        )
+                        near(
+                            order["commission"],
+                            order_fee[oid] + order_tax[oid],
+                            "AQ JQ order commission projection mismatch",
+                        )
                 pending = None
-            if row["kind"] != "snapshot":
+            if row["kind"] not in {"snapshot", "account"}:
                 continue
             held = {p["security"]: p for p in row["positions"]}
             require(len(held) == len(row["positions"]), "AQ duplicate observer position")
@@ -317,6 +408,8 @@ def _audit_run(root, *, enforce_strict_cap=True):
                 )
             if row["trades"] is not None:
                 native_trades = {t["trade_id"]: t for t in event_trades}
+                if jq_lifecycle:
+                    native_trades = {i: t for i, t in native_trades.items() if t["at"][:10] == date}
                 seen = set()
                 for trade in row["trades"]:
                     tid = str(trade["trade_id"])
@@ -326,23 +419,29 @@ def _audit_run(root, *, enforce_strict_cap=True):
                     )
                     expected = native_trades[tid]
                     require(
-                        timestamp(trade["at"]) == timestamp(expected["at"]) <= now,
+                        timestamp(trade["time"] if gap else trade["at"])
+                        == timestamp(expected["at"])
+                        <= now,
                         "AQ trade follows first observation",
                     )
                     require(
                         all(
                             trade[k] == expected[k]
-                            for k in ("order_id", "security", "amount", "side")
+                            for k in (
+                                ("order_id", "security", "amount")
+                                if gap
+                                else ("order_id", "security", "amount", "side")
+                            )
                         ),
                         "AQ observed trade identity/quantity differs",
                     )
-                    for key in ("price", "commission", "tax"):
+                    for key in ("price",) if gap else ("price", "commission", "tax"):
                         near(trade[key], expected[key], "AQ observed trade " + key + " mismatch")
                     if tid not in observed_trade_ids:
                         first_observations.append(
                             dict(
                                 trade_id=tid,
-                                fill_at=trade["at"],
+                                fill_at=expected["at"],
                                 observed_at=row["time"],
                                 seq=row["seq"],
                             )

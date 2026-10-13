@@ -4,7 +4,7 @@ import inspect
 import math
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from types import ModuleType, SimpleNamespace
 
@@ -76,7 +76,7 @@ class OrderCost:
     min_commission: float = 5
 
 
-def order_view(order):
+def order_view(order, *, jq=False, holding_cost=None):
     statuses = {
         "PENDING_NEW": "new",
         "ACTIVE": "held",
@@ -84,19 +84,33 @@ def order_view(order):
         "CANCELLED": "canceled",
         "REJECTED": "rejected",
     }
-    return SimpleNamespace(
+    status = statuses[order.status.name]
+    if jq:
+        if status == "held" and order.filled_quantity:
+            status = "filled"  # Observed partial limit label, still in get_open_orders.
+        elif status == "filled":
+            status = "held"  # Observed JQ terminal full-fill label, no longer open.
+    view = SimpleNamespace(
         order_id=str(order.order_id),
         security=order.order_book_id,
         amount=int(order.quantity),
         filled=int(order.filled_quantity),
         is_buy=order.side.name == "BUY",
-        status=OrderStatus(statuses[order.status.name]),
+        status=OrderStatus(status),
         price=float(order.price),
         avg_cost=float(order.avg_price),
         add_time=order.datetime,
         native_status=order.status.name,
         message=order.message,
     )
+    if jq:
+        view.commission = float(order.transaction_cost)
+        view.limit_price = float(order.price)
+        view.price = round(float(order.avg_price), 3) if order.filled_quantity else 0.0
+        view.avg_cost = (
+            float(holding_cost) if not view.is_buy and holding_cost is not None else view.price
+        )
+    return view
 
 
 class Context:
@@ -119,7 +133,7 @@ class Context:
     @property
     def run_params(self):
         return SimpleNamespace(
-            type="backtest",
+            type="full_backtest" if self._host.jq_lifecycle else "backtest",
             frequency="minute",
             start_date=datetime.fromisoformat(self._host.data.days[0]).date(),
             end_date=datetime.fromisoformat(self._host.data.days[-1]).date(),
@@ -159,6 +173,8 @@ class Quote:
 
     @property
     def day_open(self):
+        if self._host.data.session_data is not None:
+            return self._host.data.session_data.visible_open(self._sid, self._host.at)
         require(not self._host.data.research, "MINUTE_DAY_OPEN_OUTSIDE_RESEARCH_SESSION")
         day = str(self._host.at.date())
         row = self._host.data.bars.get((self._sid, self._host.data.ends[day][0]))
@@ -179,6 +195,13 @@ class API:
         self.universe = list(host.data.ids)
         self.schedules = []
 
+    def _order_view(self, order):
+        return order_view(
+            order,
+            jq=self.host.jq_lifecycle,
+            holding_cost=self.host.order_origin_cost.get(str(order.order_id)),
+        )
+
     def run_daily(self, func, time="open", reference_security=None):
         require(self.host.phase == "initialize", "JQ_SCHEDULE_ONLY_IN_INITIALIZE")
         require(callable(func), "JQ_SCHEDULE_CALLBACK_REQUIRED")
@@ -189,6 +212,15 @@ class API:
         )
         aliases = {"open": "09:30", "before_open": "09:00", "after_close": "15:30"}
         clock = aliases.get(time, time)
+        if self.host.jq_lifecycle:
+            from .lifecycle import schedule_clock
+
+            require(
+                isinstance(clock, str) and schedule_clock(clock),
+                f"JQ_SCHEDULE_TIME_UNSUPPORTED:{time}",
+            )
+            self.schedules.append((func, clock))
+            return
         supported = {"09:00", "15:30", "every_bar"}
         for day in self.host.data.days:
             valid = supported | {t.strftime("%H:%M") for t in self.host.data.clocks[day]}
@@ -207,6 +239,16 @@ class API:
         return ids
 
     def set_option(self, name, value):
+        if name == "order_volume_ratio":
+            require(
+                self.host.phase == "initialize"
+                and self.host.jq_capacity
+                and type(value) in (int, float)
+                and number(value) == number(self.host.config["volume_percent"]),
+                "JQ_VOLUME_RATIO_MUST_MATCH_EXPLICIT_CAPACITY_POLICY",
+            )
+            self.host.emit("option", name=name, value=value)
+            return
         require(
             name in {"use_real_price", "avoid_future_data"} and value is True,
             f"JQ_OPTION_UNSUPPORTED:{name}={value}",
@@ -369,6 +411,13 @@ class API:
         panel=False,
         fill_paused=False,
     ):
+        if frequency in {"daily", "1d"} and self.host.jq_lifecycle:
+            require(self.host.data.session_data is not None, "JQ_DAILY_REQUIRES_AD_OBSERVATIONS")
+            require(
+                fq is None and skip_paused is False and panel is False and fill_paused is False,
+                "JQ_PRICE_REQUIRES_RAW_UNFILLED_PANEL_FALSE",
+            )
+            return self._daily_price(security, start_date, end_date, fields, count)
         require(start_date is None and count is not None, "JQ_PRICE_ONLY_COUNT_WINDOW_SUPPORTED")
         require(
             fq is None and skip_paused is False and panel is False and fill_paused is False,
@@ -387,6 +436,61 @@ class API:
             ignore_index=True,
         ).sort_values(["time", "code"])
 
+    def _daily_price(self, security, start, end, fields, count):
+        require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")
+        ids = self.securities(security)
+        fields = [fields] if isinstance(fields, str) else list(fields or ["close", "volume"])
+        require(
+            fields and len(set(fields)) == len(fields) and set(fields) <= {"close", "volume"},
+            "JQ_DAILY_FIELDS_UNSUPPORTED",
+        )
+        require(
+            count is None or (type(count) is int and 0 < count <= 10000 and start is None),
+            "JQ_DAILY_COUNT_OR_START_REQUIRED",
+        )
+
+        def day(value, default):
+            if value is None:
+                return default
+            if isinstance(value, datetime):
+                return str(self.parse_end(value).date())
+            if isinstance(value, date):
+                return value.isoformat()
+            require(isinstance(value, str) and len(value) == 10, "JQ_DAILY_DATE_REQUIRED")
+            return date.fromisoformat(value).isoformat()
+
+        start = day(start, self.host.data.calendar[0])
+        end = day(end, str(self.host.at.date()))
+        import pandas as pd
+
+        frames = {}
+        for sid in ids:
+            rows = self.host.data.session_data.visible_daily(sid, self.host.at, start, end)
+            if count is not None:
+                rows = rows[-count:]
+            require(
+                rows and (count is None or len(rows) == count), "JQ_INSUFFICIENT_VISIBLE_DAILY_DATA"
+            )
+            self.host.emit(
+                "daily_history_read",
+                security=sid,
+                start=start,
+                end=end,
+                knowledge_at=self.host.at.isoformat(),
+                fields=fields,
+                dates=[r["date"] for r in rows],
+            )
+            frames[sid] = pd.DataFrame(
+                [{f: float(r[f]) for f in fields} for r in rows],
+                index=pd.DatetimeIndex([r["date"] for r in rows]),
+            )
+        if isinstance(security, str):
+            return frames[security]
+        return pd.concat(
+            [f.rename_axis("time").reset_index().assign(code=s) for s, f in frames.items()],
+            ignore_index=True,
+        ).sort_values(["time", "code"])
+
     def _order(self, api_name, security, value, style, side, pindex, close_today):
         self.securities(security)
         require(
@@ -394,16 +498,29 @@ class API:
             "JQ_ONLY_LONG_SINGLE_STOCK_ACCOUNT",
         )
         at, day = self.host.at, str(self.host.at.date())
-        require(
-            self.host.phase == "bar"
-            and at in self.host.data.clocks[day]
-            and at < self.host.data.sessions[day][-1][1],
-            "JQ_ORDER_OUTSIDE_SESSION",
-        )
+        if self.host.jq_lifecycle:
+            clock = at.strftime("%H:%M")
+            require(
+                self.host.phase in {"scheduled", "bar"}
+                and ("09:30" <= clock < "11:30" or "13:00" <= clock < "15:00"),
+                "JQ_ORDER_OUTSIDE_SESSION",
+            )
+        else:
+            require(
+                self.host.phase == "bar"
+                and at in self.host.data.clocks[day]
+                and at < self.host.data.sessions[day][-1][1],
+                "JQ_ORDER_OUTSIDE_SESSION",
+            )
         if self.host.config["matching"] == "jq_current":
             row = self.host.data.bars.get((security, at))
             require(
-                row is not None and row["_available"] <= at,
+                (row is not None and row["_available"] <= at)
+                or (
+                    self.host.jq_capacity
+                    and row is None
+                    and at.strftime("%H:%M") in {"09:30", "13:00"}
+                ),
                 "JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
             )
         require(type(value) in (int, float) and math.isfinite(value), "JQ_ORDER_FINITE_AMOUNT")
@@ -435,7 +552,7 @@ class API:
         if result is not None:
             self.host.orders[str(result.order_id)] = result
         self.host.emit("order_return", order_id=str(result.order_id) if result else None)
-        return order_view(result) if result is not None else None
+        return self._order_view(result) if result is not None else None
 
     def order(self, security, amount, style=None, side="long", pindex=0, close_today=False):
         return self._order("order_shares", security, amount, style, side, pindex, close_today)
@@ -452,7 +569,11 @@ class API:
         return self._order("order_target_value", security, value, style, side, pindex, close_today)
 
     def get_orders(self, order_id=None, security=None, status=None):
-        result = {i: order_view(o) for i, o in self.host.orders.items()}
+        result = {
+            i: self._order_view(o)
+            for i, o in self.host.orders.items()
+            if not self.host.jq_lifecycle or o.datetime.date() == self.host.at.date()
+        }
         return {
             i: o
             for i, o in result.items()
@@ -462,7 +583,9 @@ class API:
         }
 
     def get_open_orders(self):
-        return {str(o.order_id): order_view(o) for o in self.host.env.broker.get_open_orders()}
+        return {
+            str(o.order_id): self._order_view(o) for o in self.host.env.broker.get_open_orders()
+        }
 
     def cancel_order(self, order):
         order_id = str(getattr(order, "order_id", order))
@@ -474,7 +597,18 @@ class API:
         return True
 
     def get_trades(self):
-        return {t["trade_id"]: SimpleNamespace(**t) for t in self.host.trades}
+        return {
+            t["trade_id"]: SimpleNamespace(
+                **t,
+                **(
+                    {"time": datetime.fromisoformat(t["at"]).replace(tzinfo=None)}
+                    if self.host.jq_lifecycle
+                    else {}
+                ),
+            )
+            for t in self.host.trades
+            if not self.host.jq_lifecycle or t["at"][:10] == str(self.host.at.date())
+        }
 
     def record(self, **values):
         require(

@@ -12,7 +12,9 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from .inputs import number, require, stamp
 
 SCHEMA = "aq-tdx-minute-research.v1"
+SCHEMA_FULL = "aq-tdx-minute-research.v2"
 PROFILE = "tdx-two-bank-20261009-12.v1"
+PROFILE_FULL = "tdx-two-bank-20261009-12.full-session.v1"
 IDS = ("600000.XSHG", "000001.XSHE")
 DAYS = ["2026-10-09", "2026-10-12"]
 CALENDAR = ["2026-10-08", *DAYS, "2026-10-13"]
@@ -25,6 +27,13 @@ ASSUMPTIONS = [
     "bounded_action_sources_have_no_omitted_action_affecting_new_positions",
     "no_ex_right_reference_change_within_the_selected_no_known_action_window",
     "source_float_encoded_share_volume_and_CNY_amount_used_without_precision_repair",
+]
+FULL_SESSIONS = [["09:30", "11:30"], ["13:00", "15:00"]]
+FULL_ASSUMPTIONS = [
+    "source_label_is_interval_end_including_auction_rows_for_explicit_jq_research",
+    *ASSUMPTIONS[1:],
+    "opening_proxy_and_close_valuation_roles_are_AD_supplied_not_historical_PIT",
+    "terminal_holdings_are_marked_only_no_post_window_corporate_action_claim",
 ]
 
 
@@ -39,11 +48,12 @@ def envelope(previous_close):
 
 def validate_document(doc):
     model = doc["research"]
+    full = doc["schema"] == SCHEMA_FULL
     require(
         doc["real_market_data"] is True
-        and model["profile"] == PROFILE
+        and model["profile"] == (PROFILE_FULL if full else PROFILE)
         and model["purpose"] == "retrospective_research"
-        and model["assumptions"] == ASSUMPTIONS
+        and model["assumptions"] == (FULL_ASSUMPTIONS if full else ASSUMPTIONS)
         and model["strict_execution_admitted"] is False
         and model["interval_verified"] is False
         and model["price_limit_verified"] is False
@@ -56,7 +66,10 @@ def validate_document(doc):
         and doc["calendar"] == CALENDAR
         and doc["sessions"]
         == {
-            d: [[d + "T" + a + ":00+08:00", d + "T" + b + ":00+08:00"] for a, b in SESSIONS]
+            d: [
+                [d + "T" + a + ":00+08:00", d + "T" + b + ":00+08:00"]
+                for a, b in (FULL_SESSIONS if full else SESSIONS)
+            ]
             for d in DAYS
         },
         "MINUTE_RESEARCH_FIXED_CASE_SCOPE",

@@ -4,6 +4,8 @@ import inspect
 import json
 from collections.abc import Mapping
 from datetime import datetime
+from decimal import Decimal, localcontext
+from fractions import Fraction
 from types import SimpleNamespace
 
 import numpy as np
@@ -11,7 +13,11 @@ from rqalpha.const import INSTRUMENT_TYPE, ORDER_TYPE, POSITION_DIRECTION, SIDE
 from rqalpha.core.events import EVENT
 from rqalpha.interface import AbstractMod, AbstractPriceBoard
 from rqalpha.mod.rqalpha_mod_sys_simulation.matcher import DefaultBarMatcher
-from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderCancelled, OrderNotMatchable
+from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import (
+    OrderCancelled,
+    OrderNotMatchable,
+    OrderRejected,
+)
 
 from ashare_quant.contracts import SHANGHAI
 from ashare_quant.daily_portfolio.native import Proxy
@@ -22,6 +28,7 @@ from rqprobe.guards import block_rqdata_apis
 
 from .api import API, callback_name, order_view, validate_callback
 from .inputs import require, stamp
+from .lifecycle import JQEventSource, handle_clocks
 
 runtime = {}
 __config__ = {"priority": 1000}
@@ -101,12 +108,40 @@ class Matcher(DefaultBarMatcher):
 
     def __init__(self, host, config):
         self.host = host
+        self._attempted_at = {}
+        self._capacity_clock = None
         super().__init__(host.env, config, partial_fill_on_insufficient_cash=False)
+
+    def update(self, event):
+        if (
+            not self.host.config.get("lifecycle") == "jq_minute"
+            or self._capacity_clock != self.host.at
+        ):
+            super().update(event)
+            self._capacity_clock = self.host.at
+
+    def match(self, account, order, open_auction):
+        if self.host.config.get("capacity_policy") == "jq_daily_initial":
+            with localcontext() as context:
+                context.prec = 50
+                return super().match(account, order, open_auction)
+        return super().match(account, order, open_auction)
 
     def _get_deal_price(self, order, instrument, open_auction=False):
         row = self.host.data.bars.get((order.order_book_id, self.host.at))
         submitted = order.datetime.replace(tzinfo=SHANGHAI)
         if self.host.config["matching"] == "jq_current":
+            if (
+                self.host.config.get("lifecycle") == "jq_minute"
+                and submitted < self.host.at
+                and self.host.phase != "bar"
+            ):
+                raise OrderNotMatchable("Resting matching follows the scheduled callbacks")
+            if self.host.config.get("capacity_policy") == "jq_daily_initial":
+                if self._attempted_at.get(order.order_id) == self.host.at:
+                    raise OrderNotMatchable("Per-order capacity already attempted at this clock")
+                if not open_auction and submitted == self.host.at and row is None:
+                    return self.host.data.current(order.order_book_id, self.host.at)
             if open_auction or row is None or row["_available"] > self.host.at:
                 raise OrderNotMatchable("JQ-current requires a completed visible bar at this clock")
             if submitted == self.host.at:
@@ -137,6 +172,43 @@ class Matcher(DefaultBarMatcher):
         return super()._get_deal_price(order, instrument, open_auction)
 
     def _get_liquidity_limited_fill(self, order, instrument, open_auction=False):
+        if self.host.config.get("lifecycle") == "jq_minute":
+            self.update(None)
+        if self.host.config.get("capacity_policy") == "jq_daily_initial":
+            require(self._volume_limit and not open_auction, "JQ_EXPLICIT_CAPACITY_REQUIRED")
+            initial = order.datetime.replace(tzinfo=SHANGHAI) == self.host.at
+            if initial:
+                row = self.host.data.execution_daily_volume(
+                    order.order_book_id, str(self.host.at.date())
+                )
+                raw = Fraction(str(row["volume"])) * Fraction(
+                    str(self.host.config["volume_percent"])
+                )
+                cap = int(raw // instrument.round_lot) * instrument.round_lot
+            else:
+                row = self.host.data.bars[order.order_book_id, self.host.at]
+                raw = Fraction(str(row["volume"])) * Fraction(
+                    str(self.host.config["volume_percent"])
+                )
+                cap = int(raw)
+            self._attempted_at[order.order_id] = self.host.at
+            self.host.emit(
+                "volume_capacity",
+                security=order.order_book_id,
+                order_id=str(order.order_id),
+                policy="jq_daily_initial",
+                stage="initial_daily" if initial else "resting_minute",
+                source_volume=row["volume"],
+                volume_percent=self.host.config["volume_percent"],
+                per_order_cap=cap,
+                denominator_strategy_visible=not initial,
+                denominator_available_at=row["_available"].isoformat(),
+            )
+            if cap == 0:
+                if order.type == ORDER_TYPE.MARKET:
+                    raise OrderCancelled("Explicit JQ per-order participation budget exhausted")
+                raise OrderNotMatchable("Explicit JQ per-order participation budget exhausted")
+            return min(order.unfilled_quantity, cap)
         native_fill = super()._get_liquidity_limited_fill(order, instrument, open_auction)
         require(self._volume_limit and not open_auction, "MINUTE_STRICT_VOLUME_POLICY_REQUIRED")
         row = self.host.data.bars[order.order_book_id, self.host.at]
@@ -159,6 +231,30 @@ class Matcher(DefaultBarMatcher):
                 raise OrderCancelled("Strict whole-lot minute participation budget exhausted")
             raise OrderNotMatchable("Strict whole-lot minute participation budget exhausted")
         return min(native_fill, cap)
+
+    def _resolve_open_fill(self, account, order, instrument, price, fill):
+        if self.host.config.get("capacity_policy") != "jq_daily_initial":
+            return super()._resolve_open_fill(account, order, instrument, price, fill)
+
+        # Use the existing native reservation, including retained price improvement.
+        # Native matcher/Account still calculate and apply the actual Trade costs.
+        def d(value):
+            return Decimal(str(value))
+
+        remaining_value = order.unfilled_quantity * d(price)
+        prior_value = order.filled_quantity * d(order.avg_price)
+        total_fee = max(
+            d(self.host.config["min_commission"]),
+            (prior_value + remaining_value) * d(self.host.config["commission_rate"]),
+        )
+        required = remaining_value + max(Decimal(0), total_fee - d(order.transaction_cost))
+        available = d(account.cash) + d(account._remaining_frozen_cash_of_order(order))
+        if required - available > Decimal("1e-8"):
+            reason = "Explicit JQ order exceeds available cash and its native remaining reservation"
+            if order.filled_quantity:
+                raise OrderCancelled(reason)
+            raise OrderRejected(reason)
+        return fill
 
 
 class BarData(Mapping):
@@ -188,13 +284,29 @@ class Mod(AbstractMod):
     def start_up(self, env, config):
         self.env, self.data, self.config = env, runtime["data"], runtime["config"]
         runtime["mod"] = self
-        self.at = stamp(self.data.days[0] + "T09:00:00+08:00")
+        self.jq_lifecycle = self.config["lifecycle"] == "jq_minute"
+        self.jq_capacity = self.config["capacity_policy"] == "jq_daily_initial"
+        self.at = stamp(
+            self.data.days[0] + ("T00:00:00+08:00" if self.jq_lifecycle else "T09:00:00+08:00")
+        )
         self.phase = "initialize"
         self.orders, self.trades, self.accounts = {}, [], []
+        self.order_origin_cost = {}
         self.seq = 0
         self.api = API(self)
         self.namespace = self.api.namespace()
-        env.set_event_source(RecordedEventSource(env, runtime["records"]))
+        env.set_event_source(
+            JQEventSource(self.data)
+            if self.jq_lifecycle
+            else RecordedEventSource(env, runtime["records"])
+        )
+        if self.jq_capacity:
+            from ashare_quant.second_batch.reservation import install_budget_account
+
+            install_budget_account(env)
+        if self.jq_lifecycle:
+            self.handle_times = {d: set(handle_clocks(d)) for d in self.data.days}
+            env.event_bus.add_listener(EVENT.USER, self.user_clock)
         env.set_data_source(Source(self))
         env.set_price_board(Board(self))
         env.event_bus.add_listener(EVENT.POST_SYSTEM_INIT, self.ready)
@@ -227,15 +339,53 @@ class Mod(AbstractMod):
             EVENT.PRE_AFTER_TRADING: "after",
         }[event.event_type]
         self.emit("clock", phase=self.phase)
+        if self.phase == "before" and self.jq_lifecycle:
+            for order in list(self.env.broker.get_open_orders()):
+                require(order.datetime.date() < self.at.date(), "JQ_ROLLOVER_ORDER_DATE")
+                self.emit(
+                    "order_expiry_boundary",
+                    order_id=str(order.order_id),
+                    policy="before-next-session-callback",
+                    platform_exact_cancel_time_verified=False,
+                )
+                with localcontext() as context:
+                    context.prec = 50
+                    self.env.broker.cancel_order(order)
         if self.phase in {"before", "after"}:
             self.refresh_valuation()
+
+    def user_clock(self, event):
+        """Dispatch only adapter clocks; they never pretend to be native bars."""
+        from rqalpha.const import EXECUTION_PHASE
+        from rqalpha.core.execution_context import ExecutionContext
+
+        phase = getattr(event, "minute_phase", None)
+        require(phase in {"scheduled", "after", "end"}, "JQ_UNKNOWN_CLOCK_EVENT")
+        self.env.update_time(event.calendar_dt, event.trading_dt)
+        self.at = event.trading_dt.replace(tzinfo=SHANGHAI)
+        self.phase = phase
+        self.emit("clock", phase=phase)
+        self.refresh_valuation()
+        execution = (
+            EXECUTION_PHASE.ON_BAR if phase == "scheduled" else EXECUTION_PHASE.AFTER_TRADING
+        )
+        with ExecutionContext(execution):
+            if phase == "end":
+                if "on_strategy_end" in self.namespace:
+                    self.invoke(self.namespace["on_strategy_end"])
+            else:
+                self.dispatch(phase)
+            if phase == "scheduled" and self.at not in self.data.ends[str(self.at.date())]:
+                self.dispatch("bar")
+        if phase == "after":
+            self.close_day(event)
 
     def refresh_valuation(self):
         # Account._on_bar uses this same public native Position update path.
         # Non-BAR clocks must also mark already visible prices; no extra BAR or
         # matching event is published, and no parallel equity calculation exists.
         for pos in self.env.portfolio.stock_account.get_positions():
-            price = self.env.get_last_price(pos.order_book_id)
+            price = self.data.valuation_price(pos.order_book_id, self.at)
             previous = pos.last_price
             pos.update_last_price(price)
             if previous != price:
@@ -268,7 +418,13 @@ class Mod(AbstractMod):
             compile(runtime["source"], str(runtime["root"] / "strategy.py"), "exec"), self.namespace
         )
         require(callable(self.namespace.get("initialize")), "JQ_INITIALIZE_REQUIRED")
-        for name in ("initialize", "before_trading_start", "handle_data", "after_trading_end"):
+        for name in (
+            "initialize",
+            "before_trading_start",
+            "handle_data",
+            "after_trading_end",
+            "on_strategy_end",
+        ):
             if name in self.namespace:
                 validate_callback(self.namespace[name])
         self.invoke(self.namespace["initialize"])
@@ -277,7 +433,12 @@ class Mod(AbstractMod):
         validate_callback(callback)
         name = callback_name(callback)
         self.emit("callback_start", name=name, phase=self.phase)
-        result = callback(self.api.context, *args)
+        if self.jq_capacity:
+            with localcontext() as context:
+                context.prec = 50
+                result = callback(self.api.context, *args)
+        else:
+            result = callback(self.api.context, *args)
         if inspect.isawaitable(result) or inspect.isgenerator(result) or inspect.isasyncgen(result):
             if inspect.iscoroutine(result):
                 result.close()  # Do not evaluate it; avoid an unawaited-coroutine warning.
@@ -285,6 +446,9 @@ class Mod(AbstractMod):
         self.emit("callback_end", name=name, phase=self.phase)
 
     def dispatch(self, phase):
+        if self.jq_lifecycle:
+            self.dispatch_jq(phase)
+            return
         name = {
             "before": "before_trading_start",
             "bar": "handle_data",
@@ -303,9 +467,26 @@ class Mod(AbstractMod):
         if phase == "after" and name in self.namespace:
             self.invoke(self.namespace[name])
 
+    def dispatch_jq(self, phase):
+        if phase == "before" and "before_trading_start" in self.namespace:
+            self.invoke(self.namespace["before_trading_start"])
+        is_handle = self.at in self.handle_times[str(self.at.date())]
+        for callback, clock in self.api.schedules:
+            if (
+                phase in {"before", "scheduled", "after"} and clock == self.at.strftime("%H:%M")
+            ) or (phase == "bar" and is_handle and clock == "every_bar"):
+                self.invoke(callback)
+        if phase == "bar" and is_handle and "handle_data" in self.namespace:
+            self.invoke(self.namespace["handle_data"], BarData(self))
+        if phase == "after" and "after_trading_end" in self.namespace:
+            self.invoke(self.namespace["after_trading_end"])
+
     def order_event(self, event):
         o = getattr(event, "order", None)
         if o is not None:
+            if str(o.order_id) not in self.order_origin_cost and o.side == SIDE.SELL:
+                pos = self.env.portfolio.get_position(o.order_book_id, POSITION_DIRECTION.LONG)
+                self.order_origin_cost[str(o.order_id)] = float(pos.avg_price)
             self.orders[str(o.order_id)] = o
             self.emit("order_event", event=event.event_type.name, **vars(order_view(o)))
         else:
@@ -344,6 +525,11 @@ class Mod(AbstractMod):
                     avg_cost=float(pos.avg_price),
                     price=float(pos.last_price),
                     value=float(pos.market_value),
+                    **(
+                        {"today_amount": int(pos.get_state()["non_closable"])}
+                        if self.jq_lifecycle
+                        else {}
+                    ),
                 )
         return SimpleNamespace(
             available_cash=float(account.cash),
@@ -364,6 +550,8 @@ class Mod(AbstractMod):
         }
 
     def snapshot(self, event):
+        if self.data.full_session_input:
+            self.refresh_valuation()
         self.emit("account", **self.account())
 
     def close_day(self, event):
@@ -373,7 +561,7 @@ class Mod(AbstractMod):
     def finish(self, event):
         self.refresh_valuation()
         p = self.env.portfolio
-        if self.data.research:
+        if self.data.research and not self.data.full_session_input:
             require(
                 not self.account()["positions"], "MINUTE_RESEARCH_MUST_EXIT_WITHIN_ACTION_SCOPE"
             )
@@ -392,15 +580,31 @@ class Mod(AbstractMod):
                 "account": type(p.stock_account).__module__ + "." + type(p.stock_account).__name__,
             },
             "model": (
-                "closed-bar-next-open-day-orders.v1"
-                if self.config["matching"] == "next_open"
-                else "jq-current-close-resting-limit-minute-cap.v1"
+                "jq-minute-daily-initial-resting-cap.v1"
+                if self.jq_capacity
+                else (
+                    "closed-bar-next-open-day-orders.v1"
+                    if self.config["matching"] == "next_open"
+                    else "jq-current-close-resting-limit-minute-cap.v1"
+                )
             ),
             "execution_policy": {
                 "matching": self.config["matching"],
                 "cash_policy": self.config["cash_policy"],
-                "capacity": "exact-whole-lot-per-minute-shared.v1",
+                "lifecycle": self.config["lifecycle"],
+                "capacity": "jq-per-order-daily-initial-minute-resting.v1"
+                if self.jq_capacity
+                else "exact-whole-lot-per-minute-shared.v1",
+                "capacity_policy": self.config["capacity_policy"],
+                "retrospective_daily_denominator": self.jq_capacity,
                 "jq_daily_order_volume_cap_verified": False,
+                "reservation": "native-buy-limit-budget"
+                if self.jq_capacity
+                else "native-proportional",
+                "day_order_expiry": "before-next-session-callback"
+                if self.jq_lifecycle
+                else "native-after-trading",
+                "platform_exact_cancel_time_verified": False,
                 "initial_price": "next_open"
                 if self.config["matching"] == "next_open"
                 else "visible_close",

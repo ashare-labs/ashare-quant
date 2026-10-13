@@ -13,6 +13,10 @@
 以同一真实参考复验，两例成交时刻、数量、价格、费用及最终现金对齐。
 比较证据独立保存，不改写旧运行结果；估值边界、容量和对象接口仍有明确差异。
 
+`0.11.0.dev16` 新增显式完整分钟生命周期和每单容量模型，见
+[完整生命周期与容量政策](../examples/jq_minute_comparison/session-policies.md)。
+默认严格分钟模式不变。新增真实输入依赖 AD 的分角色会话观测；工程测试不代替真实平台对照。
+
 ## 可运行示例
 
 需要真实行情的端到端例子，见 [TDX 两股分钟研究样例](../examples/tdx_minute_research/README.md)：
@@ -45,7 +49,10 @@ Python 调用入口为 `ashare_quant.minute.run_backtest(strategy, input_path, o
 默认分别为 `next_open` 和 `reject`。选项、源代码和输入都计入完成身份；
 换版本或换选项重用完成目录会失败，旧任务服务/数据库和恢复契约不变。
 
-## 生命周期与时间
+## 默认生命周期与时间
+
+以下描述 `lifecycle="closed_bars", capacity_policy="strict_minute"` 的默认行为。
+显式新模式的回调顺序、午间定时、历史预热及盘后挂单边界见上述新模式文档。
 
 1. 载入脚本并调用一次 `initialize(context)`；`g` 和 context 自定义属性在本次运行保留。
 2. 每日 09:00 调用 `before_trading_start(context)`，再按注册顺序运行该时点 `run_daily` 回调。
@@ -116,12 +123,12 @@ TDX 研究 profile 改用独立的 `replay_bar_start/replay_bar_end` 模型字�
 | `history` | `1m/minute`，单字段、多股时间对齐 DataFrame 或字典；`fq=None` |
 | `attribute_history` | `1m/minute`，单股多字段，DataFrame 或字典；`fq=None` |
 | `get_bars` | `1m/minute`，明确 `include_now`，结构数组或 DataFrame；不支持复权参考日 |
-| `get_price` | `1m/minute`、`count` 窗口、单股时间索引/多股 time-code 长表；`fq=None,panel=False,fill_paused=False` |
+| `get_price` | `1m/minute`、`count` 窗口、单股时间索引/多股 time-code 长表；`fq=None,panel=False,fill_paused=False`；`jq_minute` 配合 AD 会话观测另支持已可见日 close/volume |
 | `get_current_data` | 固定证券的 `last_price`、`paused`、`high_limit`、`low_limit`、有证据才提供的 `is_st`、可见后 `day_open` |
 | `order`、`order_target`、`order_value`、`order_target_value` | 原生数量/金额 API；单股票账户、long、T+1；市价及 `LimitOrderStyle` |
 | `get_orders`、`get_open_orders`、`cancel_order`、`get_trades` | 原生订单/成交投影；失败下单可返回 None，拒绝原因保留事件日志 |
 | `record`、`log` | 有限数值记录和文本日志；日志级别变更不支持 |
-| `set_option` | 仅 `use_real_price=True`、`avoid_future_data=True` |
+| `set_option` | `use_real_price=True`、`avoid_future_data=True`；显式 `jq_daily_initial` 另允许初始化声明与配置完全相等的 `order_volume_ratio` |
 | `set_order_cost`、`set_slippage` | 校验脚本声明与冻结配置相等；不得静默忽略不同费率或非零滑点 |
 
 默认 JQ `fq='pre'` 不会偷偷转原价，迁移脚本需要明确 `fq=None`。
@@ -131,7 +138,7 @@ TDX 研究 profile 改用独立的 `replay_bar_start/replay_bar_end` 模型字�
 金额下单、整手取整、最小佣金、市价部分成交及现金冻结遵从原生模型，不宣称聚宽完全一致。
 保留原生浮点结果，极小浮点冻结尾差可能存在，不把它改写成另一份账本。
 
-明确不支持：日频/5m 历史查询、前后复权、基本面/PIT/因子、历史全市场股票池/指数成分、
+明确不支持：上述已闭合日 close/volume 以外的日频及5m历史查询、前后复权、基本面/PIT/因子、历史全市场股票池/指数成分、
 基准收益、公司行动分钟入账、期货/基金/科创创业板/北交所、多个子账户、short、tick、
 集合竞价、GTC/IOC 自定义有效期、周/月调度、任意文件 API、实盘、恶意代码沙箱。
 已知 API 名称有显式 `JQ_API_UNSUPPORTED`；未知 jqdata 导入同样失败。未知 Python 全局保留 Python 错误。

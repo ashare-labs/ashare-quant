@@ -29,8 +29,15 @@ DEFAULTS = {
     "min_commission": 5.0,
     "matching": "next_open",
     "cash_policy": "reject",
+    "lifecycle": "closed_bars",
+    "capacity_policy": "strict_minute",
 }
-POLICIES = {"matching": {"next_open", "jq_current"}, "cash_policy": {"reject", "resize"}}
+POLICIES = {
+    "matching": {"next_open", "jq_current"},
+    "cash_policy": {"reject", "resize"},
+    "lifecycle": {"closed_bars", "jq_minute"},
+    "capacity_policy": {"strict_minute", "jq_daily_initial"},
+}
 ARTIFACTS = (
     "manifest.json",
     "input.json",
@@ -84,6 +91,21 @@ def run_backtest(
         accept_state_replay=accept_state_replay,
         accept_research=accept_research,
     )
+    require(
+        not (data.research and data.full_session_input)
+        or settings["lifecycle"] == "jq_minute",
+        "MINUTE_FULL_RESEARCH_REQUIRES_EXPLICIT_JQ_LIFECYCLE",
+    )
+    if settings["lifecycle"] == "jq_minute":
+        from .lifecycle import validate_sessions
+
+        validate_sessions(data)
+    if settings["capacity_policy"] == "jq_daily_initial":
+        require(
+            settings["matching"] == "jq_current" and settings["lifecycle"] == "jq_minute",
+            "JQ_DAILY_CAP_REQUIRES_JQ_MATCHING_AND_LIFECYCLE",
+        )
+        data.require_jq_capacity()
     from rqprobe.runtime import runtime_identity
 
     native_identity = runtime_identity()

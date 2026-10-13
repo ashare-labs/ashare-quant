@@ -49,8 +49,12 @@ class MinuteInputs:
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
-        self.research = doc["schema"] == research.SCHEMA
-        require(self.research or doc["schema"] == "ad-minute-backtest.v1", "MINUTE_INPUT_SCHEMA")
+        self.research = doc["schema"] in {research.SCHEMA, research.SCHEMA_FULL}
+        self.full_session_input = doc["schema"] in {"ad-minute-backtest.v2", research.SCHEMA_FULL}
+        require(
+            self.research or doc["schema"] in {"ad-minute-backtest.v1", "ad-minute-backtest.v2"},
+            "MINUTE_INPUT_SCHEMA",
+        )
         require(not self.research or accept_research, "MINUTE_RESEARCH_REQUIRES_OPT_IN")
         if self.research:
             research.validate_document(doc)
@@ -264,6 +268,15 @@ class MinuteInputs:
             for t in self.ends[d]
         }
         require(set(self.bars) == expected, "MINUTE_BAR_COVERAGE_GAP")
+        self.session_data = None
+        if self.full_session_input:
+            from .session_data import SessionData
+
+            self.session_data = SessionData(self, doc["session_observations"])
+            for (sid, _), row in self.session_data.history.items():
+                self.by_security[sid].append(row)
+        else:
+            require("session_observations" not in doc, "MINUTE_SESSION_INPUT_VERSION_REQUIRED")
         for rows in self.by_security.values():
             rows.sort(key=lambda r: r["_end"])
         self.labels = {s: [r["_end"] for r in rows] for s, rows in self.by_security.items()}
@@ -329,7 +342,27 @@ class MinuteInputs:
         rows = self.visible(sid, at, count=1)
         today = [r for r in rows if r["_end"].date() == at.date()]
         state = self.state(sid, at.date().isoformat(), at=at)
+        if not today and self.session_data is not None:
+            opening = self.session_data.opening[sid, str(at.date())]
+            if opening["_available"] <= at:
+                return float(opening["price"])
         return float(today[-1]["close"] if today else state["previous_close"])
+
+    def valuation_price(self, sid, at):
+        if self.session_data is not None:
+            closing = self.session_data.closing[sid, str(at.date())]
+            if closing["_available"] <= at:
+                return float(closing["price"])
+        return self.current(sid, at)
+
+    def require_jq_capacity(self):
+        require(self.session_data is not None, "JQ_DAILY_CAP_REQUIRES_AD_SESSION_OBSERVATIONS")
+
+    def execution_daily_volume(self, sid, day):
+        """Post-hoc execution denominator; never use this in a strategy data API."""
+        self.require_jq_capacity()
+        require(day in self.days and sid in self.ids, "JQ_DAILY_CAP_OUT_OF_SCOPE")
+        return self.session_data.daily[sid, day]
 
     def preflight(self):
         result = {
@@ -353,10 +386,24 @@ class MinuteInputs:
                 strict_execution_admitted=False,
                 research=self.document["research"],
                 action_coverage=self.document["action_coverage"],
-                valuation_cutoff="14:56 source label, not official daily close",
+                valuation_cutoff=(
+                    "independent AD closing observation, subject to its visibility"
+                    if self.full_session_input
+                    else "14:56 source label, not official daily close"
+                ),
                 native_price_bounds="4% inward execution envelope; exchange limits unknown",
-                requires_flat_end=True,
+                requires_flat_end=not self.full_session_input,
             )
+        if self.session_data is not None:
+            result["session_observations"] = {
+                "schema": self.session_data.document["schema"],
+                "history_rows": len(self.session_data.history),
+                "opening_prices": len(self.session_data.opening),
+                "closing_marks": len(self.session_data.closing),
+                "daily_rows": len(self.session_data.daily),
+                "source_refs": self.session_data.document["source_refs"],
+                "limitations": self.session_data.document["limitations"],
+            }
         return result
 
 
