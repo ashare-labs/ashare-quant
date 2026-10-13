@@ -50,7 +50,16 @@ def hashes(root):
     return {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in ARTIFACTS}
 
 
-def run_backtest(strategy, input_path, output, *, config=None, accept_assumed=False, timeout=120):
+def run_backtest(
+    strategy,
+    input_path,
+    output,
+    *,
+    config=None,
+    accept_assumed=False,
+    accept_state_replay=False,
+    timeout=120,
+):
     """Execute a trusted JQ-style script. No collection, browser or task DB access."""
     source = Path(strategy).read_bytes()
     require(len(source) <= 256 * 1024, "MINUTE_STRATEGY_TOO_LARGE")
@@ -62,7 +71,9 @@ def run_backtest(strategy, input_path, output, *, config=None, accept_assumed=Fa
         require(type(value) in (int, float), "MINUTE_CONFIG_NUMERIC_TYPE")
         number(value, zero=key not in {"initial_cash", "volume_percent"})
     require(settings["volume_percent"] <= 1, "MINUTE_VOLUME_RATIO")
-    data = MinuteInputs(input_path, accept_assumed=accept_assumed)
+    data = MinuteInputs(
+        input_path, accept_assumed=accept_assumed, accept_state_replay=accept_state_replay
+    )
     from rqprobe.runtime import runtime_identity
 
     native_identity = runtime_identity()
@@ -72,6 +83,7 @@ def run_backtest(strategy, input_path, output, *, config=None, accept_assumed=Fa
         "strategy_sha256": hashlib.sha256(source).hexdigest(),
         "config": settings,
         "accept_assumed": accept_assumed,
+        "accept_state_replay": accept_state_replay,
         "native_runtime": native_identity,
         "runtime": runtime_fingerprint(native=True),
         "backend_sources": source_inventory(),
@@ -150,7 +162,11 @@ def worker(root):
     install_network_guard()
     try:
         manifest = json.loads((root / "manifest.json").read_text())
-        data = MinuteInputs(root / "input.json", accept_assumed=manifest["accept_assumed"])
+        data = MinuteInputs(
+            root / "input.json",
+            accept_assumed=manifest["accept_assumed"],
+            accept_state_replay=manifest["accept_state_replay"],
+        )
         source = (root / "strategy.py").read_bytes()
         require(
             data.sha256 == manifest["input_sha256"]

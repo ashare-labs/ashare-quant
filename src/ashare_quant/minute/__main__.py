@@ -14,11 +14,16 @@ def main():
     p.add_argument("--output")
     p.add_argument("--config", help="JSON execution settings")
     p.add_argument("--accept-assumed-visibility", action="store_true")
+    p.add_argument("--accept-state-replay", action="store_true")
     p.add_argument("--preflight", action="store_true")
     p.add_argument("--timeout", type=float, default=120)
     a = p.parse_args()
     if a.preflight:
-        result = MinuteInputs(a.input, accept_assumed=a.accept_assumed_visibility).preflight()
+        result = MinuteInputs(
+            a.input,
+            accept_assumed=a.accept_assumed_visibility,
+            accept_state_replay=a.accept_state_replay,
+        ).preflight()
     else:
         if not a.strategy or not a.output:
             p.error("--strategy and --output are required for execution")
@@ -28,6 +33,7 @@ def main():
             a.output,
             config=json.loads(a.config) if a.config else None,
             accept_assumed=a.accept_assumed_visibility,
+            accept_state_replay=a.accept_state_replay,
             timeout=a.timeout,
         )
         result = {

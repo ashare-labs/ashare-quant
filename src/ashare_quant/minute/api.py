@@ -1,5 +1,6 @@
 """Explicit JQ-style subset; functions delegate orders to native RQAlpha APIs."""
 
+import inspect
 import math
 import sys
 from dataclasses import dataclass
@@ -12,6 +13,24 @@ from .inputs import number, require, stamp
 
 class UnsupportedAPI(NotImplementedError):
     pass
+
+
+def callback_name(callback):
+    return getattr(callback, "__name__", type(callback).__name__)
+
+
+def validate_callback(callback):
+    require(callable(callback), "JQ_CALLBACK_REQUIRED")
+    targets = (callback, getattr(callback, "__call__", None))
+    require(
+        not any(
+            inspect.iscoroutinefunction(f)
+            or inspect.isgeneratorfunction(f)
+            or inspect.isasyncgenfunction(f)
+            for f in targets
+        ),
+        f"JQ_CALLBACK_UNSUPPORTED:{callback_name(callback)}:synchronous_function_required",
+    )
 
 
 def unsupported(name):
@@ -117,19 +136,22 @@ class Quote:
 
     @property
     def paused(self):
-        return self._host.data.state(self._sid, str(self._host.at.date()))["suspended"]
+        return self._state()["suspended"]
+
+    def _state(self):
+        return self._host.data.state(self._sid, str(self._host.at.date()), at=self._host.at)
 
     @property
     def high_limit(self):
-        return float(self._host.data.state(self._sid, str(self._host.at.date()))["upper_limit"])
+        return float(self._state()["upper_limit"])
 
     @property
     def low_limit(self):
-        return float(self._host.data.state(self._sid, str(self._host.at.date()))["lower_limit"])
+        return float(self._state()["lower_limit"])
 
     @property
     def is_st(self):
-        value = self._host.data.state(self._sid, str(self._host.at.date())).get("is_st")
+        value = self._state().get("is_st")
         require(value is not None, "MINUTE_ST_STATUS_UNKNOWN")
         return value
 
@@ -157,6 +179,7 @@ class API:
     def run_daily(self, func, time="open", reference_security=None):
         require(self.host.phase == "initialize", "JQ_SCHEDULE_ONLY_IN_INITIALIZE")
         require(callable(func), "JQ_SCHEDULE_CALLBACK_REQUIRED")
+        validate_callback(func)
         require(
             reference_security is None or reference_security in self.host.data.ids,
             "JQ_REFERENCE_SECURITY_OUT_OF_SCOPE",
@@ -223,14 +246,18 @@ class API:
             and set(fields) <= {"open", "high", "low", "close", "volume", "money"},
             "JQ_HISTORY_FIELDS_UNSUPPORTED",
         )
-        cutoff = self.host.at if end is None else min(self.host.at, end)
-        rows = self.host.data.visible(sid, cutoff, include_now=include_now, count=count)
+        cutoff = self.host.at if end is None else end
+        rows = self.host.data.visible(
+            sid, self.host.at, end=cutoff, include_now=include_now, count=count
+        )
         require(len(rows) == count, f"JQ_INSUFFICIENT_VISIBLE_HISTORY:{sid}:{count}:{len(rows)}")
         self.host.emit(
             "history_read",
             security=sid,
             count=count,
             cutoff=cutoff.isoformat(),
+            knowledge_at=self.host.at.isoformat(),
+            include_now=include_now,
             last_end=rows[-1]["bar_end"],
             fields=fields,
         )

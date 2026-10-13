@@ -1,5 +1,6 @@
 """Event/data adapters around the existing RQAlpha broker, matcher and Account."""
 
+import inspect
 import json
 from collections.abc import Mapping
 from datetime import datetime
@@ -18,7 +19,7 @@ from ashare_quant.daily_portfolio.native import Source as DailySource
 from rqprobe.events import RecordedEventSource
 from rqprobe.guards import block_rqdata_apis
 
-from .api import API, order_view
+from .api import API, callback_name, order_view, validate_callback
 from .inputs import require, stamp
 
 runtime = {}
@@ -39,7 +40,7 @@ class Source(DailySource):
         require(at == self.host.at, "MINUTE_NATIVE_BAR_CLOCK")
         row = self.host.data.bars.get((sid, at))
         require(row is not None and row["_available"] <= at, "MINUTE_NATIVE_BAR_UNAVAILABLE")
-        state = self.host.data.state(sid, str(at.date()))
+        state = self.host.data.state(sid, str(at.date()), at=at)
         return {
             **{k: float(row[k]) for k in ("open", "high", "low", "close", "volume")},
             "datetime": int(dt.strftime("%Y%m%d%H%M%S")),
@@ -56,12 +57,20 @@ class Source(DailySource):
         day = str(self.host.at.date())
         require(str(dt.date()) == self.host.data.previous[day], "MINUTE_PREVIOUS_CLOSE_DATE")
         return np.array(
-            [float(self.host.data.state(instrument.order_book_id, day)["previous_close"])]
+            [
+                float(
+                    self.host.data.state(instrument.order_book_id, day, at=self.host.at)[
+                        "previous_close"
+                    ]
+                )
+            ]
         )
 
     def is_suspended(self, sid, dates):
         return [
-            self.host.data.state(sid, str(d.date() if isinstance(d, datetime) else d))["suspended"]
+            self.host.data.state(
+                sid, str(d.date() if isinstance(d, datetime) else d), at=self.host.at
+            )["suspended"]
             for d in dates
         ]
 
@@ -80,10 +89,14 @@ class Board(AbstractPriceBoard):
         return self.host.data.current(sid, self.host.at)
 
     def get_limit_up(self, sid):
-        return float(self.host.data.state(sid, str(self.host.at.date()))["upper_limit"])
+        return float(
+            self.host.data.state(sid, str(self.host.at.date()), at=self.host.at)["upper_limit"]
+        )
 
     def get_limit_down(self, sid):
-        return float(self.host.data.state(sid, str(self.host.at.date()))["lower_limit"])
+        return float(
+            self.host.data.state(sid, str(self.host.at.date()), at=self.host.at)["lower_limit"]
+        )
 
 
 class Matcher(DefaultBarMatcher):
@@ -173,6 +186,25 @@ class Mod(AbstractMod):
             EVENT.PRE_AFTER_TRADING: "after",
         }[event.event_type]
         self.emit("clock", phase=self.phase)
+        if self.phase in {"before", "after"}:
+            self.refresh_valuation()
+
+    def refresh_valuation(self):
+        # Account._on_bar uses this same public native Position update path.
+        # Non-BAR clocks must also mark already visible prices; no extra BAR or
+        # matching event is published, and no parallel equity calculation exists.
+        for pos in self.env.portfolio.stock_account.get_positions():
+            price = self.env.get_last_price(pos.order_book_id)
+            previous = pos.last_price
+            pos.update_last_price(price)
+            if previous != price:
+                self.emit(
+                    "valuation_refresh",
+                    security=pos.order_book_id,
+                    previous_price=float(previous),
+                    price=float(price),
+                    phase=self.phase,
+                )
 
     def emit(self, kind, **payload):
         self.seq += 1
@@ -195,12 +227,21 @@ class Mod(AbstractMod):
             compile(runtime["source"], str(runtime["root"] / "strategy.py"), "exec"), self.namespace
         )
         require(callable(self.namespace.get("initialize")), "JQ_INITIALIZE_REQUIRED")
+        for name in ("initialize", "before_trading_start", "handle_data", "after_trading_end"):
+            if name in self.namespace:
+                validate_callback(self.namespace[name])
         self.invoke(self.namespace["initialize"])
 
     def invoke(self, callback, *args):
-        self.emit("callback_start", name=callback.__name__, phase=self.phase)
-        callback(self.api.context, *args)
-        self.emit("callback_end", name=callback.__name__, phase=self.phase)
+        validate_callback(callback)
+        name = callback_name(callback)
+        self.emit("callback_start", name=name, phase=self.phase)
+        result = callback(self.api.context, *args)
+        if inspect.isawaitable(result) or inspect.isgenerator(result) or inspect.isasyncgen(result):
+            if inspect.iscoroutine(result):
+                result.close()  # Do not evaluate it; avoid an unawaited-coroutine warning.
+            raise ValueError(f"JQ_CALLBACK_RESULT_UNSUPPORTED:{name}:unevaluated_execution_object")
+        self.emit("callback_end", name=name, phase=self.phase)
 
     def dispatch(self, phase):
         name = {
@@ -285,9 +326,11 @@ class Mod(AbstractMod):
         self.emit("account", **self.account())
 
     def close_day(self, event):
+        self.refresh_valuation()
         self.accounts.append({"at": self.at.isoformat(), **self.account()})
 
     def finish(self, event):
+        self.refresh_valuation()
         p = self.env.portfolio
         self.result = {
             "schema": "aq-python-minute-result.v1",
@@ -296,6 +339,8 @@ class Mod(AbstractMod):
             "is_test_double": False,
             "real_market_data": self.data.document["real_market_data"],
             "historical_pit_verified": False,
+            "state_visibility": self.data.state_visibility,
+            "state_replay_used": self.data.state_replay_used,
             "jq_comparison": "NOT_PERFORMED",
             "native_classes": {
                 "broker": type(self.env.broker).__module__ + "." + type(self.env.broker).__name__,

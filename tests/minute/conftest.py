@@ -19,13 +19,30 @@ def run_minute(tmp_path, minute_doc):
     )
     from ashare_quant.minute import run_backtest
 
-    def run(source, *, doc=None, config=None, name="run", timeout=120):
+    def run(
+        source,
+        *,
+        doc=None,
+        config=None,
+        name="run",
+        timeout=120,
+        accept_assumed=False,
+        accept_state_replay=False,
+    ):
         strategy = tmp_path / f"{name}.py"
         strategy.write_text(source)
         inputs = tmp_path / f"{name}.json"
         inputs.write_text(json.dumps(doc if doc is not None else minute_doc))
         root = tmp_path / name
-        result = run_backtest(strategy, inputs, root, config=config, timeout=timeout)
+        result = run_backtest(
+            strategy,
+            inputs,
+            root,
+            config=config,
+            timeout=timeout,
+            accept_assumed=accept_assumed,
+            accept_state_replay=accept_state_replay,
+        )
         events = [json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()]
         return result["result"], events, root
 

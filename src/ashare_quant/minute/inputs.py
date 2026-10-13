@@ -38,8 +38,9 @@ class MinuteInputs:
     Actual interval labels must already be supplied by AD, even in this mode.
     """
 
-    def __init__(self, path, *, accept_assumed=False):
+    def __init__(self, path, *, accept_assumed=False, accept_state_replay=False):
         require(type(accept_assumed) is bool, "MINUTE_VISIBILITY_OPT_IN_MUST_BE_BOOLEAN")
+        require(type(accept_state_replay) is bool, "MINUTE_STATE_OPT_IN_MUST_BE_BOOLEAN")
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
@@ -115,7 +116,29 @@ class MinuteInputs:
                 for n in range(1, int((b - a).total_seconds() / 60) + 1)
             )
             self.clocks[d] = tuple(sorted({*self.ends[d], *(a for a, _ in sessions)}))
-        self.states = {}
+        self.state_visibility = doc.get("state_visibility", "declared_available_at")
+        require(
+            self.state_visibility in {"declared_available_at", "posthoc_daily_replay"},
+            "MINUTE_STATE_VISIBILITY_MODEL_REQUIRED",
+        )
+        self.state_replay_used = self.state_visibility == "posthoc_daily_replay"
+        require(
+            not self.state_replay_used or accept_state_replay,
+            "MINUTE_STATE_REPLAY_REQUIRES_OPT_IN",
+        )
+        if self.state_replay_used:
+            model = doc.get("state_replay", {})
+            require(
+                model.get("model") == "dated-daily-state-0900.v1"
+                and model.get("purpose") == "retrospective_research"
+                and model.get("evidence")
+                and isinstance(model.get("limitations"), list)
+                and model["limitations"],
+                "MINUTE_STATE_REPLAY_EVIDENCE_REQUIRED",
+            )
+        else:
+            require("state_replay" not in doc, "MINUTE_STATE_REPLAY_MODE_NOT_DECLARED")
+        self.states, self.state_times = {}, {}
         for state in doc["states"]:
             key = (state["security"], state["date"])
             require(
@@ -127,11 +150,41 @@ class MinuteInputs:
                 "MINUTE_EXPLICIT_STATE_REQUIRED",
             )
             require(state.get("is_st") is None or type(state["is_st"]) is bool, "MINUTE_ST_TYPE")
-            require(
-                state["evidence"]
-                and stamp(state["available_at"]) <= stamp(key[1] + "T09:00:00+08:00"),
-                "MINUTE_STATE_NOT_AVAILABLE_BEFORE_OPEN",
-            )
+            require(state["evidence"], "MINUTE_STATE_EVIDENCE_REQUIRED")
+            opening = stamp(key[1] + "T09:00:00+08:00")
+            if self.state_replay_used:
+                # Keep genuine historical availability null in the frozen input.
+                # A dated research assumption has a separate clock and receipt.
+                require(
+                    "available_at" in state
+                    and state["available_at"] is None
+                    and state.get("historical_available_at") is None,
+                    "MINUTE_STATE_REPLAY_MUST_PRESERVE_UNKNOWN_AVAILABILITY",
+                )
+                require(
+                    stamp(state.get("replay_effective_at")) == opening,
+                    "MINUTE_STATE_REPLAY_CLOCK_MUST_BE_SAME_DAY_0900",
+                )
+                stamp(state.get("observed_at"))
+                self.state_times[key] = opening
+            else:
+                require(
+                    state.get("available_at") is not None,
+                    "MINUTE_STATE_AVAILABILITY_UNKNOWN",
+                )
+                require(
+                    "replay_effective_at" not in state,
+                    "MINUTE_STATE_REPLAY_MODE_NOT_DECLARED",
+                )
+                available = stamp(state["available_at"])
+                if "historical_available_at" in state:
+                    require(
+                        state["historical_available_at"] is not None
+                        and stamp(state["historical_available_at"]) == available,
+                        "MINUTE_STATE_AVAILABILITY_CONFLICT",
+                    )
+                require(available <= opening, "MINUTE_STATE_NOT_AVAILABLE_BEFORE_OPEN")
+                self.state_times[key] = available
             require(
                 number(state["lower_limit"]) <= number(state["upper_limit"]), "MINUTE_LIMIT_ORDER"
             )
@@ -192,9 +245,15 @@ class MinuteInputs:
             "MINUTE_REAL_ACTION_EVIDENCE_REQUIRED",
         )
 
-    def visible(self, sid, at, *, include_now=True, count=None):
+    def visible(self, sid, at, *, include_now=True, count=None, end=None):
         require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
-        index = (bisect_right if include_now else bisect_left)(self.labels[sid], at)
+        cutoff = at if end is None else end
+        require(cutoff <= at, "JQ_FUTURE_DATA_REQUEST")
+        # end bounds bar labels; at is the knowledge clock. include_now excludes
+        # only the bar ending at the current clock, not an inclusive past end.
+        index = (bisect_left if not include_now and cutoff == at else bisect_right)(
+            self.labels[sid], cutoff
+        )
         result = []
         for i in range(index - 1, -1, -1):
             row = self.by_security[sid][i]
@@ -204,14 +263,19 @@ class MinuteInputs:
                     break
         return result[::-1]
 
-    def state(self, sid, day):
+    def state(self, sid, day, *, at=None):
         require((sid, day) in self.states, "MINUTE_STATE_OUT_OF_SCOPE")
+        if at is not None:
+            require(
+                day <= at.date().isoformat() and self.state_times[sid, day] <= at,
+                "MINUTE_STATE_NOT_VISIBLE_AT_CLOCK",
+            )
         return self.states[sid, day]
 
     def current(self, sid, at):
         rows = self.visible(sid, at, count=1)
         today = [r for r in rows if r["_end"].date() == at.date()]
-        state = self.state(sid, at.date().isoformat())
+        state = self.state(sid, at.date().isoformat(), at=at)
         return float(today[-1]["close"] if today else state["previous_close"])
 
     def preflight(self):
@@ -221,6 +285,9 @@ class MinuteInputs:
             "days": self.days,
             "minute_rows": len(self.bars),
             "visibility": self.visibility,
+            "state_visibility": self.state_visibility,
+            "state_replay_used": self.state_replay_used,
+            "state_replay": self.document.get("state_replay"),
             "real_market_data": self.document["real_market_data"],
             "historical_pit_verified": False,
             "jq_comparison": "NOT_PERFORMED",
@@ -229,7 +296,9 @@ class MinuteInputs:
         }
 
 
-def export_ad_snapshot(snapshot, metadata, path):
+def export_ad_snapshot(
+    snapshot, metadata, path, *, accept_assumed=False, accept_state_replay=False
+):
     """Project public AD Snapshot.bars output, preserving its supplied intervals.
 
     Metadata is an AD-owned state/calendar/action delivery. This function does not
@@ -271,4 +340,6 @@ def export_ad_snapshot(snapshot, metadata, path):
                     }
                 )
     Path(path).write_text(json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2))
-    return MinuteInputs(path)
+    return MinuteInputs(
+        path, accept_assumed=accept_assumed, accept_state_replay=accept_state_replay
+    )

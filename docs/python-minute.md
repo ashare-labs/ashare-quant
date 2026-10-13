@@ -41,6 +41,11 @@ Python 调用入口为 `ashare_quant.minute.run_backtest(strategy, input_path, o
 4. 15:30 原生 broker 终结日单，然后执行该时点定时回调及 `after_trading_end(context)`。
    原生结算决定 T+1 可卖数量。
 
+生命周期与定时回调只支持同步函数。载入、注册和实际调用均校验回调；
+`async def`、generator、async generator，以及同步包装函数返回的 awaitable/generator
+执行对象，都显式失败，保留 `failure.json`，不写 `complete.json`。
+不会因为创建了尚未执行的对象就报告策略成功，也不会自动启动另一个异步运行器。
+
 策略 `context.current_dt` 是上海本地无时区 datetime；持久证据时间有 `+08:00`。
 没有午休分钟，也不填缺失 K 线。`11:30` 回调可以留单到 `13:01`，`13:00` 时钟没有撮合条。
 最后收盘分钟可读数据，不能提交新的订单；盘前/盘后下单显式拒绝。
@@ -49,9 +54,19 @@ Python 调用入口为 `ashare_quant.minute.run_backtest(strategy, input_path, o
 
 数据按 AD 提供的 `bar_end <= current_dt` 且 `available_at <= current_dt` 可见。
 `history`、`attribute_history`、`get_price` 包含恰好结束且已可见的分钟；
-`get_bars(include_now=False)` 排除恰好当前结束的分钟。未来端点请求报错，历史不足也报错。
+历史 `end_date/end_dt` 只限制条的结束时间，不替代当前知识时钟。例如 09:31 的条在
+09:34 才可见，09:35 查询 `end_date=09:31` 可以取得它；09:33 同样查询仍失败。
+`get_bars(include_now=False)` 仅排除恰好 `context.current_dt` 结束的分钟；
+显式过去终点仍是包含该终点的窗口。未来端点请求报错，历史不足也报错。
 `get_current_data().last_price` 取当天最新可见闭合价，开盘前取 AD 明示的昨收；
 `day_open` 须等待第一根可见分钟。此约定尚未证实等同聚宽的时间标签。
+
+原生账户在 BAR 更新持仓末价；适配层还在 09:00 盘前、15:30 盘后回调前以及日终/
+最终快照前，经原生 `Position.update_last_price` 应用同一时钟已可见价格。
+15:00 结束、15:01 可见的条因此可用于 15:30 估值；15:30 后才可见的条仍不使用。
+估值更新不会生成额外 BAR、撮合迟到条或新增成交，也不另算一份权益覆盖原生账户。
+次日盘前用当日已准入的前收参考更新持仓；它不使仍未可见的历史分钟在查询中提前出现。
+最终权益是最后事件时钟（15:30）可见信息下的原生估值，不承诺已收到最后发布版本。
 
 订单只能使用提交时刻之后的输入区间：撮合区间 `bar_start >= submitted_at`，且 `bar_end > submitted_at`。
 成交价格取该区间开盘价；成交量上限由原生 matcher 按整段量及参与率计算。
@@ -97,6 +112,60 @@ Python 调用入口为 `ashare_quant.minute.run_backtest(strategy, input_path, o
 `ad-minute-backtest.v1` 是 AQ 消费契约，不是新的源采集服务。
 示例生成器可查看完整字段形状。真实数据要求 `producer.name=ashare-data`，
 并保留版本/提交/来源摘要、`source_refs`、`limitations` 和 `real_market_data`。
+
+### 日状态的可见时间与显式事后回放
+
+分钟可见性和日状态可见性是两个独立契约。`state_visibility` 省略时默认为
+`declared_available_at`，保留原有严格规则：每个状态须有证据、真实声明的
+`available_at <= 当日09:00`。未知/null 仍拒绝；打开任一个研究开关都不会自动改写
+这种输入的模式。接收回执时间不等于历史首次可见时间，不得回填成 09:00。
+
+如果 AD 只能提供对应日期的事后日状态，可在独立研究运行中同时声明以下数据模型，
+并传 `run_backtest(..., accept_state_replay=True)` 或 CLI `--accept-state-replay`：
+
+```json
+{
+  "state_visibility": "posthoc_daily_replay",
+  "state_replay": {
+    "model": "dated-daily-state-0900.v1",
+    "purpose": "retrospective_research",
+    "evidence": "AD 固定日状态范围及来源/字段证据引用",
+    "limitations": ["历史首次可见未知；不是历史 PIT 或盘中状态认证"]
+  }
+}
+```
+
+每个 `states` 行仍需已知的上市、停牌、上下限和前收字段及 `evidence`，另须：
+
+```json
+{
+  "security": "600000.XSHG",
+  "date": "2026-10-09",
+  "available_at": null,
+  "historical_available_at": null,
+  "observed_at": "2026-10-13T03:32:54+00:00",
+  "replay_effective_at": "2026-10-09T09:00:00+08:00"
+}
+```
+
+以上仅为字段片段，不是可运行行情包或所示证券日期的事实证据。
+`observed_at` 是实际源回执；`replay_effective_at` 必须恰好为**该状态日期**的 09:00，
+只代表模型生效点。原始 `available_at` 保持 null；不能同时放入伪造的历史时刻。
+模型声明、开关、原始输入和证据均进入运行身份；预检和结果写出 `state_visibility`、
+`state_replay_used`，`historical_pit_verified` 仍为 false。默认关闭，少了显式接受就阻断。
+
+AD 证据必须证明字段所属证券、日期和日状态范围，并区分事实与条件价带模型。
+当日未来行情计算出的指标、盘中变化的收盘终态，不能作为本模型的盘前日状态。
+若状态在盘中改变或其适用范围未知，数据侧须报告缺口，不得借回放开关填“正常”。
+任何缺失上市/停牌/价带值、缺分钟区间、未知行动覆盖仍按原校验阻断。
+`is_st` 未知时 API 读取仍报错；不能由开关把 null 变成 false。
+
+策略公开 API 只能读取当前日已到模型生效点的状态，不能读取未来日期状态；
+分钟条继续按自身 `available_at` 门禁，未完成/未可见分钟不会因此开放。
+如果分钟首次可见也未知，仍须独立声明 `visibility=assumed_closed` 并传
+`--accept-assumed-visibility`；状态开关不能代替分钟开关。该研究模型不重建当时的
+知识集合，不能用于认证历史 PIT、盘中无停牌或历史无前视表现；真实经济验收必须
+同时保留这些限制与实际源证据，不能标成聚宽对齐。
 
 - `securities`：1..20 个显式沪深主板证券；`days` 最多60个连续声明交易日。
 - `calendar`：包含前一和后一实际交易日；`sessions` 明示各日连续区间，不能穿过午休。
