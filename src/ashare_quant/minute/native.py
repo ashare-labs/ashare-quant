@@ -141,7 +141,9 @@ class Matcher(DefaultBarMatcher):
                 if self._attempted_at.get(order.order_id) == self.host.at:
                     raise OrderNotMatchable("Per-order capacity already attempted at this clock")
                 if not open_auction and submitted == self.host.at and row is None:
-                    return self.host.data.current(order.order_book_id, self.host.at)
+                    return self.host.data.boundary_execution_price(
+                        order.order_book_id, self.host.at
+                    )
             if open_auction or row is None or row["_available"] > self.host.at:
                 raise OrderNotMatchable("JQ-current requires a completed visible bar at this clock")
             if submitted == self.host.at:
@@ -177,7 +179,11 @@ class Matcher(DefaultBarMatcher):
         if self.host.config.get("capacity_policy") == "jq_daily_initial":
             require(self._volume_limit and not open_auction, "JQ_EXPLICIT_CAPACITY_REQUIRED")
             initial = order.datetime.replace(tzinfo=SHANGHAI) == self.host.at
-            if initial:
+            bar = self.host.data.bars.get((order.order_book_id, self.host.at))
+            zero_minute = bar is not None and Fraction(str(bar["volume"])) == 0
+            if zero_minute:
+                row, cap = bar, 0
+            elif initial:
                 row = self.host.data.execution_daily_volume(
                     order.order_book_id, str(self.host.at.date())
                 )
@@ -197,11 +203,13 @@ class Matcher(DefaultBarMatcher):
                 security=order.order_book_id,
                 order_id=str(order.order_id),
                 policy="jq_daily_initial",
-                stage="initial_daily" if initial else "resting_minute",
+                stage="zero_volume_minute"
+                if zero_minute
+                else ("initial_daily" if initial else "resting_minute"),
                 source_volume=row["volume"],
                 volume_percent=self.host.config["volume_percent"],
                 per_order_cap=cap,
-                denominator_strategy_visible=not initial,
+                denominator_strategy_visible=zero_minute or not initial,
                 denominator_available_at=row["_available"].isoformat(),
             )
             if cap == 0:
@@ -605,6 +613,24 @@ class Mod(AbstractMod):
                 if self.jq_lifecycle
                 else "native-after-trading",
                 "platform_exact_cancel_time_verified": False,
+                **(
+                    {
+                        "opening_execution_price": "visible-same-day-opening-scalar-only",
+                        "resume_execution_price": "visible-same-day-closed-minute-only",
+                        "zero_volume_execution": "no-fills-at-visible-zero-volume-minute",
+                        "unverified_jq_rules": [
+                            "exact_initial_daily_denominator_not_uniquely_identified",
+                            "resting_multiple_orders_use_independent_capacity",
+                            "equal_touch_and_low_high_cross_without_close_cross",
+                            "sell_side_symmetry",
+                            "1130_and_1500_matching_internal_phase",
+                            "zero_volume_initial_order_handling",
+                            "exact_day_order_cancellation_clock",
+                        ],
+                    }
+                    if self.jq_capacity
+                    else {}
+                ),
                 "initial_price": "next_open"
                 if self.config["matching"] == "next_open"
                 else "visible_close",

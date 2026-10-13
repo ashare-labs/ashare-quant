@@ -514,15 +514,13 @@ class API:
             )
         if self.host.config["matching"] == "jq_current":
             row = self.host.data.bars.get((security, at))
-            require(
-                (row is not None and row["_available"] <= at)
-                or (
-                    self.host.jq_capacity
-                    and row is None
-                    and at.strftime("%H:%M") in {"09:30", "13:00"}
-                ),
-                "JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
-            )
+            if self.host.jq_capacity and row is None and at.strftime("%H:%M") in {"09:30", "13:00"}:
+                self.host.data.boundary_execution_price(security, at)
+            else:
+                require(
+                    row is not None and row["_available"] <= at,
+                    "JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
+                )
         require(type(value) in (int, float) and math.isfinite(value), "JQ_ORDER_FINITE_AMOUNT")
         if api_name in {"order_shares", "order_to"}:
             require(float(value).is_integer(), "JQ_ORDER_INTEGER_SHARES")

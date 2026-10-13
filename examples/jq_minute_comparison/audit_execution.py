@@ -110,6 +110,29 @@ def _audit_run(root, *, enforce_strict_cap=True):
             )
         return initial_reserve[oid] * remaining / order["amount"]
 
+    def executable_price(sid, now, bar):
+        # Do not reuse the valuation fallback: a previous close or an opening
+        # scalar at 13:00 is not evidence of an executable boundary price.
+        if bar is not None:
+            require(number(bar["volume"]) > 0, "fill at zero-volume minute")
+            return number(bar["close"])
+        if now.strftime("%H:%M") == "09:30":
+            quote = opening.get((sid, str(now.date())))
+            require(
+                quote is not None
+                and quote["purpose"] == "opening_price"
+                and quote["price_basis"] == "raw"
+                and timestamp(quote.get("available_at") or quote["replay_available_at"]) <= now,
+                "fill without visible opening execution price",
+            )
+            return number(quote["price"])
+        require(now.strftime("%H:%M") == "13:00", "invalid no-bar execution clock")
+        visible = [
+            r for r in by_day[sid, str(now.date())] if r["end"] <= now and r["visible"] <= now
+        ]
+        require(visible, "fill without visible same-day resume price")
+        return number(visible[-1]["close"])
+
     def reservation():
         # Native Account reserves the initial request's notional/estimated fees,
         # then releases that budget proportionally to each fill. Rebuild it from
@@ -206,9 +229,8 @@ def _audit_run(root, *, enforce_strict_cap=True):
                 )
                 near(e["price"], bar["open"], "next-open fill price mismatch")
             elif now == submitted:
-                near(
-                    e["price"], visible_price(sid, now), "immediate fill differs from visible close"
-                )
+                price = executable_price(sid, now, bar) if jq_capacity else visible_price(sid, now)
+                near(e["price"], price, "immediate fill differs from eligible visible price")
             else:
                 require(
                     now > submitted and bar["start"] >= submitted and o["price"] > 0,

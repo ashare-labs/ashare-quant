@@ -31,10 +31,42 @@ ASSUMPTIONS = [
 FULL_SESSIONS = [["09:30", "11:30"], ["13:00", "15:00"]]
 FULL_ASSUMPTIONS = [
     "source_label_is_interval_end_including_auction_rows_for_explicit_jq_research",
-    *ASSUMPTIONS[1:],
+    *ASSUMPTIONS[1:3],
+    "daily_tradable_status_with_AD_declared_zero_volume_closing_phase_rows_not_intraday_halt_proof",
+    *ASSUMPTIONS[4:],
     "opening_proxy_and_close_valuation_roles_are_AD_supplied_not_historical_PIT",
     "terminal_holdings_are_marked_only_no_post_window_corporate_action_claim",
 ]
+
+
+def validate_activity(row, volume, amount, *, full):
+    """Zero activity is admissible only in an explicitly evidenced closing role.
+
+    This classifies a bounded research interval, not historical exchange phases
+    or an absence of intraday halts. Source volume/amount are never rewritten.
+    """
+    if volume > 0:
+        require(amount > 0, "MINUTE_INVALID_NUMBER")
+        return
+    require(full, "MINUTE_RESEARCH_ZERO_VOLUME_HALT_AMBIGUITY")
+    require(amount == 0, "MINUTE_RESEARCH_ZERO_VOLUME_AMOUNT_CONFLICT")
+    phase = row.get("phase_evidence")
+    require(
+        row.get("session_phase") == "closing_auction"
+        and "14:57" < stamp(row["source_label"]).strftime("%H:%M") <= "15:00"
+        and isinstance(phase, dict),
+        "MINUTE_RESEARCH_ZERO_VOLUME_PHASE_REQUIRED",
+    )
+    require(
+        phase.get("model") == "ad-declared-closing-stage.v1"
+        and phase.get("source_label") == row["source_label"]
+        and phase.get("manifest_sha256") == row["evidence"]["manifest_sha256"]
+        and phase.get("historical_phase_verified") is False
+        and isinstance(phase.get("source_refs"), list)
+        and phase["source_refs"]
+        and all(isinstance(s, str) and s for s in phase["source_refs"]),
+        "MINUTE_RESEARCH_ZERO_VOLUME_PHASE_EVIDENCE",
+    )
 
 
 def envelope(previous_close):

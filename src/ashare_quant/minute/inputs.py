@@ -247,15 +247,14 @@ class MinuteInputs:
             require(low <= min(o, c) <= max(o, c) <= h, "MINUTE_INVALID_OHLC")
             volume = number(row["volume"], zero=True)
             require(volume == volume.to_integral_value(), "MINUTE_VOLUME_NOT_SHARES")
-            number(row["amount"], zero=True)
+            amount = number(row["amount"], zero=True)
             if self.research:
-                require(volume > 0, "MINUTE_RESEARCH_ZERO_VOLUME_HALT_AMBIGUITY")
-                number(row["amount"])
                 require(
                     row["evidence"]["manifest_sha256"]
                     == doc["source_refs"]["tdx_manifest_sha256"][sid],
                     "MINUTE_RESEARCH_BAR_SOURCE_BINDING",
                 )
+                research.validate_activity(row, volume, amount, full=self.full_session_input)
                 research.check_price(self.states[sid, d], row["low"], row["high"])
             require(not self.states[sid, d]["suspended"], "MINUTE_SUSPENDED_BAR_CONFLICT")
             self.bars[key] = {**row, "_start": a, "_end": b, "_available": available}
@@ -354,6 +353,26 @@ class MinuteInputs:
             if closing["_available"] <= at:
                 return float(closing["price"])
         return self.current(sid, at)
+
+    def boundary_execution_price(self, sid, at):
+        """Qualify a JQ no-BAR price, independently of valuation's previous close."""
+        require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
+        clock = at.strftime("%H:%M")
+        if clock == "09:30":
+            require(self.session_data is not None, "JQ_OPENING_EXECUTION_PRICE_UNAVAILABLE")
+            row = self.session_data.opening.get((sid, str(at.date())))
+            require(
+                row is not None and row["_available"] <= at,
+                "JQ_OPENING_EXECUTION_PRICE_UNAVAILABLE",
+            )
+            return float(row["price"])
+        require(clock == "13:00", "JQ_NO_BAR_EXECUTION_CLOCK_UNSUPPORTED")
+        rows = self.visible(sid, at, count=1)
+        require(
+            rows and rows[-1]["_end"].date() == at.date(),
+            "JQ_RESUME_EXECUTION_PRICE_UNAVAILABLE",
+        )
+        return float(rows[-1]["close"])
 
     def require_jq_capacity(self):
         require(self.session_data is not None, "JQ_DAILY_CAP_REQUIRES_AD_SESSION_OBSERVATIONS")
