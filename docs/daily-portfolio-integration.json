@@ -1,0 +1,170 @@
+{
+  "schema": "aq.daily-portfolio-integration.v1",
+  "baseline_commit": "ad34f32990e17c655bb0cfafe7c8725ba95a4c38",
+  "ordered_source_commits": [
+    "e4ee27f90db2835fc5a488fa3e70f861b95bc193",
+    "db5163d0497b03177440a6ec0f332334c85ac5df"
+  ],
+  "source_mapping": {
+    "docs/daily-portfolio.md": {
+      "source_sha256": "c9e12bb7b8d03b187230d3ab0145fdf8617beeeb0e4e28b0e471631196791888",
+      "integrated_sha256": "c97e3769763daef4442ade6a520c46d5904080591e599b0f6b6079909e8fdbda"
+    },
+    "examples/daily_portfolio/expansion/R04-weekly-reversal/jq.py": {
+      "source_sha256": "c7fbe1b4cb203ee6dfd72558bedea3101b3c145deb04b93a349a9dc3b7d84cd0",
+      "integrated_sha256": "c7fbe1b4cb203ee6dfd72558bedea3101b3c145deb04b93a349a9dc3b7d84cd0"
+    },
+    "examples/daily_portfolio/expansion/R04-weekly-reversal/manifest.json": {
+      "source_sha256": "8757bedadf8b3b59e9987d7c581bc2b3f744d81e8941eeee2abaa9e152d14b7c",
+      "integrated_sha256": "8757bedadf8b3b59e9987d7c581bc2b3f744d81e8941eeee2abaa9e152d14b7c"
+    },
+    "examples/daily_portfolio/expansion/R04-weekly-reversal/weekly-reversal/config.json": {
+      "source_sha256": "899104e60bacec43a79a0e11be65679d065c5b974539d83bb0a116b1dd13b7db",
+      "integrated_sha256": "899104e60bacec43a79a0e11be65679d065c5b974539d83bb0a116b1dd13b7db"
+    },
+    "examples/daily_portfolio/expansion/R04-weekly-reversal/weekly-reversal/strategy.py": {
+      "source_sha256": "616fb89cc1364cdc84569fe58e4c12aec2a1f1eb10ed50cb632941f06f9ee524",
+      "integrated_sha256": "616fb89cc1364cdc84569fe58e4c12aec2a1f1eb10ed50cb632941f06f9ee524"
+    },
+    "examples/daily_portfolio/expansion/R05-participation/daily-equal-weight/config.json": {
+      "source_sha256": "6e5b6e88f58bef251611b400fd9dc34e36ac800fa85e04862e5bcb7be9ec409b",
+      "integrated_sha256": "6e5b6e88f58bef251611b400fd9dc34e36ac800fa85e04862e5bcb7be9ec409b"
+    },
+    "examples/daily_portfolio/expansion/R05-participation/daily-equal-weight/strategy.py": {
+      "source_sha256": "c165053d9491064f5871f12f4c9570509a7552ee8e0667b96f41f75c78a311bf",
+      "integrated_sha256": "c165053d9491064f5871f12f4c9570509a7552ee8e0667b96f41f75c78a311bf"
+    },
+    "examples/daily_portfolio/expansion/R05-participation/jq.py": {
+      "source_sha256": "e14ef42ebf0d33183fe6f12e7fde35aed6f3f8f24f45bb81d39d114f13f4c174",
+      "integrated_sha256": "e14ef42ebf0d33183fe6f12e7fde35aed6f3f8f24f45bb81d39d114f13f4c174"
+    },
+    "examples/daily_portfolio/expansion/R05-participation/manifest.json": {
+      "source_sha256": "2be625e23b906d00360094bc339678df3b9c999649a004f6ed7c770ebdb896b6",
+      "integrated_sha256": "2be625e23b906d00360094bc339678df3b9c999649a004f6ed7c770ebdb896b6"
+    },
+    "examples/daily_portfolio/expansion/R06-dividend-rebalance/daily-equal-weight/config.json": {
+      "source_sha256": "c46a65d2495bbd4623b7953934597add03474cf48a9861ccb80814e67ec4a346",
+      "integrated_sha256": "c46a65d2495bbd4623b7953934597add03474cf48a9861ccb80814e67ec4a346"
+    },
+    "examples/daily_portfolio/expansion/R06-dividend-rebalance/daily-equal-weight/strategy.py": {
+      "source_sha256": "c165053d9491064f5871f12f4c9570509a7552ee8e0667b96f41f75c78a311bf",
+      "integrated_sha256": "c165053d9491064f5871f12f4c9570509a7552ee8e0667b96f41f75c78a311bf"
+    },
+    "examples/daily_portfolio/expansion/R06-dividend-rebalance/jq.py": {
+      "source_sha256": "47f607196ddc9530d06d32cb0e2aab946e1d57da1ac7c7274855e5d69c89aa76",
+      "integrated_sha256": "47f607196ddc9530d06d32cb0e2aab946e1d57da1ac7c7274855e5d69c89aa76"
+    },
+    "examples/daily_portfolio/expansion/R06-dividend-rebalance/manifest.json": {
+      "source_sha256": "622f1879b88f91718dbcd3ca30bbbaa5933ffa8c6cbc5b177045bee91168564e",
+      "integrated_sha256": "622f1879b88f91718dbcd3ca30bbbaa5933ffa8c6cbc5b177045bee91168564e"
+    },
+    "examples/daily_portfolio/expansion/selection.json": {
+      "source_sha256": "20d673bc6d70c93887e09fa40a22bf97627cba69fdda2924c4bfbba649bac0a3",
+      "integrated_sha256": "20d673bc6d70c93887e09fa40a22bf97627cba69fdda2924c4bfbba649bac0a3"
+    },
+    "scripts/compare_daily_portfolio_jq.py": {
+      "source_sha256": "7f1e2710b8dcf9d332514bc29456cd01744e7f0a83220879386c1106225ae3d4",
+      "integrated_sha256": "7f1e2710b8dcf9d332514bc29456cd01744e7f0a83220879386c1106225ae3d4"
+    },
+    "src/ashare_quant/daily_portfolio/__main__.py": {
+      "source_sha256": "de68155e678a0a79086e11a05894dc7044305910a64a3e187b776fb5ddf65fd2",
+      "integrated_sha256": "de68155e678a0a79086e11a05894dc7044305910a64a3e187b776fb5ddf65fd2"
+    },
+    "src/ashare_quant/daily_portfolio/audit.py": {
+      "source_sha256": "e44810ac784312ac78b9189c27f8932b89f8c5f218f0ec73d8594fd5743aff44",
+      "integrated_sha256": "e44810ac784312ac78b9189c27f8932b89f8c5f218f0ec73d8594fd5743aff44"
+    },
+    "src/ashare_quant/daily_portfolio/native.py": {
+      "source_sha256": "da86880f4fdb73dddea555ff038db0155e320f329273e01aae8f7f979d33dca8",
+      "integrated_sha256": "da86880f4fdb73dddea555ff038db0155e320f329273e01aae8f7f979d33dca8"
+    },
+    "src/ashare_quant/daily_portfolio/participation.py": {
+      "source_sha256": "46024eafd6016ba99a5dceef813c2fbc99579344f9e77169b37337086ea43094",
+      "integrated_sha256": "46024eafd6016ba99a5dceef813c2fbc99579344f9e77169b37337086ea43094"
+    },
+    "src/ashare_quant/daily_portfolio/reference_audit.py": {
+      "source_sha256": "cf39c052d8d9ce275ebb2a3d3b83166ee0ef85c898c725cf08eaaf0c4ed9e4a1",
+      "integrated_sha256": "cf39c052d8d9ce275ebb2a3d3b83166ee0ef85c898c725cf08eaaf0c4ed9e4a1"
+    },
+    "src/ashare_quant/daily_portfolio/signals.py": {
+      "source_sha256": "ab99e377e19c5bf5f991fea813aa1dd94061672ab7e94e11111ed084e827502c",
+      "integrated_sha256": "ab99e377e19c5bf5f991fea813aa1dd94061672ab7e94e11111ed084e827502c"
+    },
+    "tests/daily_portfolio/test_participation.py": {
+      "source_sha256": "083494f14b5b8cb00aebc2daf4c78b23bea2931204e4a931ab0db285660449e3",
+      "integrated_sha256": "083494f14b5b8cb00aebc2daf4c78b23bea2931204e4a931ab0db285660449e3"
+    },
+    "tests/daily_portfolio/test_reference_audit.py": {
+      "source_sha256": "e3737688e59bda55ac8fa225c855420ca6c35f4a765c57e8a7a10dc5fa6dac33",
+      "integrated_sha256": "e3737688e59bda55ac8fa225c855420ca6c35f4a765c57e8a7a10dc5fa6dac33"
+    },
+    "tests/daily_portfolio/test_signals.py": {
+      "source_sha256": "6567c2e0cfeddc8e13ed87323095ea133cca83890509167828903694077d1a7a",
+      "integrated_sha256": "6567c2e0cfeddc8e13ed87323095ea133cca83890509167828903694077d1a7a"
+    }
+  },
+  "integration_only_changes": [
+    "Complete review and retained-outcome documentation",
+    "Ship the integration record in the sdist"
+  ],
+  "independent_review": {
+    "outcome": "LIMITED_PASS",
+    "report": ".verification/real-strategy-integration/review/REVIEW.md",
+    "report_sha256": "ed60b489ff0535294a5d9524728b5dfd135de2bd48595ef107ff5c612b2a7d6f",
+    "new_R05_v2_oracle_separately_independently_reviewed": false
+  },
+  "scope": {
+    "R04": "Observed economic behavior limited agreement; 59 raw money differences retained",
+    "R05_v1": "FAIL_SESSION_END_CANCELLATION; completed reentry and recovery exit 3 retained",
+    "R05_v2": "PASS_OBSERVED_SCENARIO_ONLY; cancellation observable by return; retrospective re-evaluation, not blind holdout",
+    "R05_all_day_cancellation_mechanism_certified": false,
+    "R06": {
+      "status": "attribution_closed_not_aligned",
+      "final_AQ_minus_JQ_equity": "3853.201",
+      "dividend_cash_gap": "3817.024",
+      "extra_price_loss": "33",
+      "extra_fees": "3.177",
+      "raw_money_differences": 10,
+      "independent_tax_ledger": false
+    },
+    "original_nine": "8 bounded agreements; 878.92 CNY Gree difference; incomplete new raw fields",
+    "full_alignment_eligible": false,
+    "strict_historical_PIT_certified": false
+  },
+  "question_bank": {
+    "files": 20,
+    "already_synchronized_no_overwrite": true,
+    "archive_sha256": "f9a130c4c4f40509cd5548f412f447bb6b12d56c0f127a38a633be88feb03664"
+  },
+  "local_evidence": {
+    "manifest": ".verification/real-strategy-integration/manifest.json",
+    "manifest_sha256": "5849cddd3dfbdc6eb3241c27fee4edd01d8823086d946f6f4e6eea2888009e34",
+    "files_excluding_manifest": 1017,
+    "private_data_committed": false,
+    "old_nine_external_dependencies": "The 734 original files remain at their original local paths and are individually bound by author/evidence/baseline.json; the delivery does not claim they are all embedded."
+  },
+  "integration_validation": {
+    "status": "passed_before_local_main_fast_forward",
+    "pytest_passed": 448,
+    "pytest_skipped": 93,
+    "pytest_warnings": 77,
+    "skip_scope": "Existing external owner/market inputs and optional checks remain absent; skipped tests are not acceptance claims.",
+    "installed_wheel_daily_portfolio_tests_passed": 48,
+    "installed_wheel_daily_portfolio_tests_skipped": 0,
+    "native_original_nine_and_new_three_rerun": 12,
+    "native_result_economic_and_event_fields_equal_except_identity": true,
+    "wheel_native_new_cases_replayed": 3,
+    "R05_v1_completed_reentry_exit_code": 3,
+    "R05_v2_result_byte_identical": true,
+    "R05_v2_fault_cases": 21,
+    "R05_v2_CLI_checks": 2,
+    "independent_ledger_and_attribution_replay_byte_identical": true,
+    "raw_events_reverified": 464,
+    "old_reference_files_sha256_reverified": 734,
+    "ruff_involved_Python_passed": true,
+    "question_bank_20_files_unchanged": true,
+    "new_JQ_calls": 0
+  },
+  "new_JQ_runs": 0,
+  "native_owner_dependency_unchanged": "ashare-data 0.8.0.dev2 (existing pinned AQ runtime); separately integrated AD main not substituted into this dependency lock"
+}
