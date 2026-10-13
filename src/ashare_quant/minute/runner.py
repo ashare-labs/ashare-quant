@@ -58,6 +58,7 @@ def run_backtest(
     config=None,
     accept_assumed=False,
     accept_state_replay=False,
+    accept_research=False,
     timeout=120,
 ):
     """Execute a trusted JQ-style script. No collection, browser or task DB access."""
@@ -72,7 +73,10 @@ def run_backtest(
         number(value, zero=key not in {"initial_cash", "volume_percent"})
     require(settings["volume_percent"] <= 1, "MINUTE_VOLUME_RATIO")
     data = MinuteInputs(
-        input_path, accept_assumed=accept_assumed, accept_state_replay=accept_state_replay
+        input_path,
+        accept_assumed=accept_assumed,
+        accept_state_replay=accept_state_replay,
+        accept_research=accept_research,
     )
     from rqprobe.runtime import runtime_identity
 
@@ -84,6 +88,7 @@ def run_backtest(
         "config": settings,
         "accept_assumed": accept_assumed,
         "accept_state_replay": accept_state_replay,
+        "accept_research": accept_research,
         "native_runtime": native_identity,
         "runtime": runtime_fingerprint(native=True),
         "backend_sources": source_inventory(),
@@ -166,6 +171,7 @@ def worker(root):
             root / "input.json",
             accept_assumed=manifest["accept_assumed"],
             accept_state_replay=manifest["accept_state_replay"],
+            accept_research=manifest.get("accept_research", False),
         )
         source = (root / "strategy.py").read_bytes()
         require(

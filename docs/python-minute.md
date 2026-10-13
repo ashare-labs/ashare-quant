@@ -10,6 +10,11 @@
 
 ## 可运行示例
 
+需要真实行情的端到端例子，见 [TDX 两股分钟研究样例](../examples/tdx_minute_research/README.md)：
+924 条真实原生分钟、两份 Python 策略、共享现金/T+1、完整经济结果和独立重放。
+它采用另行命名且显式 opt-in 的研究 profile，保留未知交易所限价、历史时点和行动覆盖限制。
+原三股严格题及 B27 仍缺证；以下合成例子和原严格输入契约不变。
+
 按主 README 安装固定原生依赖，然后执行：
 
 ```sh
@@ -53,6 +58,7 @@ Python 调用入口为 `ashare_quant.minute.run_backtest(strategy, input_path, o
 午休时刻、周/月调度、动态注册不在范围内。
 
 数据按 AD 提供的 `bar_end <= current_dt` 且 `available_at <= current_dt` 可见。
+TDX 研究 profile 改用独立的 `replay_bar_start/replay_bar_end` 模型字段；源区间与可见时点仍为 null。
 `history`、`attribute_history`、`get_price` 包含恰好结束且已可见的分钟；
 历史 `end_date/end_dt` 只限制条的结束时间，不替代当前知识时钟。例如 09:31 的条在
 09:34 才可见，09:35 查询 `end_date=09:31` 可以取得它；09:33 同样查询仍失败。

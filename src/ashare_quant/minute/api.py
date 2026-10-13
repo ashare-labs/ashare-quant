@@ -143,10 +143,12 @@ class Quote:
 
     @property
     def high_limit(self):
+        require(not self._host.data.research, "MINUTE_EXCHANGE_PRICE_LIMIT_UNKNOWN")
         return float(self._state()["upper_limit"])
 
     @property
     def low_limit(self):
+        require(not self._host.data.research, "MINUTE_EXCHANGE_PRICE_LIMIT_UNKNOWN")
         return float(self._state()["lower_limit"])
 
     @property
@@ -157,6 +159,7 @@ class Quote:
 
     @property
     def day_open(self):
+        require(not self._host.data.research, "MINUTE_DAY_OPEN_OUTSIDE_RESEARCH_SESSION")
         day = str(self._host.at.date())
         row = self._host.data.bars.get((self._sid, self._host.data.ends[day][0]))
         require(
@@ -408,6 +411,7 @@ class API:
         if style is None or isinstance(style, MarketOrderStyle):
             native_style = MarketOrder()
         elif isinstance(style, LimitOrderStyle):
+            self.host.data.check_order_price(security, style.price, at=at)
             native_style = LimitOrder(float(style.price))
         else:
             raise UnsupportedAPI("JQ_ORDER_STYLE_UNSUPPORTED")

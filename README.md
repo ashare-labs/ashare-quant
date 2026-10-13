@@ -103,6 +103,8 @@ export ASHARE_QUANT_M2_STORE="$PWD/.state/owner-store"
 
 **多股整链题。** 独立本机入口支持固定八股的等权、动量和均线过滤题，信号、共享现金、原生订单与权益逐日留痕。准备真实 AD 输入后按[日频多股验收](docs/daily-portfolio.md)运行；合成运行不等于真实数据或 JQ 一致验收。
 
+**真实分钟 Python 策略。** [TDX 两股研究例子](examples/tdx_minute_research/README.md)提供两股两日的 924 条真实原生分钟、共享资金与 T+1 策略、可复现订单/成交/账户结果，以及数据取得方法。它显式接受有界研究假设，原严格分钟题和聚宽对照状态保持不变。
+
 **诊断与开发。** `source-diagnostics-capabilities` 查看配置；只读检查需独立固定的 reader 环境及已有数据，见[数据诊断](docs/diagnostics.md)。测试和发行包构建见[开发与打包](docs/development.md)。
 
 **历史连续模拟。** `python -m ashare_quant.paper` 及独立 quant-web `#/paper` 已完成封存历史逐日消费的独立验收。先接收固定下一日数据，再推进原生账户；同日重复请求复用原报告，中断后恢复同一冻结日，修改策略、风险或数据须新建账户。准备自己的已授权输入和空账户、查看公司行动和2024逐单门禁，见[AD逐日交付与原生分红](docs/paper-execution.md)。独立浏览器联验不冒充人类亲自点击；接口的 `continuous_paper_accepted=false` 继续表示真实在线连续模拟尚未通过。

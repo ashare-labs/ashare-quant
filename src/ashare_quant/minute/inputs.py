@@ -38,13 +38,24 @@ class MinuteInputs:
     Actual interval labels must already be supplied by AD, even in this mode.
     """
 
-    def __init__(self, path, *, accept_assumed=False, accept_state_replay=False):
+    def __init__(
+        self, path, *, accept_assumed=False, accept_state_replay=False, accept_research=False
+    ):
+        from . import research
+
         require(type(accept_assumed) is bool, "MINUTE_VISIBILITY_OPT_IN_MUST_BE_BOOLEAN")
         require(type(accept_state_replay) is bool, "MINUTE_STATE_OPT_IN_MUST_BE_BOOLEAN")
+        require(type(accept_research) is bool, "MINUTE_RESEARCH_OPT_IN_MUST_BE_BOOLEAN")
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
-        require(doc["schema"] == "ad-minute-backtest.v1", "MINUTE_INPUT_SCHEMA")
+        self.research = doc["schema"] == research.SCHEMA
+        require(self.research or doc["schema"] == "ad-minute-backtest.v1", "MINUTE_INPUT_SCHEMA")
+        require(not self.research or accept_research, "MINUTE_RESEARCH_REQUIRES_OPT_IN")
+        if self.research:
+            research.validate_document(doc)
+        else:
+            require("research" not in doc, "MINUTE_RESEARCH_SCHEMA_REQUIRED")
         require(type(doc["real_market_data"]) is bool, "MINUTE_REAL_FLAG_REQUIRED")
         require(
             not doc["real_market_data"] or doc["producer"]["name"] == "ashare-data",
@@ -185,9 +196,20 @@ class MinuteInputs:
                     )
                 require(available <= opening, "MINUTE_STATE_NOT_AVAILABLE_BEFORE_OPEN")
                 self.state_times[key] = available
-            require(
-                number(state["lower_limit"]) <= number(state["upper_limit"]), "MINUTE_LIMIT_ORDER"
-            )
+            if self.research:
+                research.validate_state(state)
+                require(
+                    state["evidence"]["binding_sha256"]
+                    == doc["source_refs"]["state_binding_sha256"]
+                    and state["tdx_previous_close"]["manifest_sha256"]
+                    == doc["source_refs"]["tdx_manifest_sha256"][key[0]],
+                    "MINUTE_RESEARCH_STATE_SOURCE_BINDING",
+                )
+            else:
+                require(
+                    number(state["lower_limit"]) <= number(state["upper_limit"]),
+                    "MINUTE_LIMIT_ORDER",
+                )
             number(state["previous_close"])
             self.states[key] = state
         require(
@@ -196,7 +218,12 @@ class MinuteInputs:
         )
         self.bars, self.by_security = {}, {s: [] for s in self.ids}
         for row in doc["minute"]:
-            sid, a, b = row["security"], stamp(row["bar_start"]), stamp(row["bar_end"])
+            sid = row["security"]
+            a, b = (
+                research.interval(row)
+                if self.research
+                else (stamp(row["bar_start"]), stamp(row["bar_end"]))
+            )
             d = b.date().isoformat()
             require(
                 sid in self.ids
@@ -217,6 +244,15 @@ class MinuteInputs:
             volume = number(row["volume"], zero=True)
             require(volume == volume.to_integral_value(), "MINUTE_VOLUME_NOT_SHARES")
             number(row["amount"], zero=True)
+            if self.research:
+                require(volume > 0, "MINUTE_RESEARCH_ZERO_VOLUME_HALT_AMBIGUITY")
+                number(row["amount"])
+                require(
+                    row["evidence"]["manifest_sha256"]
+                    == doc["source_refs"]["tdx_manifest_sha256"][sid],
+                    "MINUTE_RESEARCH_BAR_SOURCE_BINDING",
+                )
+                research.check_price(self.states[sid, d], row["low"], row["high"])
             require(not self.states[sid, d]["suspended"], "MINUTE_SUSPENDED_BAR_CONFLICT")
             self.bars[key] = {**row, "_start": a, "_end": b, "_available": available}
             self.by_security[sid].append(self.bars[key])
@@ -235,15 +271,32 @@ class MinuteInputs:
         # explicit no-action coverage, never an absent key interpreted as none.
         require(doc["actions"] == [], "MINUTE_CORPORATE_ACTIONS_UNSUPPORTED")
         coverage = doc["action_coverage"]
-        require(
-            coverage["status"] in {"source_covered_no_actions", "synthetic_known_no_actions"}
-            and coverage["evidence"],
-            "MINUTE_ACTION_COVERAGE_UNKNOWN",
-        )
-        require(
-            not doc["real_market_data"] or coverage["status"] == "source_covered_no_actions",
-            "MINUTE_REAL_ACTION_EVIDENCE_REQUIRED",
-        )
+        if self.research:
+            research.validate_actions(doc)
+        else:
+            require(
+                coverage["status"] in {"source_covered_no_actions", "synthetic_known_no_actions"}
+                and coverage["evidence"],
+                "MINUTE_ACTION_COVERAGE_UNKNOWN",
+            )
+            require(
+                not doc["real_market_data"] or coverage["status"] == "source_covered_no_actions",
+                "MINUTE_REAL_ACTION_EVIDENCE_REQUIRED",
+            )
+
+    def price_bounds(self, sid, day, *, at):
+        state = self.state(sid, day, at=at)
+        if self.research:
+            from .research import envelope
+
+            return envelope(state["previous_close"])
+        return number(state["lower_limit"]), number(state["upper_limit"])
+
+    def check_order_price(self, sid, price, *, at):
+        if self.research:
+            from .research import check_price
+
+            check_price(self.state(sid, str(at.date()), at=at), price, price)
 
     def visible(self, sid, at, *, include_now=True, count=None, end=None):
         require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
@@ -279,7 +332,7 @@ class MinuteInputs:
         return float(today[-1]["close"] if today else state["previous_close"])
 
     def preflight(self):
-        return {
+        result = {
             "input_sha256": self.sha256,
             "securities": list(self.ids),
             "days": self.days,
@@ -294,6 +347,17 @@ class MinuteInputs:
             "limitations": self.document["limitations"],
             "ready": True,
         }
+        if self.research:
+            result.update(
+                execution_scope="bounded_retrospective_research",
+                strict_execution_admitted=False,
+                research=self.document["research"],
+                action_coverage=self.document["action_coverage"],
+                valuation_cutoff="14:56 source label, not official daily close",
+                native_price_bounds="4% inward execution envelope; exchange limits unknown",
+                requires_flat_end=True,
+            )
+        return result
 
 
 def export_ad_snapshot(

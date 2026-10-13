@@ -40,13 +40,13 @@ class Source(DailySource):
         require(at == self.host.at, "MINUTE_NATIVE_BAR_CLOCK")
         row = self.host.data.bars.get((sid, at))
         require(row is not None and row["_available"] <= at, "MINUTE_NATIVE_BAR_UNAVAILABLE")
-        state = self.host.data.state(sid, str(at.date()), at=at)
+        lower, upper = self.host.data.price_bounds(sid, str(at.date()), at=at)
         return {
             **{k: float(row[k]) for k in ("open", "high", "low", "close", "volume")},
             "datetime": int(dt.strftime("%Y%m%d%H%M%S")),
             "total_turnover": float(row["amount"]),
-            "limit_up": float(state["upper_limit"]),
-            "limit_down": float(state["lower_limit"]),
+            "limit_up": float(upper),
+            "limit_down": float(lower),
         }
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, **kwargs):
@@ -75,7 +75,7 @@ class Source(DailySource):
         ]
 
     def get_dividend(self, instrument):
-        return None  # explicit complete no-action coverage validated before native run
+        return None  # strict no-action coverage OR explicit bounded research admission
 
     def get_split(self, instrument):
         return None
@@ -89,14 +89,10 @@ class Board(AbstractPriceBoard):
         return self.host.data.current(sid, self.host.at)
 
     def get_limit_up(self, sid):
-        return float(
-            self.host.data.state(sid, str(self.host.at.date()), at=self.host.at)["upper_limit"]
-        )
+        return float(self.host.data.price_bounds(sid, str(self.host.at.date()), at=self.host.at)[1])
 
     def get_limit_down(self, sid):
-        return float(
-            self.host.data.state(sid, str(self.host.at.date()), at=self.host.at)["lower_limit"]
-        )
+        return float(self.host.data.price_bounds(sid, str(self.host.at.date()), at=self.host.at)[0])
 
 
 class Matcher(DefaultBarMatcher):
@@ -332,6 +328,10 @@ class Mod(AbstractMod):
     def finish(self, event):
         self.refresh_valuation()
         p = self.env.portfolio
+        if self.data.research:
+            require(
+                not self.account()["positions"], "MINUTE_RESEARCH_MUST_EXIT_WITHIN_ACTION_SCOPE"
+            )
         self.result = {
             "schema": "aq-python-minute-result.v1",
             "identity": runtime["identity"],
@@ -354,6 +354,8 @@ class Mod(AbstractMod):
             "trades": self.trades,
             "accounts": self.accounts,
             "final_account": self.account(),
+            "total_pnl": float(p.total_value) - self.config["initial_cash"],
+            "total_return": float(p.total_value) / self.config["initial_cash"] - 1,
             "preflight": self.data.preflight(),
         }
 
