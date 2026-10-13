@@ -67,3 +67,21 @@ def opening(c):
 def test_policy_options_are_strict_before_running(run_minute, key, value):
     with pytest.raises(ValueError, match="MINUTE_CONFIG_POLICY"):
         run_minute("def initialize(c): pass", config={key: value})
+
+
+def test_terminal_day_queries_end_without_erasing_native_ledger(run_minute):
+    source = """from jqdata import *
+def initialize(c): run_daily(buy,'09:31')
+def buy(c):
+    if str(c.current_dt.date())=='2024-03-06': g.order=order('600000.XSHG',100)
+def after_trading_end(c):
+    if str(c.current_dt.date())=='2024-03-06':
+        assert len(get_orders())==len(get_trades())==1
+def on_strategy_end(c):
+    assert get_orders()==get_orders(g.order.order_id)==get_trades()=={}
+    assert c.portfolio.positions['600000.XSHG'].total_amount==100
+"""
+    result, _, _ = run_minute(source, config={"lifecycle": "jq_minute"})
+    assert len(result["orders"]) == len(result["trades"]) == 1
+    assert result["final_account"]["positions"]["600000.XSHG"]["total_amount"] == 100
+    assert result["execution_policy"]["terminal_day_queries"] == "empty"

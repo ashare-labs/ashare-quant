@@ -567,6 +567,10 @@ class API:
         return self._order("order_target_value", security, value, style, side, pindex, close_today)
 
     def get_orders(self, order_id=None, security=None, status=None):
+        # The two frozen JQ runs expose no current-session collection from the
+        # terminal callback. Keep the native ledger and pending orders intact.
+        if self.host.jq_lifecycle and self.host.phase == "end":
+            return {}
         result = {
             i: self._order_view(o)
             for i, o in self.host.orders.items()
@@ -595,6 +599,8 @@ class API:
         return True
 
     def get_trades(self):
+        if self.host.jq_lifecycle and self.host.phase == "end":
+            return {}
         return {
             t["trade_id"]: SimpleNamespace(
                 **t,

@@ -18,6 +18,11 @@
 [完整生命周期与容量政策](../examples/jq_minute_comparison/session-policies.md)。
 默认严格分钟模式不变。新增真实输入依赖 AD 的分角色会话观测；工程测试不代替真实平台对照。
 
+`0.11.0.dev18` 使用已独审的AD完整会话固定导出，完成原两份观察脚本与完整容量脚本：
+960条执行分钟、480条只读预热，三例成交及账户时序对齐既有真实JQ记录，旧190/136元
+收盘估值差消除。修复终端回调的当日订单/成交查询视图，原生账本保留。
+固定输入、原值数量差、支持范围及复验入口见[完整会话真实验收](../examples/jq_minute_comparison/session-results.md)。
+
 ## 可运行示例
 
 需要真实行情的端到端例子，见 [TDX 两股分钟研究样例](../examples/tdx_minute_research/README.md)：

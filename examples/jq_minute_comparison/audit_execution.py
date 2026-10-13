@@ -432,6 +432,12 @@ def _audit_run(root, *, enforce_strict_cap=True):
                 native_trades = {t["trade_id"]: t for t in event_trades}
                 if jq_lifecycle:
                     native_trades = {i: t for i, t in native_trades.items() if t["at"][:10] == date}
+                    if (
+                        result["execution_policy"].get("terminal_day_queries") == "empty"
+                        and now.strftime("%H:%M:%S.%f") == "23:59:59.001000"
+                    ):
+                        require(not row["orders"], "AQ terminal order collection not empty")
+                        native_trades = {}
                 seen = set()
                 for trade in row["trades"]:
                     tid = str(trade["trade_id"])

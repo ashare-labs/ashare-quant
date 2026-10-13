@@ -3,7 +3,8 @@
 默认行为保持 `lifecycle="closed_bars", capacity_policy="strict_minute"`。
 新模型由已冻结的真实 R4 平台观测约束，工程覆盖包括可运行原脚本、完整时钟、
 跨段挂单、零股尾单、T+1、共享现金、独立现金分项审计和失败恢复。
-真实 AD 新输入交付前，不把工程样本的通过标成新模型已经完成 JQ 对齐。
+dev18已用固定AD公开导出完成三份真实脚本的离线聚宽对照，见
+[完整会话真实验收](session-results.md)。工程边界与平台实证范围仍分别标明。
 
 ## 选择和入口
 
@@ -94,6 +95,12 @@ Order.commission，以及真实参考中观察到的状态标签和三位小数�
 `get_open_orders` 判断。原生事件/结果保持原生状态及委托价，额外 `limit_price` 保留委托价。
 卖单 avg_cost 取提交时持仓成本，买单取成交均价。未成交对象、均价舍入临界点、
 卖单在平台的零股部分成交等未新增真实实证，不宣称全对象兼容。
+
+dev18按两份真实参考修复终端查询：`on_strategy_end`中的`get_orders/get_trades`为空，
+15:30的当日集合仍正常可读。此处只结束会话查询视图，不删除原生订单、成交、持仓或结果。
+未成交末日挂单仍遵循上述保留政策；真实参考没有末日仍挂单的终端查询场景，不能据此认证它。
+额外的AQ Trade.at/side/commission/tax和LimitOrderStyle公开price与JQ私有`_limit_price`
+不声称逐字段一致，比较报告逐项保留这些接口表示差异。
 
 [`gap_probe.py`](gap_probe.py) 保持已上传真实源码字节不变。
 [`gap_ported.py`](gap_ported.py) 只在分钟历史调用增加 `fq=None`，其余字节相同；

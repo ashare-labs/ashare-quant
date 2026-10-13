@@ -613,6 +613,7 @@ class Mod(AbstractMod):
                 if self.jq_lifecycle
                 else "native-after-trading",
                 "platform_exact_cancel_time_verified": False,
+                **({"terminal_day_queries": "empty"} if self.jq_lifecycle else {}),
                 **(
                     {
                         "opening_execution_price": "visible-same-day-opening-scalar-only",
