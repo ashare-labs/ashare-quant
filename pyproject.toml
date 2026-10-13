@@ -92,6 +92,8 @@ include = [
   "/docs/daily-paper.md",
   "/docs/daily-portfolio.md",
   "/docs/daily-portfolio-integration.json",
+  "/docs/python-minute.md",
+  "/docs/python-minute-integration.json",
   "/docs/paper-integration.md",
   "/docs/paper-execution.md",
   "/docs/rqalpha/RQAlpha-LICENSE.txt",
