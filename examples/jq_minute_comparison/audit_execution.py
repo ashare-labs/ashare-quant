@@ -7,7 +7,7 @@ values to the engine. Legacy overruns may be reported only for before/after audi
 import hashlib
 import json
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from fractions import Fraction
 from pathlib import Path
 
@@ -15,6 +15,14 @@ from examples.jq_minute_comparison.compare import near, number, read_rows, requi
 
 
 def audit_run(root, *, enforce_strict_cap=True):
+    # Native imports may lower the ambient precision. The independent cash
+    # reconciliation must retain cents without changing the caller's context.
+    with localcontext() as context:
+        context.prec = 50
+        return _audit_run(root, enforce_strict_cap=enforce_strict_cap)
+
+
+def _audit_run(root, *, enforce_strict_cap=True):
     root = Path(root)
     result = json.loads((root / "result.json").read_text())
     manifest = json.loads((root / "manifest.json").read_text())
@@ -59,13 +67,37 @@ def audit_run(root, *, enforce_strict_cap=True):
     qty, basis, bought_today, consumed = [defaultdict(int) for _ in range(4)]
     order_value, order_fee = defaultdict(Decimal), defaultdict(Decimal)
     order_states, filled, checks, day = {}, defaultdict(int), 0, None
+    initial_reserve = {}
     ledger, budgets, violations, event_trades = [], {}, [], []
     observer_checks, first_observations, observed_trade_ids = [], [], set()
     pending = native_request = native_return = None
     aliases = {"order": "order_shares", "order_target": "order_to"}
 
+    def visible_price(sid, now):
+        visible = [
+            r for r in by_day[sid, str(now.date())] if r["end"] <= now and r["visible"] <= now
+        ]
+        return number(
+            visible[-1]["close"] if visible else states[sid, str(now.date())]["previous_close"]
+        )
+
+    def reservation():
+        # Native Account reserves the initial request's notional/estimated fees,
+        # then releases that budget proportionally to each fill. Rebuild it from
+        # creation and trade events; observer totals are never the authority.
+        return sum(
+            (
+                initial_reserve[oid] * (o["amount"] - max(o["filled"], filled[oid])) / o["amount"]
+                for oid, o in order_states.items()
+                if o["status"] in {"new", "held"}
+            ),
+            Decimal(0),
+        )
+
     def check_account(account, held, now):
-        date = str(now.date())
+        reserved = reservation()
+        near(account["locked_cash"], reserved, "event frozen cash mismatch")
+        near(account["available_cash"], cash - reserved, "event available cash mismatch")
         near(
             number(account["available_cash"]) + number(account["locked_cash"]),
             cash,
@@ -87,8 +119,7 @@ def audit_run(root, *, enforce_strict_cap=True):
                 "closeable inventory mismatch",
             )
             near(p["avg_cost"], basis[sid] / qty[sid], "holding cost mismatch")
-            visible = [r for r in by_day[sid, date] if r["end"] <= now and r["visible"] <= now]
-            mark = number(visible[-1]["close"] if visible else states[sid, date]["previous_close"])
+            mark = visible_price(sid, now)
             near(p["price"], mark, "event price clock mismatch")
             near(p["value"], mark * qty[sid], "event position value mismatch")
             market_value += mark * qty[sid]
@@ -103,6 +134,13 @@ def audit_run(root, *, enforce_strict_cap=True):
             bought_today.clear()
         if e["kind"] == "order_event":
             order_states[e["order_id"]] = e
+            if e["order_id"] not in initial_reserve:
+                price = number(e["price"]) or visible_price(e["security"], now)
+                gross = price * e["amount"]
+                fee = max(number(cfg["min_commission"]), gross * number(cfg["commission_rate"]))
+                initial_reserve[e["order_id"]] = (
+                    gross + fee if e["is_buy"] else fee + gross * number(cfg["sell_tax"])
+                )
         elif e["kind"] == "trade":
             event_trades.append(e)
             sid, oid, amount = e["security"], e["order_id"], e["amount"]
@@ -265,6 +303,8 @@ def audit_run(root, *, enforce_strict_cap=True):
                     time=row["time"],
                     label=row["label"],
                     total_cash=str(cash),
+                    available_cash=str(cash - reservation()),
+                    locked_cash=str(reservation()),
                     no_trade_collection=row["trades"] is None,
                 )
             )
@@ -316,6 +356,12 @@ def audit_run(root, *, enforce_strict_cap=True):
         require(
             {k: actual[k] for k in expected} == expected, "result trade differs from native event"
         )
+    near(result["final_account"]["locked_cash"], reservation(), "final frozen cash mismatch")
+    near(
+        result["final_account"]["available_cash"],
+        cash - reservation(),
+        "final available cash mismatch",
+    )
     near(
         result["final_account"]["available_cash"] + result["final_account"]["locked_cash"],
         cash,
@@ -332,5 +378,6 @@ def audit_run(root, *, enforce_strict_cap=True):
         capacity_violations=violations,
         policies={"matching": mode, "cash_policy": cfg.get("cash_policy", "reject")},
         all_costs_and_T1_checked=True,
+        both_cash_components_checked=True,
         float_tolerance="1e-7",
     )
