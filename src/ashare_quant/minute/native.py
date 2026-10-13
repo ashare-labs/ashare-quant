@@ -7,15 +7,16 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import numpy as np
-from rqalpha.const import INSTRUMENT_TYPE, POSITION_DIRECTION
+from rqalpha.const import INSTRUMENT_TYPE, ORDER_TYPE, POSITION_DIRECTION, SIDE
 from rqalpha.core.events import EVENT
 from rqalpha.interface import AbstractMod, AbstractPriceBoard
 from rqalpha.mod.rqalpha_mod_sys_simulation.matcher import DefaultBarMatcher
-from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderNotMatchable
+from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderCancelled, OrderNotMatchable
 
 from ashare_quant.contracts import SHANGHAI
 from ashare_quant.daily_portfolio.native import Proxy
 from ashare_quant.daily_portfolio.native import Source as DailySource
+from ashare_quant.daily_portfolio.participation import strict_lot_capacity
 from rqprobe.events import RecordedEventSource
 from rqprobe.guards import block_rqdata_apis
 
@@ -96,7 +97,7 @@ class Board(AbstractPriceBoard):
 
 
 class Matcher(DefaultBarMatcher):
-    """Gate unavailable/same-interval bars; all fill/cash/volume code is native."""
+    """Adapt price timing and exact capacity; retain native fills, costs and account."""
 
     def __init__(self, host, config):
         self.host = host
@@ -105,6 +106,26 @@ class Matcher(DefaultBarMatcher):
     def _get_deal_price(self, order, instrument, open_auction=False):
         row = self.host.data.bars.get((order.order_book_id, self.host.at))
         submitted = order.datetime.replace(tzinfo=SHANGHAI)
+        if self.host.config["matching"] == "jq_current":
+            if open_auction or row is None or row["_available"] > self.host.at:
+                raise OrderNotMatchable("JQ-current requires a completed visible bar at this clock")
+            if submitted == self.host.at:
+                # No future open/high/low is consulted for a new order.
+                return float(row["close"])
+            if row["_start"] < submitted or self.host.at <= submitted:
+                raise OrderNotMatchable("Resting orders require a later complete interval")
+            if order.type == ORDER_TYPE.LIMIT:
+                crossed = (
+                    float(row["low"]) < order.price
+                    if order.side == SIDE.BUY
+                    else float(row["high"]) > order.price
+                )
+                if not crossed:
+                    raise OrderNotMatchable("Resting limit requires strict low/high crossing")
+                # JQ documented resting-bar rule. Native matcher still checks
+                # limits, capacity, cash, T+1, costs and publishes the real Trade.
+                return order.price
+            raise OrderNotMatchable("JQ-current market orders do not carry to later bars")
         if (
             open_auction
             or row is None
@@ -114,6 +135,30 @@ class Matcher(DefaultBarMatcher):
         ):
             raise OrderNotMatchable("AQ requires the next completed, available input interval")
         return super()._get_deal_price(order, instrument, open_auction)
+
+    def _get_liquidity_limited_fill(self, order, instrument, open_auction=False):
+        native_fill = super()._get_liquidity_limited_fill(order, instrument, open_auction)
+        require(self._volume_limit and not open_auction, "MINUTE_STRICT_VOLUME_POLICY_REQUIRED")
+        row = self.host.data.bars[order.order_book_id, self.host.at]
+        consumed = self._turnover[order.order_book_id]
+        cap = strict_lot_capacity(
+            row["volume"], self.host.config["volume_percent"], instrument.round_lot, consumed
+        )
+        self.host.emit(
+            "volume_capacity",
+            security=order.order_book_id,
+            order_id=str(order.order_id),
+            source_volume=row["volume"],
+            volume_percent=self.host.config["volume_percent"],
+            consumed=consumed,
+            strict_remaining=cap,
+            native_proposal=int(native_fill),
+        )
+        if cap == 0:
+            if order.type == ORDER_TYPE.MARKET:
+                raise OrderCancelled("Strict whole-lot minute participation budget exhausted")
+            raise OrderNotMatchable("Strict whole-lot minute participation budget exhausted")
+        return min(native_fill, cap)
 
 
 class BarData(Mapping):
@@ -346,7 +391,23 @@ class Mod(AbstractMod):
                 "broker": type(self.env.broker).__module__ + "." + type(self.env.broker).__name__,
                 "account": type(p.stock_account).__module__ + "." + type(p.stock_account).__name__,
             },
-            "model": "closed-bar-next-open-day-orders.v1",
+            "model": (
+                "closed-bar-next-open-day-orders.v1"
+                if self.config["matching"] == "next_open"
+                else "jq-current-close-resting-limit-minute-cap.v1"
+            ),
+            "execution_policy": {
+                "matching": self.config["matching"],
+                "cash_policy": self.config["cash_policy"],
+                "capacity": "exact-whole-lot-per-minute-shared.v1",
+                "jq_daily_order_volume_cap_verified": False,
+                "initial_price": "next_open"
+                if self.config["matching"] == "next_open"
+                else "visible_close",
+                "resting_limit_price": "next_open"
+                if self.config["matching"] == "next_open"
+                else "order_limit_strict_cross",
+            },
             "orders": [
                 {**vars(order_view(o)), "add_time": o.datetime.isoformat()}
                 for o in self.orders.values()
@@ -413,7 +474,7 @@ def run_native(root, data, source, config, identity):
             "sys_analyser": {"enabled": False},
             "sys_scheduler": {"enabled": False},
             "sys_simulation": {
-                "matching_type": "next_bar",
+                "matching_type": "next_bar" if config["matching"] == "next_open" else "current_bar",
                 "signal": False,
                 "price_limit": True,
                 "volume_limit": True,
@@ -425,7 +486,7 @@ def run_native(root, data, source, config, identity):
             "sys_accounts": {
                 "stock_t1": True,
                 "validate_stock_position": True,
-                "auto_switch_order_value": False,
+                "auto_switch_order_value": config["cash_policy"] == "resize",
                 "financing_rate": 0,
                 "financing_stocks_restriction_enabled": False,
                 "dividend_reinvestment": False,

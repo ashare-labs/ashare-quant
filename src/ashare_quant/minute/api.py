@@ -400,6 +400,12 @@ class API:
             and at < self.host.data.sessions[day][-1][1],
             "JQ_ORDER_OUTSIDE_SESSION",
         )
+        if self.host.config["matching"] == "jq_current":
+            row = self.host.data.bars.get((security, at))
+            require(
+                row is not None and row["_available"] <= at,
+                "JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
+            )
         require(type(value) in (int, float) and math.isfinite(value), "JQ_ORDER_FINITE_AMOUNT")
         if api_name in {"order_shares", "order_to"}:
             require(float(value).is_integer(), "JQ_ORDER_INTEGER_SHARES")

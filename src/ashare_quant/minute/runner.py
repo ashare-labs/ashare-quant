@@ -27,7 +27,10 @@ DEFAULTS = {
     "commission_rate": 0.0003,
     "sell_tax": 0.001,
     "min_commission": 5.0,
+    "matching": "next_open",
+    "cash_policy": "reject",
 }
+POLICIES = {"matching": {"next_open", "jq_current"}, "cash_policy": {"reject", "resize"}}
 ARTIFACTS = (
     "manifest.json",
     "input.json",
@@ -69,6 +72,9 @@ def run_backtest(
     settings = {**DEFAULTS, **(config or {})}
     require(set(settings) == set(DEFAULTS), "MINUTE_UNKNOWN_CONFIG")
     for key, value in settings.items():
+        if key in POLICIES:
+            require(type(value) is str and value in POLICIES[key], f"MINUTE_CONFIG_POLICY:{key}")
+            continue
         require(type(value) in (int, float), "MINUTE_CONFIG_NUMERIC_TYPE")
         number(value, zero=key not in {"initial_cash", "volume_percent"})
     require(settings["volume_percent"] <= 1, "MINUTE_VOLUME_RATIO")
