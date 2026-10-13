@@ -17,9 +17,10 @@
   "available": {
     "python_entrypoint": "ashare_quant.minute.run_backtest",
     "cli": "python -m ashare_quant.minute",
-    "input_export": "ashare_quant.minute.export_ad_snapshot",
+    "input_export": "ashare_quant.minute.inputs.export_ad_snapshot",
     "backend": "RQAlpha 6.4.1 native broker, matcher, and account",
-    "scope": "Fixed main-board securities; synchronous Python lifecycle; 1-minute raw-price history; orders; native shared cash and cross-day positions."
+    "scope": "Fixed main-board securities; synchronous Python lifecycle; 1-minute raw-price history; orders; native shared cash and cross-day positions.",
+    "input_class": "ashare_quant.minute.MinuteInputs"
   },
   "state_visibility": {
     "default": "declared_available_at",
