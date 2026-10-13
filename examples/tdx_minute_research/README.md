@@ -7,6 +7,23 @@
 
 ## 运行
 
+本地 main 整合后，已校验的离线输入和原始封存文件保存在主仓
+`.verification/tdx-minute-integration/tdx-minute-research-delivery-v1/`，不进入 Git 或发布包。
+在已安装原生依赖的主仓可直接运行：
+
+```sh
+cd ~/Workspace/ashare-quant
+export AQ_TDX_EVIDENCE="${AQ_TDX_EVIDENCE:-$PWD/.verification/tdx-minute-integration/tdx-minute-research-delivery-v1}"
+.venv/bin/python examples/tdx_minute_research/run_demo.py \
+  --input "$AQ_TDX_EVIDENCE/input.json" --output .state/tdx-demo-v1 --accept-research
+```
+
+`AQ_TDX_EVIDENCE` 可以指向搬动后的同一交付目录；`sources/tdx/`、
+`sources/state/binding.json`、`dist/`、`local-dependencies/` 和 `manifest.json`
+一并保留即可使用下文的独立导出环境重建输入。新的输出目录由 `--output` 指定。
+本次整合的冻结来源、核验摘要和日志改进 C1 见
+[整合记录](../../docs/tdx-minute-integration.json)。
+
 按主 README 安装 AQ 原生运行环境，取得下面的真实导出 `input.json` 后：
 
 ```sh
