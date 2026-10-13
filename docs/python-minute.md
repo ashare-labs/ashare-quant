@@ -6,7 +6,10 @@
 
 这是明确约定行为的 **JQ 风格 API 子集**。真实 Python 代码已经执行，不代表真实行情、
 聚宽服务端对照或全 API 兼容。结果分别记录 `real_strategy_executed`、
-`real_market_data` 和 `jq_comparison`；当前对照状态始终 `NOT_PERFORMED`。
+`real_market_data` 和 `jq_comparison`；单次本地运行继续记录 `NOT_PERFORMED`。
+另有 [两例真实聚宽分钟对照](../examples/jq_minute_comparison/README.md)：
+2026-10-09/12 两股的信号及委托计划一致，撮合时点和资金不足处理不同，经济差额已核平。
+比较证据独立保存，不改写旧运行结果，也不据此宣称严格等价。
 
 ## 可运行示例
 
@@ -65,7 +68,8 @@ TDX 研究 profile 改用独立的 `replay_bar_start/replay_bar_end` 模型字�
 `get_bars(include_now=False)` 仅排除恰好 `context.current_dt` 结束的分钟；
 显式过去终点仍是包含该终点的窗口。未来端点请求报错，历史不足也报错。
 `get_current_data().last_price` 取当天最新可见闭合价，开盘前取 AD 明示的昨收；
-`day_open` 须等待第一根可见分钟。此约定尚未证实等同聚宽的时间标签。
+`day_open` 须等待第一根可见分钟。两例实测历史窗口和提交当前价相同，
+完整生命周期及分钟边界仍不等同聚宽，范围见上述对照。
 
 原生账户在 BAR 更新持仓末价；适配层还在 09:00 盘前、15:30 盘后回调前以及日终/
 最终快照前，经原生 `Position.update_last_price` 应用同一时钟已可见价格。
@@ -203,6 +207,7 @@ AQ 固定运行时仍为已锁定的 AD 0.8.0.dev2；本接口不擅自更新服
 回归入口：`pytest tests/minute -q`；全仓测试和固定日频九案例另行验收。
 真实行情、JQ 浏览器日志及个人运行证据不进入源码包。
 
-官方参考：聚宽[API 帮助](https://www.joinquant.com/help/api/help)在本次公开读取时返回地区限制；
+官方参考：聚宽[API 帮助](https://www.joinquant.com/help/api/help)最初公开读取返回地区限制，
+后续本次两例对照已通过获授权浏览器读取生命周期、订单和费用规则；
 [官方 SDK](https://github.com/JoinQuant/jqdatasdk/blob/ba61143a6504bb1f797b16b8f9d23a21909c4f60/jqdatasdk/api.py)
-仅提供数据函数签名参考。没有使用正在被因子线占用的浏览器或额度。
+仅提供数据函数签名参考。对照使用单独获授权的浏览器时段，未使用因子额度。
