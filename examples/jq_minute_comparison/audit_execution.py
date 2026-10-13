@@ -60,6 +60,41 @@ def audit_run(root, *, enforce_strict_cap=True):
     order_value, order_fee = defaultdict(Decimal), defaultdict(Decimal)
     order_states, filled, checks, day = {}, defaultdict(int), 0, None
     ledger, budgets, violations, event_trades = [], {}, [], []
+    observer_checks, first_observations, observed_trade_ids = [], [], set()
+    pending = native_request = native_return = None
+    aliases = {"order": "order_shares", "order_target": "order_to"}
+
+    def check_account(account, held, now):
+        date = str(now.date())
+        near(
+            number(account["available_cash"]) + number(account["locked_cash"]),
+            cash,
+            "event cash mismatch",
+        )
+        require(
+            {s: q for s, q in qty.items() if q} == {s: p["total_amount"] for s, p in held.items()},
+            "event holdings mismatch",
+        )
+        market_value = Decimal(0)
+        for sid, p in held.items():
+            pending_sell = sum(
+                o["amount"] - max(o["filled"], filled[o["order_id"]])
+                for o in order_states.values()
+                if o["security"] == sid and not o["is_buy"] and o["status"] in {"new", "held"}
+            )
+            require(
+                p["closeable_amount"] == qty[sid] - bought_today[sid] - pending_sell,
+                "closeable inventory mismatch",
+            )
+            near(p["avg_cost"], basis[sid] / qty[sid], "holding cost mismatch")
+            visible = [r for r in by_day[sid, date] if r["end"] <= now and r["visible"] <= now]
+            mark = number(visible[-1]["close"] if visible else states[sid, date]["previous_close"])
+            near(p["price"], mark, "event price clock mismatch")
+            near(p["value"], mark * qty[sid], "event position value mismatch")
+            market_value += mark * qty[sid]
+        near(account["positions_value"], market_value, "event position value sum mismatch")
+        near(account["total_value"], cash + market_value, "event equity mismatch")
+
     for e in read_rows(root / "events.jsonl"):
         now = timestamp(e["at"])
         date = str(now.date())
@@ -161,37 +196,121 @@ def audit_run(root, *, enforce_strict_cap=True):
                     cash_after=str(cash),
                 )
             )
+        elif e["kind"] == "order_request":
+            native_request = e
+        elif e["kind"] == "order_return":
+            native_return = e
         elif e["kind"] == "account":
-            near(
-                number(e["available_cash"]) + number(e["locked_cash"]), cash, "event cash mismatch"
-            )
-            require(
-                {s: q for s, q in qty.items() if q}
-                == {s: p["total_amount"] for s, p in e["positions"].items()},
-                "event holdings mismatch",
-            )
-            market_value = Decimal(0)
-            for sid, p in e["positions"].items():
-                pending_sell = sum(
-                    o["amount"] - max(o["filled"], filled[o["order_id"]])
-                    for o in order_states.values()
-                    if o["security"] == sid and not o["is_buy"] and o["status"] in {"new", "held"}
+            check_account(e, e["positions"], now)
+            checks += 1
+        elif e["kind"] == "log" and e["message"].startswith("AQMIN_JSON "):
+            row = json.loads(e["message"].removeprefix("AQMIN_JSON "))
+            require(timestamp(row["time"]) == now, "AQ observer/native event clock mismatch")
+            if row["kind"] == "submit":
+                require(pending is None, "AQ missing observer return")
+                pending, native_request, native_return = row, None, None
+            elif row["kind"] == "order_return":
+                require(
+                    pending is not None
+                    and native_request is not None
+                    and native_return is not None,
+                    "AQ observer return without native call",
                 )
                 require(
-                    p["closeable_amount"] == qty[sid] - bought_today[sid] - pending_sell,
-                    "closeable inventory mismatch",
+                    all(row[k] == pending[k] for k in ("time", "api", "security")),
+                    "AQ observer return differs from submit",
                 )
-                near(p["avg_cost"], basis[sid] / qty[sid], "holding cost mismatch")
-                visible = [r for r in by_day[sid, date] if r["end"] <= now and r["visible"] <= now]
-                mark = number(
-                    visible[-1]["close"] if visible else states[sid, date]["previous_close"]
+                require(
+                    native_request["api"] == aliases.get(row["api"], row["api"])
+                    and native_request["security"] == row["security"]
+                    and native_request["value"] == pending["value"],
+                    "AQ observer/native request mismatch",
                 )
-                near(p["price"], mark, "event price clock mismatch")
-                near(p["value"], mark * qty[sid], "event position value mismatch")
-                market_value += mark * qty[sid]
-            near(e["positions_value"], market_value, "event position value sum mismatch")
-            near(e["total_value"], cash + market_value, "event equity mismatch")
-            checks += 1
+                require(
+                    timestamp(native_request["at"]) == timestamp(native_return["at"]) == now,
+                    "AQ native/observer return clock mismatch",
+                )
+                order = row["order"]
+                require(row["returned_none"] is (order is None), "AQ inconsistent return flag")
+                oid = None if order is None else str(order["order_id"])
+                require(
+                    oid == native_return["order_id"], "AQ observer/native returned order differs"
+                )
+                if order is not None:
+                    expected = orders[oid]
+                    require(
+                        timestamp(order["add_time"]) == timestamp(expected["add_time"]) == now,
+                        "AQ returned order time differs from submission",
+                    )
+                    require(
+                        all(
+                            order[k] == expected[k]
+                            for k in ("security", "amount", "is_buy", "price")
+                        ),
+                        "AQ returned order identity/quantity differs",
+                    )
+                    require(
+                        order["filled"] == filled[oid],
+                        "AQ return fill amount differs from native trades",
+                    )
+                pending = None
+            if row["kind"] != "snapshot":
+                continue
+            held = {p["security"]: p for p in row["positions"]}
+            require(len(held) == len(row["positions"]), "AQ duplicate observer position")
+            check_account(row["account"], held, now)
+            observer_checks.append(
+                dict(
+                    seq=row["seq"],
+                    time=row["time"],
+                    label=row["label"],
+                    total_cash=str(cash),
+                    no_trade_collection=row["trades"] is None,
+                )
+            )
+            for order in row["orders"] or []:
+                oid = str(order["order_id"])
+                require(oid in order_states, "AQ observed order before native creation")
+                require(
+                    timestamp(order["add_time"]) == timestamp(orders[oid]["add_time"]) <= now,
+                    "AQ snapshot order time mismatch",
+                )
+            if row["trades"] is not None:
+                native_trades = {t["trade_id"]: t for t in event_trades}
+                seen = set()
+                for trade in row["trades"]:
+                    tid = str(trade["trade_id"])
+                    require(
+                        tid not in seen and tid in native_trades,
+                        "AQ duplicate or future observed trade",
+                    )
+                    expected = native_trades[tid]
+                    require(
+                        timestamp(trade["at"]) == timestamp(expected["at"]) <= now,
+                        "AQ trade follows first observation",
+                    )
+                    require(
+                        all(
+                            trade[k] == expected[k]
+                            for k in ("order_id", "security", "amount", "side")
+                        ),
+                        "AQ observed trade identity/quantity differs",
+                    )
+                    for key in ("price", "commission", "tax"):
+                        near(trade[key], expected[key], "AQ observed trade " + key + " mismatch")
+                    if tid not in observed_trade_ids:
+                        first_observations.append(
+                            dict(
+                                trade_id=tid,
+                                fill_at=trade["at"],
+                                observed_at=row["time"],
+                                seq=row["seq"],
+                            )
+                        )
+                        observed_trade_ids.add(tid)
+                    seen.add(tid)
+                require(seen == set(native_trades), "AQ observed trade collection incomplete")
+    require(pending is None, "AQ missing observer order return")
     require(len(ledger) == len(result["trades"]), "result trade stream incomplete")
     for actual, expected in zip(event_trades, result["trades"], strict=True):
         require(
@@ -204,6 +323,9 @@ def audit_run(root, *, enforce_strict_cap=True):
     )
     return dict(
         native_account_events=checks,
+        observer_snapshots_checked=len(observer_checks),
+        observer_checkpoints=observer_checks,
+        first_trade_observations=first_observations,
         exact_cash=str(cash),
         ledger=ledger,
         capacity_checks=list(budgets.values()),

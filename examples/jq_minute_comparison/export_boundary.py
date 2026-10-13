@@ -17,6 +17,11 @@ def main():
     p.add_argument("--tdx-root", required=True, type=Path)
     p.add_argument("--ad-wheel", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
+    p.add_argument(
+        "--all-checkpoints",
+        action="store_true",
+        help="also export source labels needed by all captured JQ account checkpoints",
+    )
     args = p.parse_args()
     verify_ad_install(args.ad_wheel)
     from ashare_data import TDXBarView
@@ -39,6 +44,13 @@ def main():
             "15:00",
         )
     ]
+    if args.all_checkpoints:
+        labels += [
+            f"{date}T{clock}:00+08:00"
+            for date in ("2026-10-09", "2026-10-12")
+            for clock in ("09:35", "09:45", "11:29", "11:30", "13:01")
+        ]
+        labels = sorted(set(labels))
     output = {}
     for sid, pin in PINS.items():
         read = TDXBarView(args.tdx_root / sid, expected_sha256=pin).get_price(
