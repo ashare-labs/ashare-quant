@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import Contract, Money
 
@@ -19,6 +19,32 @@ class OnlineSession(SessionConfig):
     replay_binding_sha256: None = None
     cash_dividend_policy: Literal["reject"] = "reject"
     admission_reader_sha256: Sha
+
+
+class CalendarReplan(Contract):
+    """An explicit finite replacement plan; it cannot supply market permission."""
+
+    schema_version: Literal["paper-calendar-replan.v1"] = "paper-calendar-replan.v1"
+    first_window: tuple[date, date]
+    scope: tuple[Security, ...] = Field(min_length=1, max_length=3)
+    strategy_id: Literal["equal-weight"] = "equal-weight"
+    model: Literal["prior-close-standing-intent-observed-open.v1"] = (
+        "prior-close-standing-intent-observed-open.v1"
+    )
+    previous_scenario_manifest_sha256: Sha
+    admission_reader_sha256: Sha
+    action_baseline_sha256: Sha
+    calendar_source_sha256: Sha
+    source_state_manifest_sha256: Sha
+
+    @model_validator(mode="after")
+    def bounded(self):
+        first, last = self.first_window
+        if (last - first).days != 1 or any(d.weekday() >= 5 for d in self.first_window):
+            raise ValueError("This pilot replan requires two adjacent weekdays")
+        if len(set(self.scope)) != len(self.scope):
+            raise ValueError("Unique replan securities required")
+        return self
 
 
 class OnlineDecision(Decision):

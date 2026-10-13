@@ -18,7 +18,7 @@ from ashare_quant.paper.online_adapter import (
     decision_from_owner,
     scoped_action_effect,
 )
-from ashare_quant.paper.online_contracts import OnlineSession
+from ashare_quant.paper.online_contracts import CalendarReplan, OnlineSession
 from ashare_quant.paper.risk import profiles
 
 
@@ -135,18 +135,10 @@ import pytest
 from ashare_data import phase_observation as phase
 from test_action_scope import issuer_sources
 out={}
-for day in ['2026-10-13','2026-10-14']:
+for day in ['2026-10-14','2026-10-15']:
     mp=pytest.MonkeyPatch()
-    _,original=issuer_sources(mp)
+    _,original=issuer_sources(mp, day=day)
     mp.setattr(phase,'now',lambda:datetime.fromisoformat(day+'T08:55:00+08:00'))
-    def fetch(url,referer):
-        body=original(url.replace('end_time=2026-10-14','end_time=2026-10-13'),referer)
-        if day.endswith('14'):
-            if 'hq.sinajs' in url:body=body.replace(b'2026-10-13',b'2026-10-14')
-            if 'push2.eastmoney' in url:
-                v=json.loads(body);v['data']['f86']+=86400;body=json.dumps(v).encode()
-        return body
-    mp.setattr(phase,'fetch',fetch)
     root=Path(sys.argv[2])/day
     attempt=phase.capture(root,'admission',day)
     assert attempt['status']=='observed',attempt
@@ -174,10 +166,28 @@ print(json.dumps(out))
     )
     service = OnlineService(tmp_path / "native")
     service.create(config)
+    baseline = packets["2026-10-14"]["packet"]["assessment"]["rows"][0]["action_scope"][
+        "price_share_code_review"
+    ]["baseline_sha256"]
+    plan = CalendarReplan(
+        first_window=("2026-10-14", "2026-10-15"),
+        scope=UNIVERSE,
+        previous_scenario_manifest_sha256=config.scenario_manifest_sha256,
+        admission_reader_sha256=config.admission_reader_sha256,
+        action_baseline_sha256=baseline,
+        calendar_source_sha256=digest("fixture-calendar"),
+        source_state_manifest_sha256=digest("fixture-source-manifest"),
+    )
+    old_state = service.path.read_bytes()
+    service.migrate_empty(
+        config.admission_reader_sha256, sha(old_state), "explicit fixture replan", plan=plan
+    )
+    _, config = service._load()
+    assert (service.root / "migrations" / (sha(old_state) + ".json")).read_bytes() == old_state
     reports = []
     for prior, day, after in [
-        ("2026-10-12", "2026-10-13", "2026-10-14"),
         ("2026-10-13", "2026-10-14", "2026-10-15"),
+        ("2026-10-14", "2026-10-15", "2026-10-16"),
     ]:
         state, _ = service._load()
         daily = dict(
@@ -219,7 +229,7 @@ print(json.dumps(out))
         row = service.prepare_fixture(value)
         assert service.prepare_fixture(value) == row
         for receipt in value["strategy_receipt"]["action_adjudications"].values():
-            assert receipt["genesis"] == "2026-10-13"
+            assert receipt["genesis"] == "2026-10-14"
         assert all(
             r["action_effect"] == "zero_entitlement" and not r["actions_known_absent"]
             for r in value["rows"]

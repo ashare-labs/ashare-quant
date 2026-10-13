@@ -65,6 +65,28 @@ class OwnerReader:
         require(self.pin() == config.admission_reader_sha256, "PAPER_OWNER_READER_CHANGED")
         return json.loads(result.stdout)
 
+    def reviewed_plan(self):
+        """Read the pinned owner's finite interval and official calendar proof."""
+        before = self.pin()
+        boot = (
+            "import sys,json;sys.path.insert(0,sys.argv[1]);"
+            "from ashare_data.action_scope import load_baseline,REPLAN_SHA256;"
+            "m,_=load_baseline(replan=True);"
+            "print(json.dumps(dict(first_window=[m['from_day'],m['through_day']],"
+            "scope=[c+'.XSHG' for c in m['securities']],action_baseline_sha256=REPLAN_SHA256,"
+            "calendar_source_sha256=m['sources'][m['scope_review']['calendar_source']]['sha256'])))"
+        )
+        result = subprocess.run(
+            [self.python, "-I", "-B", "-c", boot, str(self.source.resolve())],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        require(result.returncode == 0, "PAPER_OWNER_READ_REJECTED", result.stderr[-3000:])
+        require(self.pin() == before, "PAPER_OWNER_READER_CHANGED")
+        return dict(json.loads(result.stdout), admission_reader_sha256=before)
+
 
 def scoped_action_effect(state, fact, day, *, require_binding=False):
     """Zero pre-genesis entitlement is distinct from absent corporate actions.
@@ -132,6 +154,11 @@ def scoped_action_effect(state, fact, day, *, require_binding=False):
 def decision_from_owner(config, state, previous, reader, capture, admission):
     daily = reader.read(config, "daily", capture)
     facts = reader.read(config, "admission", admission)
+    if (
+        config.data_mode == "calendar_observed"
+        and facts.get("schema") == "ad-calendar-phase-observation.v4"
+    ):
+        require("calendar_plan" in state, "PAPER_EXPLICIT_REPLAN_REQUIRED")
     require(
         tuple(config.universe) == UNIVERSE and set(daily["securities"]) == set(UNIVERSE),
         "PAPER_OBSERVATION_UNIVERSE",

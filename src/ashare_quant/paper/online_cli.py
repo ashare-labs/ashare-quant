@@ -11,7 +11,7 @@ from ashare_quant.m2_jobs.files import atomic, digest, regular, sha
 
 from .online import OnlineService
 from .online_adapter import UNIVERSE, OwnerReader
-from .online_contracts import OnlineSession
+from .online_contracts import CalendarReplan, OnlineSession
 from .risk import profiles, require
 
 
@@ -39,6 +39,7 @@ def main():
     migrate = sub.add_parser("migrate-empty")
     migrate.add_argument("--state-sha", required=True)
     migrate.add_argument("--reason", required=True)
+    migrate.add_argument("--plan", type=Path, help="Explicit reviewed finite calendar replan JSON")
     args = parser.parse_args()
     reader = OwnerReader(args.ad_python, args.ad_source, args.ad_store, args.phase_store)
     service = OnlineService(args.root)
@@ -64,7 +65,20 @@ def main():
                 )
             )
         elif args.command == "migrate-empty":
-            result = service.migrate_empty(reader.pin(), args.state_sha, args.reason)
+            plan = CalendarReplan.model_validate_json(regular(args.plan)) if args.plan else None
+            if plan is not None:
+                owned = reader.reviewed_plan()
+                supplied = plan.model_dump(mode="json")
+                require(
+                    all(supplied[k] == value for k, value in owned.items()),
+                    "PAPER_REPLAN_OWNER_SCOPE",
+                )
+            result = service.migrate_empty(
+                reader.pin(),
+                args.state_sha,
+                args.reason,
+                plan=plan,
+            )
         elif args.command == "status":
             if not service.path.exists():
                 result = dict(

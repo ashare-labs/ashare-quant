@@ -19,7 +19,13 @@ from pathlib import Path
 from ashare_quant.contracts import SHANGHAI
 from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
 
-from .online_contracts import OnlineClose, OnlineDecision, OnlineSession, OpeningInput
+from .online_contracts import (
+    CalendarReplan,
+    OnlineClose,
+    OnlineDecision,
+    OnlineSession,
+    OpeningInput,
+)
 from .online_gates import closing_gate, opening_gate
 from .risk import decision_gate, require
 from .service import completed_proof, engine_pin, read_checkpoint
@@ -88,6 +94,15 @@ class OnlineService:
         )
         if verify:
             require(state["engine_pin"] == engine_pin(), "PAPER_RUNTIME_CHANGED")
+        if "calendar_plan" in state:
+            plan = CalendarReplan.model_validate(state["calendar_plan"])
+            require(digest(plan) == config.scenario_manifest_sha256, "PAPER_CALENDAR_PLAN_CHANGED")
+            require(
+                plan.admission_reader_sha256 == config.admission_reader_sha256
+                and plan.scope == config.universe
+                and plan.model == config.model,
+                "PAPER_CALENDAR_PLAN_CHANGED",
+            )
         return state, config
 
     def create(self, config):
@@ -112,7 +127,7 @@ class OnlineService:
             self._save(state, "session_created", data_mode=config.data_mode)
             return state
 
-    def migrate_empty(self, owner_pin, expected_state_sha256, reason):
+    def migrate_empty(self, owner_pin, expected_state_sha256, reason, *, plan=None):
         """Explicit new code identity only before any intent or native account."""
         require(bool(reason.strip()), "PAPER_RECOVERY_REASON")
         with lock(self.root / "writer.lock"):
@@ -128,15 +143,34 @@ class OnlineService:
                 and not list(self.root.rglob("request.json")),
                 "PAPER_MIGRATION_REQUIRES_EMPTY_ACCOUNT",
             )
-            config = OnlineSession.model_validate(
-                {**old_config.model_dump(mode="json"), "admission_reader_sha256": owner_pin}
-            )
+            changes = {"admission_reader_sha256": owner_pin}
+            if plan is not None:
+                plan = CalendarReplan.model_validate(plan)
+                require(
+                    plan.previous_scenario_manifest_sha256 == old_config.scenario_manifest_sha256
+                    and plan.admission_reader_sha256 == owner_pin
+                    and plan.scope == old_config.universe
+                    and plan.model == old_config.model,
+                    "PAPER_REPLAN_IDENTITY",
+                )
+                changes["scenario_manifest_sha256"] = digest(plan)
+            elif "calendar_plan" in state:
+                require(owner_pin == old_config.admission_reader_sha256, "PAPER_REPLAN_REQUIRED")
+            config = OnlineSession.model_validate({**old_config.model_dump(mode="json"), **changes})
             backup = self.root / "migrations" / (expected_state_sha256 + ".json")
             backup.parent.mkdir(exist_ok=True, mode=0o700)
             if backup.exists():
                 require(regular(backup) == raw, "PAPER_MIGRATION_BACKUP_CHANGED")
             else:
                 atomic(backup, raw)
+            if plan is not None:
+                plan_path = self.root / "migrations" / ("plan-" + digest(plan) + ".json")
+                content = canonical(plan)
+                if plan_path.exists():
+                    require(regular(plan_path) == content, "PAPER_MIGRATION_BACKUP_CHANGED")
+                else:
+                    atomic(plan_path, content)
+                state["calendar_plan"] = plan.model_dump(mode="json")
             prior_identity = state["identity"]
             state["config"] = config.model_dump(mode="json")
             state["engine_pin"] = engine_pin()
@@ -149,6 +183,8 @@ class OnlineService:
                 previous_state_sha256=expected_state_sha256,
                 new_identity=state["identity"],
                 archive=str(backup),
+                previous_scenario_manifest_sha256=old_config.scenario_manifest_sha256,
+                new_scenario_manifest_sha256=config.scenario_manifest_sha256,
             )
             return state
 
@@ -191,6 +227,23 @@ class OnlineService:
         day = decision.trading_date.isoformat()
         with lock(self.root / "writer.lock"):
             state, config = self._load()
+            if "calendar_plan" in state:
+                plan = CalendarReplan.model_validate(state["calendar_plan"])
+                days = tuple(d.isoformat() for d in plan.first_window)
+                require(day in days and (bool(state["days"]) or day == days[0]), "PAPER_REPLAN_DAY")
+                if config.data_mode == "calendar_observed":
+                    evidence = (decision.strategy_receipt or {}).get("action_adjudications", {})
+                    require(
+                        set(evidence) == set(config.universe)
+                        and all(
+                            evidence[s]["action_scope"]["price_share_code_review"][
+                                "baseline_sha256"
+                            ]
+                            == plan.action_baseline_sha256
+                            for s in config.universe
+                        ),
+                        "PAPER_REPLAN_ACTION_BASELINE",
+                    )
             decision_gate(config, decision)
             old = state["days"].get(day)
             if old:
