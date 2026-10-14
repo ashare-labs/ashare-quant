@@ -484,6 +484,9 @@ class OnlineService:
                     day == state["continuation"]["plan"]["day"], "PAPER_CONTINUATION_PARENT_FROZEN"
                 )
                 request["continuation"] = state["continuation"]
+                request["continuation_binding"] = next(
+                    e for e in reversed(state["events"]) if e["kind"] == "holding_successor_bound"
+                )
             request_path = root / (phase + "-request.json")
             if request_path.exists():
                 require(regular(request_path) == canonical(request), "PAPER_REQUEST_CHANGED")

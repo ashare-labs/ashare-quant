@@ -83,6 +83,17 @@ def manifest_gate(value, config, decision=None):
     return m
 
 
+def verify_binding(m, event):
+    """The full manifest digest is the explicitly selected continuation identity."""
+    require(
+        isinstance(event, dict)
+        and event.get("kind") == "holding_successor_bound"
+        and event.get("day") == str(m.plan.day)
+        and event.get("details") == dict(parent=m.parent_checkpoint, manifest=digest(m)),
+        "PAPER_CONTINUATION_BINDING_CHANGED",
+    )
+
+
 def verify_state(root, state, config, current_pin):
     m = manifest_gate(state["continuation"], config)
     origin_raw = regular(root / "continuation-origin.json")
@@ -113,11 +124,19 @@ def verify_state(root, state, config, current_pin):
         == digest(m.origin_plan),
         "PAPER_CONTINUATION_BINDING_CHANGED",
     )
+    tail = state["events"][len(origin["events"]) :]
+    bindings = [e for e in tail if e.get("kind") == "holding_successor_bound"]
+    require(
+        len(bindings) == 1 and tail[0] == bindings[0],
+        "PAPER_CONTINUATION_BINDING_CHANGED",
+    )
+    verify_binding(m, bindings[0])
     return m
 
 
 def verify_request(request, config, decision, current_pin):
     m = manifest_gate(request["continuation"], config, decision)
+    verify_binding(m, request.get("continuation_binding"))
     require(
         m.runtime_pin == current_pin
         and m.origin_engine_pin == request["engine_pin"]
