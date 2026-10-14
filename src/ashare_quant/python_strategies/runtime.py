@@ -8,6 +8,7 @@ from types import MappingProxyType
 from ashare_quant.contracts import DomainError
 from ashare_quant.m2.common import digest
 from ashare_quant.m2.contracts import Signal
+from ashare_quant.m2.quantity import valid_target
 from ashare_quant.m2_jobs.files import atomic
 from ashare_quant.strategy_api import (
     DecisionContext,
@@ -85,10 +86,10 @@ def invoke(session, context, account, read, root, invocation):
                 422,
             )
         if type(result) is TargetShares:
-            if type(result.quantity) is not int or result.quantity not in (0, 100, 200):
+            if not valid_target(result.quantity):
                 raise DomainError(
                     "PYTHON_OUTPUT_INVALID",
-                    "Target must be exactly 0, 100 or 200 integer shares",
+                    "Target must be a nonnegative, exactly representable whole lot",
                     422,
                 )
             signal = Signal(

@@ -16,7 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-def watch_control(control):
+def watch_control(control, execution_seconds):
     """Stop only this process when ownership/cancellation changes, including orphaned workers."""
     started = time.monotonic()
     while True:
@@ -36,7 +36,7 @@ def watch_control(control):
                 os._exit(74)
             if row[3]:
                 os._exit(73)
-            if time.monotonic() - started > 120:
+            if time.monotonic() - started > execution_seconds:
                 os._exit(75)
         except Exception:
             os._exit(74)
@@ -47,7 +47,11 @@ def execute(args):
     assert sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode
     if args["action"] == "run":
         assert args["control"] is not None
-        threading.Thread(target=watch_control, args=(args["control"],), daemon=True).start()
+        threading.Thread(
+            target=watch_control,
+            args=(args["control"], args["resource_limits"]["execution_seconds"]),
+            daemon=True,
+        ).start()
     from rqprobe.guards import install_network_guard
 
     install_network_guard()

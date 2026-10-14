@@ -115,8 +115,7 @@ class Repository:
             checkpoint_complete=bool(row["checkpoint_complete"]),
             cancellation_requested_at=row["cancellation_requested_at"],
             recovery_required=expired,
-            can_resume=(row["status"] in {"failed", "cancelled"} or expired)
-            and row["attempt_count"] < self.policy.max_attempts,
+            can_resume=(row["status"] in {"failed", "cancelled"} or expired),
             result=ResultReference.model_validate_json(row["result"]) if row["result"] else None,
             error=json.loads(row["error"]) if row["error"] else None,
         )
@@ -213,8 +212,6 @@ class Repository:
             )
             if row["status"] in {"failed", "cancelled"}:
                 self.capacity(db)
-            require(row["attempt_count"] < self.policy.max_attempts, "M2_JOB_ATTEMPT_LIMIT",
-                    "Attempt budget exhausted; preserve evidence and create a new task after review")
             db.execute(
                 "UPDATE m2_jobs SET status='queued',lease_token=NULL,lease_until=NULL,"
                 "cancellation_requested_at=NULL,error=NULL,result=NULL,updated_at=? WHERE job_id=?",
@@ -229,9 +226,24 @@ class Repository:
                 db,
                 job_id,
                 "resume_queued",
-                {"prior_status": row["status"], "committed_cursor": row["committed_cursor"]},
+                {"prior_status": row["status"], "committed_cursor": row["committed_cursor"],
+                 "attempt_base": row["attempt_count"], "granted_attempts": self.policy.max_attempts},
             )
         return self.row(job_id)
+
+    def attempt_limit(self, db, row):
+        """Explicit resume renews a bounded budget without erasing attempt history."""
+        grant = db.execute(
+            "SELECT details FROM m2_job_logs WHERE job_id=? AND event='resume_queued' "
+            "ORDER BY sequence DESC LIMIT 1", (row["job_id"],)
+        ).fetchone()
+        try:
+            base = json.loads(grant[0]).get("attempt_base", 0) if grant else 0
+            require(type(base) is int and 0 <= base <= row["attempt_count"],
+                    "M2_JOB_STATE_INVALID", "Invalid recovery attempt grant")
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise DomainError("M2_JOB_STATE_INVALID", "Invalid recovery attempt grant") from exc
+        return base + self.policy.max_attempts
 
     def claim(self, job_id):
         with self.store.connection(transaction=True) as db:
@@ -241,8 +253,8 @@ class Repository:
             )
             if not eligible:
                 return None
-            if row["attempt_count"] >= self.policy.max_attempts:
-                error = {"code": "M2_JOB_ATTEMPT_LIMIT", "message": "Attempt budget exhausted; operator review required"}
+            if row["attempt_count"] >= self.attempt_limit(db, row):
+                error = {"code": "M2_JOB_ATTEMPT_LIMIT", "message": "Automatic attempt budget exhausted; explicitly resume after addressing the failure"}
                 db.execute("UPDATE m2_jobs SET status='failed',lease_token=NULL,lease_until=NULL,error=?,updated_at=? WHERE job_id=?",
                            (canonical(error).decode(), now(), job_id))
                 self._log(db, job_id, "attempt_limit", error)

@@ -132,7 +132,7 @@ def test_unsupported_programs_are_rejected(defect):
             "scientific": "1e3",
             "whitespace": " 12.5 ",
             "number": 12.5,
-            "too_large": "1000001",
+            "too_large": "1" * 25,
         }[defect]
     elif defect == "fractional_day":
         c.update(field="day_index", value="1.5")

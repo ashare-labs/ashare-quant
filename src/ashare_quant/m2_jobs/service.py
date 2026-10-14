@@ -19,7 +19,7 @@ from ashare_quant.m2.portable import LocalDataBinding, bind_dataset
 from ashare_quant.m2.registry import StrategyRegistry
 from ashare_quant.python_strategies.registry import register as register_python
 from ashare_quant.python_strategies.registry import source_bytes
-from ashare_quant.python_strategies.spec import is_python, task_source
+from ashare_quant.python_strategies.spec import PythonCapabilities, is_python, task_source
 from ashare_quant.runtime import runtime_fingerprint
 
 from . import publication
@@ -169,6 +169,12 @@ class Jobs:
             native_error = exc.code
         self.guard()
         return JobCatalogue(
+            python_strategies=PythonCapabilities(
+                module_load_seconds=self.repo.policy.module_load_seconds,
+                callback_seconds=self.repo.policy.callback_seconds,
+                attempt_seconds=self.repo.policy.execution_seconds,
+                output_bytes=self.repo.policy.output_bytes,
+            ),
             configured=error is None,
             configuration_error=error,
             data_binding_sha256=binding.identity if binding else None,
@@ -397,8 +403,6 @@ class Jobs:
             row = self.repo.row(job_id)
             if row["status"] == "queued":
                 return self.view(row)
-            require(row["attempt_count"] < self.repo.policy.max_attempts,
-                    "M2_JOB_ATTEMPT_LIMIT", "Attempt budget exhausted; preserve evidence for review")
             require(
                 self.repo.view(row).can_resume,
                 "M2_JOB_NOT_RESUMABLE",

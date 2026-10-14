@@ -117,7 +117,7 @@ def test_python_insufficient_cash_is_native_rejection(host):
     "body,code",
     [
         ("return None", "PYTHON_OUTPUT_INVALID"),
-        ("return TargetShares(300)", "PYTHON_OUTPUT_INVALID"),
+        ("return TargetShares(350)", "PYTHON_OUTPUT_INVALID"),
         ('raise ValueError("owned example error")', "PYTHON_CALLBACK_ERROR"),
     ],
 )

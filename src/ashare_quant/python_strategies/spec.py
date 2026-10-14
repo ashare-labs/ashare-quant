@@ -49,10 +49,10 @@ class PythonCapabilities(Contract):
     arbitrary_data_queries: Literal[False] = False
     hostile_code_sandbox: Literal[False] = False
     hard_memory_quota: Literal[False] = False
-    module_load_seconds: Literal[5] = 5
-    callback_seconds: Literal[5] = 5
-    attempt_seconds: Literal[120] = 120
-    output_bytes: Literal[1048576] = 1048576
+    module_load_seconds: int = 5
+    callback_seconds: int = 5
+    attempt_seconds: int = 120
+    output_bytes: int = 1048576
     source_bytes: Literal[65536] = 65536
     parameters_bytes: Literal[8192] = 8192
     registration_status: Literal["registered_not_executed"] = "registered_not_executed"

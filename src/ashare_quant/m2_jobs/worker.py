@@ -106,7 +106,11 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                             raise DomainError(
                                 "PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit"
                             )
-                        check_phase(root / (invocation + ".python-phase.json"))
+                        check_phase(
+                            root / (invocation + ".python-phase.json"),
+                            module_load_seconds=jobs.repo.policy.module_load_seconds,
+                            callback_seconds=jobs.repo.policy.callback_seconds,
+                        )
                         if time.monotonic() - heartbeat >= 0.25:
                             if jobs.repo.heartbeat(job_id, token):
                                 stop(process)

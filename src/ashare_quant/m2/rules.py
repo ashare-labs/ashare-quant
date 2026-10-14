@@ -8,6 +8,7 @@ from pydantic import Field, field_validator, model_validator
 from ashare_quant.contracts import Contract
 
 from .common import decimal_text
+from .quantity import MAX_EXACT_SHARES, TargetQuantity
 
 RuleField = Literal["previous_close", "prior_cash", "prior_quantity", "day_index"]
 RuleOperator = Literal["lt", "le", "eq", "ne", "ge", "gt"]
@@ -27,8 +28,6 @@ class RuleCondition(Contract):
     @model_validator(mode="after")
     def bounds(self):
         number = Decimal(self.value)
-        if number > 1000000:
-            raise ValueError("Rule constants must be in [0, 1000000]")
         if self.field in {"prior_quantity", "day_index"} and number != number.to_integral_value():
             raise ValueError("Share quantity and day index require integral constants")
         return self
@@ -37,7 +36,7 @@ class RuleCondition(Contract):
 class DecisionRule(Contract):
     rule_id: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")]
     when_all: tuple[RuleCondition, ...] = Field(max_length=8)
-    target_shares: Literal[0, 100, 200]
+    target_shares: TargetQuantity
 
     @field_validator("target_shares", mode="before")
     @classmethod
@@ -69,6 +68,10 @@ class RuleStrategyCapabilities(Contract):
     max_rules: Literal[16] = 16
     max_conditions_per_rule: Literal[8] = 8
     target_shares: tuple[Literal[0], Literal[100], Literal[200]] = (0, 100, 200)
+    target_shares_are_examples: Literal[True] = True
+    target_shares_min: Literal[0] = 0
+    target_shares_multiple_of: Literal[100] = 100
+    target_shares_max: int = MAX_EXACT_SHARES
     ordering: Literal["first_match_all_conditions"] = "first_match_all_conditions"
     otherwise: Literal["no_change"] = "no_change"
     required_data: Literal["owner_authorized_previous_close_each_day"] = (

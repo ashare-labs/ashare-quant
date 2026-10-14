@@ -4,9 +4,9 @@
 
 ## 排队与并发
 
-默认每个数据库一个执行槽、最多 32 个非终态任务，每个任务最多 8 次尝试。`queued/running/cancelling` 均占容量；取消排队任务即时变为 `cancelled`，运行任务先变为 `cancelling`，必须停止子进程并核实 checkpoint 后才能结束。重复取消没有额外副作用；取消与发布在同一 SQLite 写事务中决胜，取消不能产生成功结果。
+默认每个数据库一个执行槽、最多 32 个非终态任务，每轮自动恢复最多 8 次尝试。`queued/running/cancelling` 均占容量；取消排队任务即时变为 `cancelled`，运行任务先变为 `cancelling`，必须停止子进程并核实 checkpoint 后才能结束。重复取消没有额外副作用；取消与发布在同一 SQLite 写事务中决胜，取消不能产生成功结果。
 
-新数据库可通过 `ASHARE_QUANT_JOB_POLICY` 设置更小的资源预算或最多四个槽。例如：
+新数据库可通过 `ASHARE_QUANT_JOB_POLICY` 显式设置本机资源预算和槽位数量；所有预算必须有限且为正，默认值不是产品硬上限。例如：
 
 ```sh
 export ASHARE_QUANT_JOB_POLICY='{"max_workers":2,"max_pending":16}'
@@ -31,7 +31,7 @@ export ASHARE_QUANT_JOB_POLICY='{"max_workers":2,"max_pending":16}'
 
 1. 查看 `job-status ID`、`job-logs ID` 和 `job-service`。worker 死亡后租约最多约 15 秒过期。运行中的旧子进程还持有锁时，返回 `M2_JOB_WRITER_BUSY`，不能强制忽略。
 2. 对正常过期且没有显式错误的任务，重新启动相同固定版本的 worker 自动接续。已提交的原生 checkpoint 是唯一账户状态；完成后、发布前死亡也从同一 checkpoint 完成封存，不重做交易。
-3. `failed/cancelled` 任务须显式 `job-resume ID`，检查冻结策略、Python 源码、参数、日期、数据绑定、session、checkpoint 摘要后重新排队，账户 ID 不变。尝试预算用尽返回 `M2_JOB_ATTEMPT_LIMIT`；不要直接编辑数据库清零计数，应在查明问题后创建新的任务。
+3. `failed/cancelled` 任务须显式 `job-resume ID`，检查冻结策略、Python 源码、参数、日期、数据绑定、session、checkpoint 摘要后重新排队，账户 ID 不变。自动尝试预算用尽返回 `M2_JOB_ATTEMPT_LIMIT` 并停止自动运行。查明问题后可对同一任务显式 `job-resume ID`，通过上述检查后重新授予 `max_attempts` 次预算；累计尝试不清零，恢复授权写入日志，排队状态下重复 resume 不重复授予预算。
 4. `recovery_required=true` 只是租约过期，不证明旧进程已经退出。服务仍核实账户写锁。损坏文件、source 漂移或 checkpoint 摘要变化均拒绝恢复。
 
 取消的任务不能读取成功结果；只有数据库已提交 `succeeded` 且发布目录全部文件摘要复核通过，`result` 才可读取。queued 日志记录完整固定服务策略及其摘要；成功发布把该历史和原生 receipt、策略、数据绑定、输入、执行身份一起封存。读取结果会重新验证封印，HTTP ETag 对应结果摘要。

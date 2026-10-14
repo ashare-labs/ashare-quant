@@ -9,6 +9,7 @@ from ashare_quant.contracts import Contract
 
 from .common import decimal_text, require
 from .contracts import Sha, StrategyDefinition
+from .quantity import MAX_EXACT_SHARES, TargetQuantity
 
 Cents = Annotated[str, Field(pattern=r"^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$", max_length=12)]
 
@@ -18,7 +19,7 @@ class BandParameters(Contract):
     security: Literal["600000.XSHG"] = "600000.XSHG"
     frequency: Literal["1d"] = "1d"
     initial_cash: Cents = "10000"
-    target_shares: Literal[100, 200] = 100
+    target_shares: TargetQuantity = Field(default=100, ge=100)
     enter_below: Cents = "12.5"
     exit_above: Cents = "12.55"
 
@@ -26,7 +27,7 @@ class BandParameters(Contract):
     @classmethod
     def integer_lots(cls, value):
         if type(value) is not int:
-            raise ValueError("target_shares must be an integer, either 100 or 200")
+            raise ValueError("target_shares must be an integer number of shares")
         return value
 
     @field_validator("initial_cash", "enter_below", "exit_above")
@@ -36,8 +37,8 @@ class BandParameters(Contract):
 
     @model_validator(mode="after")
     def bounds(self):
-        if not Decimal("1000") <= Decimal(self.initial_cash) <= Decimal("10000"):
-            raise ValueError("initial_cash must be between 1000 and 10000 inclusive")
+        if Decimal(self.initial_cash) <= 0:
+            raise ValueError("initial_cash must be positive")
         self.definition()  # Reuse the established positive, strictly ordered threshold bounds.
         return self
 
@@ -52,12 +53,17 @@ class BandParameters(Contract):
 
 class ParameterLimits(Contract):
     policy_version: Literal["m2-band-parameters.v1"] = "m2-band-parameters.v1"
-    initial_cash_min: Literal["1000"] = "1000"
-    initial_cash_max: Literal["10000"] = "10000"
+    initial_cash_min: Literal["0.01"] = "0.01"
+    initial_cash_max: None = None
+    initial_cash_max_text_length: Literal[12] = 12
     target_shares: tuple[Literal[100], Literal[200]] = (100, 200)
+    target_shares_are_examples: Literal[True] = True
+    target_shares_min: Literal[100] = 100
+    target_shares_multiple_of: Literal[100] = 100
+    target_shares_max: int = MAX_EXACT_SHARES
     maximum_decimal_places: Literal[2] = 2
-    threshold_rule: Literal["0 < enter_below < exit_above <= 1000000"] = (
-        "0 < enter_below < exit_above <= 1000000"
+    threshold_rule: Literal["0 < enter_below < exit_above"] = (
+        "0 < enter_below < exit_above"
     )
     entry_comparison: Literal["previous_close <= enter_below"] = "previous_close <= enter_below"
     exit_comparison: Literal["previous_close >= exit_above"] = "previous_close >= exit_above"
@@ -74,8 +80,8 @@ class RegisteredRuleParameters(Contract):
     @field_validator("initial_cash")
     @classmethod
     def cash(cls, value):
-        if not Decimal("1000") <= Decimal(value) <= Decimal("10000"):
-            raise ValueError("initial_cash must be between 1000 and 10000 inclusive")
+        if Decimal(value) <= 0:
+            raise ValueError("initial_cash must be positive")
         return decimal_text(value)
 
 

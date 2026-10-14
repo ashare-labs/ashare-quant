@@ -13,6 +13,7 @@ from ashare_quant.python_strategies.spec import PythonDefinition
 from .common import decimal_text, digest
 from .execution_dates import ISODate
 from .owner_contracts import OwnerDocuments
+from .quantity import TargetQuantity, valid_target
 from .rules import RuleStrategyDefinition
 
 Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
@@ -35,7 +36,7 @@ class Contract(BaseContract):
 
 class StrategyDefinition(BaseContract):
     template: Literal["buy_hold.v1", "previous_close_band.v1"]
-    target_shares: int = Field(strict=True, ge=100, le=200)
+    target_shares: TargetQuantity = Field(ge=100)
     enter_below: Money | None = None
     exit_above: Money | None = None
 
@@ -46,15 +47,13 @@ class StrategyDefinition(BaseContract):
 
     @model_validator(mode="after")
     def parameters(self):
-        if self.target_shares not in (100, 200):
-            raise ValueError("Only targets 100 and 200 are prepared")
         if self.template == "buy_hold.v1":
             if self.enter_below is not None or self.exit_above is not None:
                 raise ValueError("buy_hold has no price thresholds")
         elif self.enter_below is None or self.exit_above is None or not (
-            Decimal(0) < Decimal(self.enter_below) < Decimal(self.exit_above) <= Decimal(1000000)
+            Decimal(0) < Decimal(self.enter_below) < Decimal(self.exit_above)
         ):
-            raise ValueError("require 0 < enter < exit <= 1000000")
+            raise ValueError("require 0 < enter < exit")
         return self
 
 
@@ -106,8 +105,8 @@ class BacktestRequest(Contract):
     @field_validator("initial_cash")
     @classmethod
     def cash_bounds(cls, value):
-        if not Decimal(1000) <= Decimal(value) <= Decimal(10000):
-            raise ValueError("Initial virtual cash must be in [1000,10000]")
+        if Decimal(value) <= 0:
+            raise ValueError("Initial virtual cash must be positive")
         return decimal_text(value)
 
 
@@ -365,6 +364,6 @@ class Signal(Contract):
             raise ValueError("Python no-change requires no_change")
         if self.action == "no_change" and self.target_shares is not None:
             raise ValueError("no_change is not an executed no_order")
-        if self.action == "target_shares" and self.target_shares not in (0, 100, 200):
-            raise ValueError("Bounded target required")
+        if self.action == "target_shares" and not valid_target(self.target_shares):
+            raise ValueError("Target must be a nonnegative, exactly representable whole lot")
         return self

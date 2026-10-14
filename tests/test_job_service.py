@@ -66,10 +66,20 @@ def test_queue_capacity_fencing_and_attempt_budget(store):
         proof={"cursor": 0, "complete": False, "checkpoint_sha256": None},
     )
     assert repo.row(first)["status"] == "cancelled"
-    with pytest.raises(DomainError) as error:
-        repo.resume(first)
-    assert error.value.code == "M2_JOB_ATTEMPT_LIMIT"
     repo.capacity()
+    assert repo.resume(first)["attempt_count"] == 2
+    assert repo.resume(first)["attempt_count"] == 2  # Queued duplicate grants nothing.
+    assert repo.claim(first)["attempt_count"] == 3
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE m2_jobs SET lease_until=0 WHERE job_id=?", (first,))
+    assert repo.claim(first)["attempt_count"] == 4
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE m2_jobs SET lease_until=0 WHERE job_id=?", (first,))
+    assert repo.claim(first) is None
+    assert json.loads(repo.row(first)["error"])["code"] == "M2_JOB_ATTEMPT_LIMIT"
+    grants = [e for e in repo.logs(first) if e["event"] == "resume_queued"]
+    assert len(grants) == 1
+    assert grants[0]["details"]["attempt_base"] == 2
 
 
 def test_execution_slots_and_admission_wait_are_bounded(tmp_path):
