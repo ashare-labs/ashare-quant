@@ -361,8 +361,4 @@ def execution_from_owner(config, row, reader, phase, capture):
                 selected_watermark=row["day"],
             )
         )
-    return OnlineClose.model_validate(
-        dict(
-            common, rows=rows, data_manifest_sha256=capture, deadline=row["day"] + "T18:45:00+08:00"
-        )
-    )
+    return OnlineClose.model_validate(dict(common, rows=rows, data_manifest_sha256=capture))

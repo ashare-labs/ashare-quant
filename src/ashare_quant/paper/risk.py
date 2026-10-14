@@ -164,14 +164,16 @@ def close_gate(config, decision, close):
     require(close.trading_date == decision.trading_date, "PAPER_CLOSE_DATE")
     at = close.received_at.astimezone(SHANGHAI)
     require(
-        at.date() == close.trading_date
-        and at.time() >= time(15, 5)
-        and close.received_at <= close.deadline
-        and close.deadline.astimezone(SHANGHAI).date() == close.trading_date
-        and close.deadline.astimezone(SHANGHAI).time()
-        <= (time(18, 45) if config.data_mode.startswith("calendar_") else time(18)),
+        at.date() == close.trading_date and at.time() >= time(15, 5),
         "PAPER_CLOSE_DEADLINE",
     )
+    if not config.data_mode.startswith("calendar_"):
+        require(
+            close.received_at <= close.deadline
+            and close.deadline.astimezone(SHANGHAI).date() == close.trading_date
+            and close.deadline.astimezone(SHANGHAI).time() <= time(18),
+            "PAPER_CLOSE_DEADLINE",
+        )
     for row in indexed(close.rows, config.universe).values():
         require(
             row.trading_date == close.trading_date

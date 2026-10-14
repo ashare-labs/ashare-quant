@@ -61,6 +61,8 @@ class OnlineDecision(Decision):
 
 
 class OnlineClose(CloseInput):
+    # Preserve legacy sealed packets without imposing their pilot cutoff on settlement.
+    deadline: AwareDatetime | None = Field(default=None, exclude_if=lambda v: v is None)
     evidence_kind: Literal["live_local_capture", "calendar_fixture"]
     clock_basis: Literal["wall_clock", "fixture_clock"]
 

@@ -26,11 +26,17 @@ clock labels cannot enter a `calendar_observed` identity.
    declared standing-intent model matches at the observed open; it makes no
    claim about exchange queueing, liquidity, or an executable broker price at
    the later receipt time. No D high/low/close/volume is available in this phase.
-3. After D 15:05 and by 18:45, independently observed D daily bars are checked
+3. After D 15:05, independently observed D daily bars are checked
    against the frozen opening price. AD's collection plan starts at 17:45.
    The native process restores the open checkpoint, cancels unfilled orders,
    values at the close and settles exactly once. Native close events use the
    close receipt time. No early price is matched using late close information.
+   There is no 18:45 settlement cutoff: that was a pilot observation constraint,
+   not a source publication guarantee or an execution deadline. The owner must
+   still collect on D (its collection plan starts at 17:45). Both late same-day
+   collection and later processing of an already verified D capture are allowed.
+   New packets omit `deadline`; a legacy sealed packet retains that field and its
+   hash, but the calendar path no longer treats it as a settlement deadline.
 
 At the opening boundary, the native process atomically records cursor P+2 and
 exits before RQ's end-of-iterator settlement. Closing advances to P+4. Opening
@@ -44,8 +50,12 @@ An inherited writer lock and global account lock fence the controller/native
 pair. A native parent-death watchdog exits an orphan. Any failed or interrupted
 worker requires explicit `resume` with a reason. A completed native checkpoint
 can be published after a controller crash without re-executing trades. An
-uncommitted phase can only resume within its real clock window. There is no
-retrospective catch-up, reset, or skip-day operation. A missing close keeps the
+uncommitted opening phase can only resume within its real execution window.
+Closing can resume after that day's pilot cutoff, including on a later calendar
+date, using the same immutable input and native open checkpoint. Native close
+events retain the actual D capture receipt time; controller `worker_started` and
+`phase_committed` events retain the actual later processing time. There is no
+historical recollection, reset, or skip-day operation. A missing close keeps the
 account pending and blocks the next trading day; the supervisor must resolve
 that explicitly. Source, input or native evidence changes reject rather than
 silently overwrite. Duplicate identical deliveries reuse their original intent

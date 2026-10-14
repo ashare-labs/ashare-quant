@@ -222,6 +222,13 @@ class OnlineService:
                 "PAPER_REAL_WINDOW_CLOSED",
             )
 
+    @staticmethod
+    def _closing_window(config, received):
+        # Closing only values/settles an existing open checkpoint. Its owner-verified
+        # same-day receipt may be processed later; it must never come from the future.
+        if config.data_mode == "calendar_observed":
+            require(received <= now(), "PAPER_CLOSE_NOT_YET_RECEIVED")
+
     def prepare_fixture(self, value):
         _, config = self._load()
         require(config.data_mode == "calendar_fixture", "PAPER_OWNER_ADAPTER_REQUIRED")
@@ -362,7 +369,7 @@ class OnlineService:
                 require("opening" in row["reports"], "PAPER_OPENING_PENDING")
                 self._report(state, day, "opening")
                 closing_gate(config, decision, OpeningInput.model_validate(row["opening"]), packet)
-                self._window(config, day, time(15, 5), time(18, 45), packet.received_at)
+                self._closing_window(config, packet.received_at)
             row[field], row["phase"], row["status"] = packet.model_dump(mode="json"), phase, "ready"
             self._save(state, "input_sealed", day, phase=phase, input_sha256=digest(packet))
             return row
@@ -535,11 +542,8 @@ class OnlineService:
                             OnlineDecision.model_validate(row["decision"]),
                         )
                     else:
-                        self._window(
+                        self._closing_window(
                             config,
-                            day,
-                            time(15, 5),
-                            time(18, 45),
                             OnlineClose.model_validate(row["close"]).received_at,
                         )
                     self._spawn(request_path, serial, writer, fault, stage)
