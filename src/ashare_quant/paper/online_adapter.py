@@ -361,4 +361,8 @@ def execution_from_owner(config, row, reader, phase, capture):
                 selected_watermark=row["day"],
             )
         )
+    sealed = row.get("close")
+    if sealed and sealed.get("data_manifest_sha256") == capture and "deadline" in sealed:
+        # Preserve the selected legacy input identity; all market fields above are reread.
+        common["deadline"] = sealed["deadline"]
     return OnlineClose.model_validate(dict(common, rows=rows, data_manifest_sha256=capture))
