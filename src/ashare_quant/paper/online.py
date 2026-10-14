@@ -30,6 +30,7 @@ from .online_contracts import (
 )
 from .online_gates import closing_gate, opening_gate
 from .risk import decision_gate, require
+from .runtime_migration import authorization_event, selected_continuation
 from .service import completed_proof, engine_pin, read_checkpoint
 
 
@@ -94,7 +95,7 @@ class OnlineService:
             == digest({"config": config.model_dump(mode="json"), "engine": state["engine_pin"]}),
             "PAPER_SESSION_CHANGED",
         )
-        if verify and "continuation" in state:
+        if verify and selected_continuation(state) is not None:
             from .intraday_continuation import verify_state
 
             verify_state(self.root, state, config, engine_pin())
@@ -259,9 +260,10 @@ class OnlineService:
         day = decision.trading_date.isoformat()
         with lock(self.root / "writer.lock"):
             state, config = self._load()
-            if "continuation" in state:
+            if selected_continuation(state) is not None:
                 require(
-                    (decision.strategy_receipt or {}).get("continuation") == state["continuation"],
+                    (decision.strategy_receipt or {}).get("continuation")
+                    == selected_continuation(state),
                     "PAPER_CONTINUATION_MANIFEST_CHANGED",
                 )
             if "calendar_plan" in state:
@@ -410,15 +412,20 @@ class OnlineService:
             native["phase"] == phase and native["opening_sha256"] == digest(row["opening"]),
             "PAPER_PHASE_PROOF",
         )
-        if "continuation" in state and day == state["continuation"]["plan"]["day"]:
-            m = state["continuation"]
+        m = selected_continuation(state)
+        if m is not None and day == m["plan"]["day"]:
+            expected = dict(
+                manifest_sha256=digest(m),
+                engine_pin_sha256=digest(m["runtime_pin"]),
+                original_parent=m["parent_checkpoint"],
+            )
+            if "runtime_authorization" in state:
+                a = state["runtime_authorization"]
+                expected.update(
+                    engine_pin_sha256=digest(a["to_runtime_pin"]), authorization_sha256=digest(a)
+                )
             require(
-                native.get("continuation_runtime")
-                == dict(
-                    manifest_sha256=digest(m),
-                    engine_pin_sha256=digest(m["runtime_pin"]),
-                    original_parent=m["parent_checkpoint"],
-                ),
+                native.get("continuation_runtime") == expected,
                 "PAPER_CONTINUATION_RECEIPT_CHANGED",
             )
         if phase == "closing":
@@ -486,14 +493,16 @@ class OnlineService:
                 parent_complete=bool(parent),
                 parent_sha=parent,
             )
-            if "continuation" in state:
-                require(
-                    day == state["continuation"]["plan"]["day"], "PAPER_CONTINUATION_PARENT_FROZEN"
-                )
-                request["continuation"] = state["continuation"]
+            m = selected_continuation(state)
+            if m is not None:
+                require(day == m["plan"]["day"], "PAPER_CONTINUATION_PARENT_FROZEN")
+                request["continuation"] = m
                 request["continuation_binding"] = next(
                     e for e in reversed(state["events"]) if e["kind"] == "holding_successor_bound"
                 )
+                if "runtime_authorization" in state:
+                    request["runtime_authorization"] = state["runtime_authorization"]
+                    request["runtime_authorization_event"] = authorization_event(state)
             request_path = root / (phase + "-request.json")
             if request_path.exists():
                 require(regular(request_path) == canonical(request), "PAPER_REQUEST_CHANGED")
@@ -651,7 +660,7 @@ class OnlineService:
             real_calendar_observation=config.data_mode == "calendar_observed",
         )
         result["runtime_matches"] = state["engine_pin"] == engine_pin()
-        if "continuation" in state:
+        if selected_continuation(state) is not None:
             result["origin_runtime_matches"] = result["runtime_matches"]
             try:
                 self._load()

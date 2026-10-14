@@ -95,7 +95,13 @@ def verify_binding(m, event):
 
 
 def verify_state(root, state, config, current_pin):
-    m = manifest_gate(state["continuation"], config)
+    from .runtime_migration import selected_continuation, verify_authorized_state
+
+    m = manifest_gate(selected_continuation(state), config)
+    if "runtime_authorization" in state:
+        verify_authorized_state(root, state, config, m, current_pin)
+    else:
+        require(current_pin == m.runtime_pin, "PAPER_CONTINUATION_BINDING_CHANGED")
     origin_raw = regular(root / "continuation-origin.json")
     require(sha(origin_raw) == m.origin_state_sha256, "PAPER_CONTINUATION_ORIGIN_CHANGED")
     origin = json.loads(origin_raw)
@@ -107,7 +113,6 @@ def verify_state(root, state, config, current_pin):
         state["identity"] == origin["identity"] == m.origin_identity
         and state["config"] == origin["config"]
         and state["engine_pin"] == origin["engine_pin"] == m.origin_engine_pin
-        and current_pin == m.runtime_pin
         and origin["head"] == m.parent_checkpoint
         and origin["last_day"] == day
         and set(origin["days"]) == {day}
@@ -137,9 +142,20 @@ def verify_state(root, state, config, current_pin):
 def verify_request(request, config, decision, current_pin):
     m = manifest_gate(request["continuation"], config, decision)
     verify_binding(m, request.get("continuation_binding"))
+    if "runtime_authorization" in request:
+        from .runtime_migration import authorization_gate
+
+        authorization_gate(
+            request["runtime_authorization"],
+            m,
+            request["identity"],
+            current_pin,
+            request.get("runtime_authorization_event"),
+        )
+    else:
+        require(m.runtime_pin == current_pin, "PAPER_CONTINUATION_RUNTIME_CHANGED")
     require(
-        m.runtime_pin == current_pin
-        and m.origin_engine_pin == request["engine_pin"]
+        m.origin_engine_pin == request["engine_pin"]
         and m.origin_identity == request["identity"]
         and request["parent_sha"] == m.parent_checkpoint
         and request["parent_complete"] is True
@@ -161,6 +177,7 @@ def bind(
     with lock(service.root / "writer.lock"):
         raw = regular(service.path)
         state, config = service._load(verify=False)
+        require("runtime_authorization" not in state, "PAPER_RUNTIME_ALREADY_AUTHORIZED")
         require(
             digest(state["engine_pin"]) == expected_origin_runtime_sha,
             "PAPER_CONTINUATION_ORIGIN_RUNTIME",

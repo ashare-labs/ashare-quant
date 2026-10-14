@@ -706,6 +706,10 @@ class PaperMod(AbstractMod):
                 engine_pin_sha256=digest(runtime["execution_runtime_pin"]),
                 original_parent=runtime["continuation"]["parent_checkpoint"],
             )
+            if runtime.get("runtime_authorization"):
+                result["continuation_runtime"]["authorization_sha256"] = digest(
+                    runtime["runtime_authorization"]
+                )
         if runtime.get("online"):
             result.update(
                 phase="closing" if complete else "opening",
@@ -790,6 +794,7 @@ def main():
     require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
     runtime.update(
         continuation=request.get("continuation"),
+        runtime_authorization=request.get("runtime_authorization"),
         execution_runtime_pin=current_pin,
         online=online,
         intraday=session.model

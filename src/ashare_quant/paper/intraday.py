@@ -63,7 +63,9 @@ def config_for(plan, account):
 def prepare(service, reader, plan, admission):
     plan = IntradayPlan.model_validate(plan)
     state, config = service._load()
-    continuation = state.get("continuation")
+    from .runtime_migration import selected_continuation
+
+    continuation = selected_continuation(state)
     successor = continuation is not None and str(plan.day) == continuation["plan"]["day"]
     if successor:
         from .intraday_continuation import manifest_gate
