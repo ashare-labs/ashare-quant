@@ -136,6 +136,8 @@ class DayEvents(AbstractEventSource):
             if cursor <= self.cursor:
                 continue
             at = datetime.fromisoformat(f"{self.day}T{clock}")
+            if runtime.get("intraday") and offset == 1:
+                at = runtime["decision"].received_at.astimezone(SHANGHAI).replace(tzinfo=None)
             if runtime.get("online") and offset >= 2:
                 packet = runtime["opening"] if offset == 2 else runtime["close"]
                 at = packet.received_at.astimezone(SHANGHAI).replace(tzinfo=None)
@@ -207,14 +209,22 @@ class DaySource(AbstractDataSource):
         }
 
     def get_open_auction_bar(self, instrument, dt):
+        from .intraday_contracts import continuous
+
         require(
             dt.date() == self.decision.trading_date
-            and dt.hour == 9
-            and (30 <= dt.minute <= 35 if runtime.get("online") else dt.minute == 30),
+            and (
+                continuous(dt.replace(tzinfo=SHANGHAI))
+                if runtime.get("intraday")
+                else dt.hour == 9
+                and (30 <= dt.minute <= 35 if runtime.get("online") else dt.minute == 30)
+            ),
             "PAPER_OPEN_ROLE",
         )
         sid = instrument.order_book_id
-        # Daily opening-price research model only: no invented intraday OHLCV.
+        # Intraday uses the explicitly proved post-intent minute-close + tick.
+        # OPEN_AUCTION is only the native broker callback; no old exchange open
+        # or invented OHLCV is supplied to that independent execution model.
         return {
             "datetime": dt,
             "open": float(self.after[sid].open),
@@ -315,6 +325,10 @@ class Board(AbstractPriceBoard):
 
     def get_last_price(self, sid):
         s = self.source
+        if runtime.get("intraday") and s.env.calendar_dt < runtime[
+            "opening"
+        ].received_at.astimezone(SHANGHAI).replace(tzinfo=None):
+            return float(s.before[sid].previous_close)
         if (
             s.env.calendar_dt.date() < s.decision.trading_date
             or s.env.calendar_dt.hour < 9
@@ -731,6 +745,7 @@ def main():
     require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
     runtime.update(
         online=online,
+        intraday=session.model == "prior-close-intent-next-complete-minute.v1",
         phase=request.get("phase"),
         opening=opening,
         session=session,

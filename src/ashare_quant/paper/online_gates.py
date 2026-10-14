@@ -5,23 +5,33 @@ from decimal import Decimal
 
 from ashare_quant.contracts import SHANGHAI
 
-from .online_contracts import CONDITIONAL_MODEL
+from .online_contracts import CONDITIONAL_MODEL, INTRADAY_MODEL
 from .risk import close_gate, evidence_gate, indexed, require
 
 
 def opening_gate(config, decision, opening):
     evidence_gate(config, opening)
     at = opening.received_at.astimezone(SHANGHAI)
+    intraday = config.model == INTRADAY_MODEL
+    if intraday:
+        from .intraday_contracts import continuous, execution_gate
+
+        execution_gate(config, decision, opening)
     require(
         opening.trading_date == decision.trading_date
         and at.date() == opening.trading_date
-        and time(9, 30) <= at.time() <= time(9, 35)
+        and (continuous(at) if intraday else time(9, 30) <= at.time() <= time(9, 35))
         and opening.received_at > decision.received_at,
         "PAPER_OPENING_WINDOW",
     )
-    if config.model == CONDITIONAL_MODEL:
+    if config.model in {CONDITIONAL_MODEL, INTRADAY_MODEL}:
         proof = opening.execution_admission
         require(proof is not None, "PAPER_OPENING_ADMISSION_REQUIRED")
+        require(
+            proof.schema_version
+            == ("ad-intraday-observation.v1" if intraday else "ad-calendar-phase-observation.v5"),
+            "PAPER_EXECUTION_PROOF_SCHEMA",
+        )
         require(proof.observed_at == opening.received_at, "PAPER_OPENING_ADMISSION_CLOCK")
         prior = indexed(decision.rows, config.universe)
         for sid, fact in indexed(proof.rows, config.universe).items():
@@ -54,7 +64,7 @@ def opening_gate(config, decision, opening):
         require(
             row.trading_date == opening.trading_date
             and source.date() == opening.trading_date
-            and time(9, 30) <= source.time() <= time(9, 35)
+            and (continuous(source) if intraday else time(9, 30) <= source.time() <= time(9, 35))
             and row.source_as_of <= row.observed_at <= opening.received_at
             and Decimal(row.open) > 0,
             "PAPER_OPENING_NOT_OBSERVED",
@@ -66,7 +76,8 @@ def closing_gate(config, decision, opening, close):
     require(close.intent_id == opening.intent_id, "PAPER_INTENT_MISMATCH")
     before = indexed(opening.rows, config.universe)
     for row in close.rows:
-        require(
-            Decimal(row.open) == Decimal(before[row.security].open),
-            "PAPER_OPENING_PRICE_REVISION",
-        )
+        if config.model != INTRADAY_MODEL:
+            require(
+                Decimal(row.open) == Decimal(before[row.security].open),
+                "PAPER_OPENING_PRICE_REVISION",
+            )

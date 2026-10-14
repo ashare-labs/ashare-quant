@@ -8,11 +8,14 @@ from pydantic import AwareDatetime, Field, model_validator
 from ashare_quant.contracts import Contract, Money
 
 from .contracts import CloseInput, Decision, Security, SessionConfig, Sha
+from .intraday_contracts import IntradayProof
 
 CONDITIONAL_MODEL = "prior-close-conditional-intent-observed-open.v2"
+INTRADAY_MODEL = "prior-close-intent-next-complete-minute.v1"
 OnlineModel = Literal[
     "prior-close-standing-intent-observed-open.v1",
     "prior-close-conditional-intent-observed-open.v2",
+    "prior-close-intent-next-complete-minute.v1",
 ]
 
 
@@ -82,7 +85,7 @@ class OpeningAdmissionRow(Contract):
 
 
 class OpeningAdmission(Contract):
-    schema_version: Literal["ad-calendar-phase-observation.v5"]
+    schema_version: Literal["ad-calendar-phase-observation.v5", "ad-intraday-observation.v1"]
     capture_id: Sha
     observed_at: AwareDatetime
     rows: tuple[OpeningAdmissionRow, ...] = Field(min_length=1, max_length=3)
@@ -98,3 +101,4 @@ class OpeningInput(Contract):
     execution_admission: OpeningAdmission | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
+    intraday: IntradayProof | None = Field(default=None, exclude_if=lambda v: v is None)

@@ -21,6 +21,7 @@ from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular,
 
 from .online_contracts import (
     CONDITIONAL_MODEL,
+    INTRADAY_MODEL,
     CalendarReplan,
     OnlineClose,
     OnlineDecision,
@@ -197,9 +198,21 @@ class OnlineService:
             return state
 
     @staticmethod
-    def _window(config, day, start, end, received):
+    def _window(config, day, start, end, received, decision=None):
         if config.data_mode == "calendar_observed":
             at = now().astimezone(SHANGHAI)
+            if config.model == INTRADAY_MODEL and start.hour == 9:
+                from .intraday_contracts import continuous, plan_for
+
+                plan = plan_for(config, decision)
+                cutoff = plan.intent_deadline if start.minute == 0 else plan.execution_deadline
+                require(
+                    at.date().isoformat() == day
+                    and plan.start_at <= received <= at <= cutoff
+                    and continuous(at),
+                    "PAPER_INTRADAY_REAL_WINDOW_CLOSED",
+                )
+                return
             require(
                 at.date().isoformat() == day and start <= at.time() <= end and received <= at,
                 "PAPER_REAL_WINDOW_CLOSED",
@@ -260,7 +273,7 @@ class OnlineService:
                     "PAPER_IDEMPOTENCY_CONFLICT",
                 )
                 return old
-            self._window(config, day, time(9), time(9, 5), decision.received_at)
+            self._window(config, day, time(9), time(9, 5), decision.received_at, decision)
             require(state["head"] == decision.expected_parent, "PAPER_PARENT_CONFLICT")
             require(
                 all(r["status"] == "committed" for r in state["days"].values()),
@@ -328,7 +341,7 @@ class OnlineService:
             decision = OnlineDecision.model_validate(row["decision"])
             if phase == "opening":
                 opening_gate(config, decision, packet)
-                self._window(config, day, time(9, 30), time(9, 35), packet.received_at)
+                self._window(config, day, time(9, 30), time(9, 35), packet.received_at, decision)
                 row["input_id"] = digest(
                     {
                         "decision": digest(decision),
@@ -491,6 +504,7 @@ class OnlineService:
                             time(9, 30),
                             time(9, 35),
                             OpeningInput.model_validate(row["opening"]).received_at,
+                            OnlineDecision.model_validate(row["decision"]),
                         )
                     else:
                         self._window(

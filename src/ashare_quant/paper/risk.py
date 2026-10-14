@@ -62,16 +62,23 @@ def decision_gate(config, decision):
     require(decision.strategy_version == config.strategy_version, "PAPER_STRATEGY_IDENTITY")
     require(set(decision.targets) == set(config.universe), "PAPER_TARGET_SET")
     require(decision.previous_open < decision.trading_date < decision.next_open, "PAPER_CALENDAR")
-    require(
-        logical.date() == decision.trading_date and logical.time() == time(9),
-        "PAPER_DECISION_CLOCK",
-    )
-    require(
-        decision.logical_at <= decision.received_at <= decision.decision_deadline
-        and decision.decision_deadline.astimezone(SHANGHAI).date() == decision.trading_date
-        and decision.decision_deadline.astimezone(SHANGHAI).time() <= time(9, 5),
-        "PAPER_MISSED_DECISION",
-    )
+    from .online_contracts import INTRADAY_MODEL
+
+    if config.model == INTRADAY_MODEL:
+        from .intraday_contracts import decision_gate as intraday_decision_gate
+
+        intraday_decision_gate(config, decision)
+    else:
+        require(
+            logical.date() == decision.trading_date and logical.time() == time(9),
+            "PAPER_DECISION_CLOCK",
+        )
+        require(
+            decision.logical_at <= decision.received_at <= decision.decision_deadline
+            and decision.decision_deadline.astimezone(SHANGHAI).date() == decision.trading_date
+            and decision.decision_deadline.astimezone(SHANGHAI).time() <= time(9, 5),
+            "PAPER_MISSED_DECISION",
+        )
     require(decision.calendar_available_at <= decision.logical_at, "PAPER_CALENDAR_NOT_VISIBLE")
     for row in indexed(decision.rows, config.universe).values():
         require(
