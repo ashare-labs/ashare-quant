@@ -12,10 +12,13 @@ from .intraday_contracts import IntradayProof
 
 CONDITIONAL_MODEL = "prior-close-conditional-intent-observed-open.v2"
 INTRADAY_MODEL = "prior-close-intent-next-complete-minute.v1"
+INTRADAY_PARTIAL_MODEL = "prior-close-intent-minute-partial-cancel.v2"
+INTRADAY_MODELS = {INTRADAY_MODEL, INTRADAY_PARTIAL_MODEL}
 OnlineModel = Literal[
     "prior-close-standing-intent-observed-open.v1",
     "prior-close-conditional-intent-observed-open.v2",
     "prior-close-intent-next-complete-minute.v1",
+    "prior-close-intent-minute-partial-cancel.v2",
 ]
 
 

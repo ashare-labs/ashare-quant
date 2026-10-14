@@ -62,9 +62,9 @@ def decision_gate(config, decision):
     require(decision.strategy_version == config.strategy_version, "PAPER_STRATEGY_IDENTITY")
     require(set(decision.targets) == set(config.universe), "PAPER_TARGET_SET")
     require(decision.previous_open < decision.trading_date < decision.next_open, "PAPER_CALENDAR")
-    from .online_contracts import INTRADAY_MODEL
+    from .online_contracts import INTRADAY_MODELS
 
-    if config.model == INTRADAY_MODEL:
+    if config.model in INTRADAY_MODELS:
         from .intraday_contracts import decision_gate as intraday_decision_gate
 
         intraday_decision_gate(config, decision)

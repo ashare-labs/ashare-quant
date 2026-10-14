@@ -36,6 +36,7 @@ from rqalpha.interface import (
     AbstractPriceBoard,
 )
 from rqalpha.mod.rqalpha_mod_sys_simulation.matcher import DefaultBarMatcher
+from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderCancelled
 from rqalpha.model.instrument import Instrument
 from rqalpha.model.order import Order
 from rqalpha.model.trade import Trade
@@ -347,6 +348,26 @@ class Board(AbstractPriceBoard):
 
 
 class DailyOpenMatcher(DefaultBarMatcher):
+    def _get_liquidity_limited_fill(self, order, instrument, open_auction=False):
+        if not runtime.get("intraday_partial"):
+            return super()._get_liquidity_limited_fill(order, instrument, open_auction)
+        rows = indexed(runtime["opening"].intraday.rows, runtime["session"].universe)
+        plan = runtime["decision"].strategy_receipt["intraday_plan"]
+        volume = rows[order.order_book_id].volume
+        lot = int(instrument.round_lot)
+        capacity = int(Decimal(volume) * Decimal(plan["max_minute_participation"])) // lot * lot
+        remaining = capacity - self._turnover[order.order_book_id]
+        if remaining <= 0:
+            raise OrderCancelled(
+                "Model minute capacity has no remaining whole lot; remainder cancelled"
+            )
+        return min(order.unfilled_quantity, remaining)
+
+    def _handle_unfilled_order(self, account, order, open_auction):
+        if runtime.get("intraday_partial"):
+            raise OrderCancelled("Model minute capacity reached; unfilled remainder cancelled")
+        return super()._handle_unfilled_order(account, order, open_auction)
+
     def _get_deal_price(self, order, instrument, open_auction=False):
         # Native broker reclassifies unfilled opening orders as ordinary open orders.
         # A later submission in the same callback must still use raw open, never D close.
@@ -668,6 +689,15 @@ class PaperMod(AbstractMod):
                 if self.decision.targets[sid] != after["positions"][sid]["quantity"]
             },
         }
+        if runtime.get("intraday_partial"):
+            result["capacity_policy"] = {
+                "participation": self.decision.strategy_receipt["intraday_plan"][
+                    "max_minute_participation"
+                ],
+                "basis": "observed_complete_minute_volume",
+                "remainder": "cancel_after_minute",
+                "exchange_rule": False,
+            }
         if runtime.get("online"):
             result.update(
                 phase="closing" if complete else "opening",
@@ -745,7 +775,12 @@ def main():
     require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
     runtime.update(
         online=online,
-        intraday=session.model == "prior-close-intent-next-complete-minute.v1",
+        intraday=session.model
+        in {
+            "prior-close-intent-next-complete-minute.v1",
+            "prior-close-intent-minute-partial-cancel.v2",
+        },
+        intraday_partial=session.model == "prior-close-intent-minute-partial-cancel.v2",
         phase=request.get("phase"),
         opening=opening,
         session=session,
@@ -798,7 +833,12 @@ def main():
             "sys_simulation": {
                 "matching_type": "current_bar",
                 "slippage": 0,
-                "volume_limit": False,
+                "volume_limit": runtime["intraday_partial"],
+                "volume_percent": float(
+                    decision.strategy_receipt["intraday_plan"]["max_minute_participation"]
+                )
+                if runtime["intraday_partial"]
+                else 0.25,
                 "inactive_limit": False,
             },
             "sys_transaction_cost": {

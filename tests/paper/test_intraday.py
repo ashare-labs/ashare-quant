@@ -16,7 +16,7 @@ from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online import OnlineService
 
 
-def setup(tmp_path, monkeypatch):
+def setup(tmp_path, monkeypatch, *, partial=False, volumes=None):
     source = os.environ.get("ASHARE_CALENDAR_AD_SOURCE")
     python = os.environ.get("ASHARE_CALENDAR_AD_PYTHON")
     if not source or not python:
@@ -32,13 +32,24 @@ root=Path(sys.argv[2]);out={}
 for kind,at,after in [('admission','10:00:30','10:00:00'),('execution','10:03:30','10:00:31')]:
  with pytest.MonkeyPatch.context() as mp:
   sources(mp,at='2026-10-14T'+at+'+08:00')
+  volumes=json.loads(sys.argv[3])
+  original=obs.phase.fetch
+  def fetch(url,referer):
+   raw=original(url,referer)
+   if 'getKLineData' in url and volumes:
+    data=json.loads(raw)
+    code=next(c for c in volumes if c in url)
+    for row in data: row['volume']=str(volumes[code])
+    return json.dumps(data).encode()
+   return raw
+  mp.setattr(obs.phase,'fetch',fetch)
   a=obs.capture(root,kind,'2026-10-14','2026-10-14T'+after+'+08:00')
   assert a['status']=='observed',a
   out[kind]=a['capture_id']
 print(json.dumps(out))
 """
     r = subprocess.run(
-        [python, "-I", "-B", "-c", boot, source, str(tmp_path / "phases")],
+        [python, "-I", "-B", "-c", boot, source, str(tmp_path / "phases"), json.dumps(volumes)],
         capture_output=True,
         text=True,
         timeout=40,
@@ -76,7 +87,17 @@ print(json.dumps(out))
 
     reader = Reader(python, Path(source), tmp_path / "ad", tmp_path / "phases")
     owned = reader.reviewed_plan()
+    extra = (
+        dict(
+            schema_version="paper-intraday-plan.v2",
+            model="prior-close-intent-minute-partial-cancel.v2",
+            remainder_policy="cancel_after_minute",
+        )
+        if partial
+        else {}
+    )
     plan = IntradayPlan(
+        **extra,
         day="2026-10-14",
         start_at="2026-10-14T10:00:00+08:00",
         intent_deadline="2026-10-14T10:05:00+08:00",

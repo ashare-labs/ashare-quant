@@ -5,14 +5,14 @@ from decimal import Decimal
 
 from ashare_quant.contracts import SHANGHAI
 
-from .online_contracts import CONDITIONAL_MODEL, INTRADAY_MODEL
+from .online_contracts import CONDITIONAL_MODEL, INTRADAY_MODELS
 from .risk import close_gate, evidence_gate, indexed, require
 
 
 def opening_gate(config, decision, opening):
     evidence_gate(config, opening)
     at = opening.received_at.astimezone(SHANGHAI)
-    intraday = config.model == INTRADAY_MODEL
+    intraday = config.model in INTRADAY_MODELS
     if intraday:
         from .intraday_contracts import continuous, execution_gate
 
@@ -24,7 +24,7 @@ def opening_gate(config, decision, opening):
         and opening.received_at > decision.received_at,
         "PAPER_OPENING_WINDOW",
     )
-    if config.model in {CONDITIONAL_MODEL, INTRADAY_MODEL}:
+    if config.model in ({CONDITIONAL_MODEL} | INTRADAY_MODELS):
         proof = opening.execution_admission
         require(proof is not None, "PAPER_OPENING_ADMISSION_REQUIRED")
         require(
@@ -76,7 +76,7 @@ def closing_gate(config, decision, opening, close):
     require(close.intent_id == opening.intent_id, "PAPER_INTENT_MISMATCH")
     before = indexed(opening.rows, config.universe)
     for row in close.rows:
-        if config.model != INTRADAY_MODEL:
+        if config.model not in INTRADAY_MODELS:
             require(
                 Decimal(row.open) == Decimal(before[row.security].open),
                 "PAPER_OPENING_PRICE_REVISION",

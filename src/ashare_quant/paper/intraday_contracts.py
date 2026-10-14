@@ -20,10 +20,13 @@ def continuous(at):
 
 
 class IntradayPlan(Contract):
-    schema_version: Literal["paper-intraday-plan.v1"] = "paper-intraday-plan.v1"
-    model: Literal["prior-close-intent-next-complete-minute.v1"] = (
-        "prior-close-intent-next-complete-minute.v1"
+    schema_version: Literal["paper-intraday-plan.v1", "paper-intraday-plan.v2"] = (
+        "paper-intraday-plan.v1"
     )
+    model: Literal[
+        "prior-close-intent-next-complete-minute.v1",
+        "prior-close-intent-minute-partial-cancel.v2",
+    ] = "prior-close-intent-next-complete-minute.v1"
     day: date
     start_at: AwareDatetime
     intent_deadline: AwareDatetime
@@ -35,11 +38,30 @@ class IntradayPlan(Contract):
     action_baseline_sha256: Sha
     daily_capture: Sha
     minute_completion_delay_seconds: Literal[60] = 60
-    max_minute_participation: Literal["0.01"] = "0.01"
+    max_minute_participation: Money = "0.01"
+    remainder_policy: Literal["cancel_after_minute"] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     buy_slippage: Literal["0.01"] = "0.01"
 
     @model_validator(mode="after")
     def bounded(self):
+        partial = self.model == "prior-close-intent-minute-partial-cancel.v2"
+        if partial:
+            if not (
+                self.schema_version == "paper-intraday-plan.v2"
+                and self.remainder_policy == "cancel_after_minute"
+                and 0 < Decimal(self.max_minute_participation) <= 1
+            ):
+                raise ValueError(
+                    "Explicit partial-fill capacity and remainder cancellation required"
+                )
+        elif not (
+            self.schema_version == "paper-intraday-plan.v1"
+            and self.remainder_policy is None
+            and self.max_minute_participation == "0.01"
+        ):
+            raise ValueError("Original strict-volume model is immutable")
         times = (self.start_at, self.intent_deadline, self.execution_deadline)
         if not (
             self.start_at < self.intent_deadline < self.execution_deadline
@@ -133,7 +155,9 @@ def execution_gate(config, decision, opening):
             and prices[sid].source_as_of == row.minute_end,
             "PAPER_INTRADAY_PRICE_PROOF",
         )
-        require(
-            decision.targets[sid] <= int(Decimal(row.volume) * Decimal(p.max_minute_participation)),
-            "PAPER_INTRADAY_VOLUME_LIMIT",
-        )
+        if p.model == "prior-close-intent-next-complete-minute.v1":
+            require(
+                decision.targets[sid]
+                <= int(Decimal(row.volume) * Decimal(p.max_minute_participation)),
+                "PAPER_INTRADAY_VOLUME_LIMIT",
+            )

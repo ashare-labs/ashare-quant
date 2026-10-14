@@ -21,7 +21,7 @@ from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular,
 
 from .online_contracts import (
     CONDITIONAL_MODEL,
-    INTRADAY_MODEL,
+    INTRADAY_MODELS,
     CalendarReplan,
     OnlineClose,
     OnlineDecision,
@@ -201,7 +201,7 @@ class OnlineService:
     def _window(config, day, start, end, received, decision=None):
         if config.data_mode == "calendar_observed":
             at = now().astimezone(SHANGHAI)
-            if config.model == INTRADAY_MODEL and start.hour == 9:
+            if config.model in INTRADAY_MODELS and start.hour == 9:
                 from .intraday_contracts import continuous, plan_for
 
                 plan = plan_for(config, decision)

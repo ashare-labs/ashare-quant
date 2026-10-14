@@ -44,7 +44,12 @@ def main():
                 now() < plan.start_at or service.path.exists(),
                 "PAPER_INTRADAY_START_ALREADY_PASSED",
             )
-            result = service.create(config_for(plan, "intraday-20261014-independent"))
+            account = (
+                f"intraday-{plan.day:%Y%m%d}-partial"
+                if plan.remainder_policy
+                else "intraday-20261014-independent"
+            )
+            result = service.create(config_for(plan, account))
         elif args.command == "prepare":
             result = prepare(service, reader, plan, args.capture)
         elif args.command == "deliver":
