@@ -90,8 +90,15 @@ def decision_gate(config, decision):
         if config.execution_admission_scope == "per_order":
             require(row.eligible is True, "PAPER_TRADING_STATE_BLOCKED")
         else:
+            from .online_contracts import CONDITIONAL_MODEL
+
+            conditional = config.model == CONDITIONAL_MODEL and config.data_mode.startswith(
+                "calendar_"
+            )
             require(
-                row.eligible is True and row.suspended is False and row.is_st is False,
+                row.eligible is True
+                and row.is_st is False
+                and (row.suspended is not True if conditional else row.suspended is False),
                 "PAPER_TRADING_STATE_BLOCKED",
             )
             require(

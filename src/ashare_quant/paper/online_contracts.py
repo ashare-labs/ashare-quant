@@ -9,11 +9,15 @@ from ashare_quant.contracts import Contract, Money
 
 from .contracts import CloseInput, Decision, Security, SessionConfig, Sha
 
+CONDITIONAL_MODEL = "prior-close-conditional-intent-observed-open.v2"
+OnlineModel = Literal[
+    "prior-close-standing-intent-observed-open.v1",
+    "prior-close-conditional-intent-observed-open.v2",
+]
+
 
 class OnlineSession(SessionConfig):
-    model: Literal["prior-close-standing-intent-observed-open.v1"] = (
-        "prior-close-standing-intent-observed-open.v1"
-    )
+    model: OnlineModel = "prior-close-standing-intent-observed-open.v1"
     data_mode: Literal["calendar_observed", "calendar_fixture"] = "calendar_observed"
     strategy_id: None = None
     replay_binding_sha256: None = None
@@ -28,9 +32,7 @@ class CalendarReplan(Contract):
     first_window: tuple[date, date]
     scope: tuple[Security, ...] = Field(min_length=1, max_length=3)
     strategy_id: Literal["equal-weight"] = "equal-weight"
-    model: Literal["prior-close-standing-intent-observed-open.v1"] = (
-        "prior-close-standing-intent-observed-open.v1"
-    )
+    model: OnlineModel = "prior-close-standing-intent-observed-open.v1"
     previous_scenario_manifest_sha256: Sha
     admission_reader_sha256: Sha
     action_baseline_sha256: Sha
@@ -66,6 +68,26 @@ class OpeningRow(Contract):
     raw_sha256: Sha
 
 
+class OpeningAdmissionRow(Contract):
+    security: Security
+    eligible: bool = Field(strict=True)
+    suspended: bool = Field(strict=True)
+    is_st: bool = Field(strict=True)
+    reference_close: Money
+    lower_limit: Money
+    upper_limit: Money
+    rule_version: str = Field(min_length=1)
+    action_baseline_sha256: Sha
+    action_review_sha256: Sha
+
+
+class OpeningAdmission(Contract):
+    schema_version: Literal["ad-calendar-phase-observation.v5"]
+    capture_id: Sha
+    observed_at: AwareDatetime
+    rows: tuple[OpeningAdmissionRow, ...] = Field(min_length=1, max_length=3)
+
+
 class OpeningInput(Contract):
     trading_date: date
     intent_id: Sha
@@ -73,3 +95,6 @@ class OpeningInput(Contract):
     evidence_kind: Literal["live_local_capture", "calendar_fixture"]
     clock_basis: Literal["wall_clock", "fixture_clock"]
     rows: tuple[OpeningRow, ...] = Field(min_length=1, max_length=3)
+    execution_admission: OpeningAdmission | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )

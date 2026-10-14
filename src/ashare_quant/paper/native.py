@@ -249,6 +249,11 @@ class DaySource(AbstractDataSource):
 
     def is_suspended(self, sid, dates):
         require(sid in self.before, "PAPER_SECURITY_OUT_OF_SCOPE")
+        if runtime.get("online") and runtime["opening"].execution_admission is not None:
+            # The original conditional decision retains suspended=None. Only
+            # the independently gated opening proof supplies executable state.
+            facts = indexed(runtime["opening"].execution_admission.rows, self.before)
+            return [facts[sid].suspended] * len(dates)
         return [self.before[sid].suspended] * len(dates)
 
     def is_st_stock(self, sid, dates):

@@ -20,6 +20,7 @@ from ashare_quant.contracts import SHANGHAI
 from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
 
 from .online_contracts import (
+    CONDITIONAL_MODEL,
     CalendarReplan,
     OnlineClose,
     OnlineDecision,
@@ -150,10 +151,17 @@ class OnlineService:
                     plan.previous_scenario_manifest_sha256 == old_config.scenario_manifest_sha256
                     and plan.admission_reader_sha256 == owner_pin
                     and plan.scope == old_config.universe
-                    and plan.model == old_config.model,
+                    and (
+                        plan.model == old_config.model
+                        or (
+                            old_config.model == "prior-close-standing-intent-observed-open.v1"
+                            and plan.model == CONDITIONAL_MODEL
+                        )
+                    ),
                     "PAPER_REPLAN_IDENTITY",
                 )
                 changes["scenario_manifest_sha256"] = digest(plan)
+                changes["model"] = plan.model
             elif "calendar_plan" in state:
                 require(owner_pin == old_config.admission_reader_sha256, "PAPER_REPLAN_REQUIRED")
             config = OnlineSession.model_validate({**old_config.model_dump(mode="json"), **changes})

@@ -11,7 +11,7 @@ from pathlib import Path
 from ashare_quant.daily_portfolio import signals
 from ashare_quant.m2_jobs.files import digest, regular, sha
 
-from .online_contracts import OnlineClose, OnlineDecision, OpeningInput
+from .online_contracts import CONDITIONAL_MODEL, OnlineClose, OnlineDecision, OpeningInput
 from .risk import require
 
 UNIVERSE = ("600000.XSHG", "600036.XSHG", "601318.XSHG")
@@ -154,10 +154,10 @@ def scoped_action_effect(state, fact, day, *, require_binding=False):
 def decision_from_owner(config, state, previous, reader, capture, admission):
     daily = reader.read(config, "daily", capture)
     facts = reader.read(config, "admission", admission)
-    if (
-        config.data_mode == "calendar_observed"
-        and facts.get("schema") == "ad-calendar-phase-observation.v4"
-    ):
+    if config.data_mode == "calendar_observed" and facts.get("schema") in {
+        "ad-calendar-phase-observation.v4",
+        "ad-calendar-phase-observation.v5",
+    }:
         require("calendar_plan" in state, "PAPER_EXPLICIT_REPLAN_REQUIRED")
     require(
         tuple(config.universe) == UNIVERSE and set(daily["securities"]) == set(UNIVERSE),
@@ -177,8 +177,18 @@ def decision_from_owner(config, state, previous, reader, capture, admission):
         "PAPER_ADMISSION_NOT_VISIBLE",
     )
     assessment = facts["assessment"]
+    conditional = config.model == CONDITIONAL_MODEL
     require(
-        assessment["execution_permission"] is True and not assessment["blockers"],
+        (facts.get("schema") == "ad-calendar-phase-observation.v5") == conditional,
+        "PAPER_EXPLICIT_CONDITIONAL_MODEL_REQUIRED",
+    )
+    require(
+        (
+            assessment.get("preparation_ready") is True
+            if conditional
+            else assessment["execution_permission"] is True
+        )
+        and not assessment["blockers"],
         "PAPER_CURRENT_ADMISSION_BLOCKED",
         json.dumps(assessment["blockers"], ensure_ascii=False),
     )
@@ -279,7 +289,58 @@ def execution_from_owner(config, row, reader, phase, capture):
             and packet["assessment"]["opening_ready"],
             "PAPER_OPENING_NOT_OBSERVED",
         )
-        rows = [{k: v for k, v in r.items() if k != "ready"} for r in packet["assessment"]["rows"]]
+        conditional = config.model == CONDITIONAL_MODEL
+        require(
+            (packet.get("schema") == "ad-calendar-phase-observation.v5") == conditional,
+            "PAPER_EXPLICIT_CONDITIONAL_MODEL_REQUIRED",
+        )
+        if conditional:
+            assessment = packet["assessment"]
+            require(
+                assessment.get("execution_ready") is True and not assessment["blockers"],
+                "PAPER_OPENING_ADMISSION_REQUIRED",
+            )
+            fields = {
+                "security",
+                "trading_date",
+                "open",
+                "source_as_of",
+                "observed_at",
+                "raw_sha256",
+            }
+            rows = [{k: r[k] for k in fields} for r in assessment["rows"]]
+            facts = []
+            for r in assessment["rows"]:
+                proof = r["action_scope"]["price_share_code_review"]
+                facts.append(
+                    {
+                        **{
+                            k: r[k]
+                            for k in (
+                                "security",
+                                "eligible",
+                                "suspended",
+                                "is_st",
+                                "reference_close",
+                                "lower_limit",
+                                "upper_limit",
+                                "rule_version",
+                            )
+                        },
+                        "action_baseline_sha256": proof["baseline_sha256"],
+                        "action_review_sha256": proof["source_sha256"],
+                    }
+                )
+            common["execution_admission"] = dict(
+                schema_version=packet["schema"],
+                capture_id=capture,
+                observed_at=packet["completed_at"],
+                rows=facts,
+            )
+        else:
+            rows = [
+                {k: v for k, v in r.items() if k != "ready"} for r in packet["assessment"]["rows"]
+            ]
         return OpeningInput.model_validate(dict(common, rows=rows))
     require(
         packet["signal_day"] == row["day"] and packet["signal_ready"] and not packet["revisions"],

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from ashare_quant.contracts import SHANGHAI
 
+from .online_contracts import CONDITIONAL_MODEL
 from .risk import close_gate, evidence_gate, indexed, require
 
 
@@ -18,6 +19,36 @@ def opening_gate(config, decision, opening):
         and opening.received_at > decision.received_at,
         "PAPER_OPENING_WINDOW",
     )
+    if config.model == CONDITIONAL_MODEL:
+        proof = opening.execution_admission
+        require(proof is not None, "PAPER_OPENING_ADMISSION_REQUIRED")
+        require(proof.observed_at == opening.received_at, "PAPER_OPENING_ADMISSION_CLOCK")
+        prior = indexed(decision.rows, config.universe)
+        for sid, fact in indexed(proof.rows, config.universe).items():
+            before = prior[sid]
+            require(
+                fact.eligible is True and fact.suspended is False and fact.is_st is False,
+                "PAPER_OPENING_TRADING_STATE_BLOCKED",
+            )
+            require(
+                Decimal(fact.reference_close) == Decimal(before.previous_close)
+                and before.lower_limit is not None
+                and before.upper_limit is not None
+                and Decimal(fact.lower_limit) == Decimal(before.lower_limit)
+                and Decimal(fact.upper_limit) == Decimal(before.upper_limit)
+                and fact.rule_version == before.rule_version,
+                "PAPER_OPENING_PARAMETERS_CHANGED",
+            )
+            if config.data_mode == "calendar_observed":
+                old = (decision.strategy_receipt or {}).get("action_adjudications", {}).get(sid, {})
+                baseline = (
+                    old.get("action_scope", {})
+                    .get("price_share_code_review", {})
+                    .get("baseline_sha256")
+                )
+                require(fact.action_baseline_sha256 == baseline, "PAPER_OPENING_ACTION_BASELINE")
+    else:
+        require(opening.execution_admission is None, "PAPER_EXPLICIT_CONDITIONAL_MODEL_REQUIRED")
     for row in indexed(opening.rows, config.universe).values():
         source = row.source_as_of.astimezone(SHANGHAI)
         require(
