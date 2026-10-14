@@ -605,6 +605,8 @@ class PaperMod(AbstractMod):
         deltas = [
             (s, self.decision.targets[s] - before[s]["quantity"]) for s in self.session.universe
         ]
+        if runtime.get("continuation"):
+            require(all(delta == 0 for _, delta in deltas), "PAPER_CONTINUATION_HOLD_ONLY")
         facts = indexed(self.decision.rows, self.session.universe)
         for sid, delta in sorted(deltas, key=lambda x: (x[1] >= 0, x[0])):
             if not delta:
@@ -698,6 +700,12 @@ class PaperMod(AbstractMod):
                 "remainder": "cancel_after_minute",
                 "exchange_rule": False,
             }
+        if runtime.get("continuation"):
+            result["continuation_runtime"] = dict(
+                manifest_sha256=digest(runtime["continuation"]),
+                engine_pin_sha256=digest(runtime["execution_runtime_pin"]),
+                original_parent=runtime["continuation"]["parent_checkpoint"],
+            )
         if runtime.get("online"):
             result.update(
                 phase="closing" if complete else "opening",
@@ -730,7 +738,9 @@ def main():
     request = json.loads(Path(args.request).read_text())
     from .service import engine_pin
 
-    require(engine_pin() == request["engine_pin"], "PAPER_RUNTIME_CHANGED")
+    current_pin = engine_pin()
+    if "continuation" not in request:
+        require(current_pin == request["engine_pin"], "PAPER_RUNTIME_CHANGED")
     require(
         request["identity"]
         == digest({"config": request["session"], "engine": request["engine_pin"]}),
@@ -753,6 +763,10 @@ def main():
 
         session = OnlineSession.model_validate(request["session"])
         decision = OnlineDecision.model_validate(request["decision"])
+        if "continuation" in request:
+            from .intraday_continuation import verify_request
+
+            verify_request(request, session, decision, current_pin)
         opening = OpeningInput.model_validate(request["opening"])
         close = OnlineClose.model_validate(request["close"]) if request["close"] else None
         require(request["phase"] in {"opening", "closing"}, "PAPER_PHASE")
@@ -764,6 +778,7 @@ def main():
             {"decision": digest(decision), "opening": digest(opening), "intent": opening.intent_id}
         )
     else:
+        require("continuation" not in request, "PAPER_CONTINUATION_ONLINE_ONLY")
         session = SessionConfig.model_validate(request["session"])
         decision = Decision.model_validate(request["decision"])
         close = CloseInput.model_validate(request["close"])
@@ -774,6 +789,8 @@ def main():
     decision_gate(session, decision)
     require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
     runtime.update(
+        continuation=request.get("continuation"),
+        execution_runtime_pin=current_pin,
         online=online,
         intraday=session.model
         in {

@@ -98,6 +98,13 @@ def plan_for(config, decision):
     from ashare_quant.m2_jobs.files import digest
 
     p = IntradayPlan.model_validate((decision.strategy_receipt or {}).get("intraday_plan"))
+    continuation = (decision.strategy_receipt or {}).get("continuation")
+    if continuation is not None:
+        from .intraday_continuation import manifest_gate
+
+        m = manifest_gate(continuation, config, decision)
+        require(p == m.plan, "PAPER_CONTINUATION_PLAN_CHANGED")
+        return p
     require(
         digest(p) == config.scenario_manifest_sha256
         and p.model == config.model

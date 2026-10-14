@@ -94,7 +94,11 @@ class OnlineService:
             == digest({"config": config.model_dump(mode="json"), "engine": state["engine_pin"]}),
             "PAPER_SESSION_CHANGED",
         )
-        if verify:
+        if verify and "continuation" in state:
+            from .intraday_continuation import verify_state
+
+            verify_state(self.root, state, config, engine_pin())
+        elif verify:
             require(state["engine_pin"] == engine_pin(), "PAPER_RUNTIME_CHANGED")
         if "calendar_plan" in state:
             plan = CalendarReplan.model_validate(state["calendar_plan"])
@@ -248,6 +252,11 @@ class OnlineService:
         day = decision.trading_date.isoformat()
         with lock(self.root / "writer.lock"):
             state, config = self._load()
+            if "continuation" in state:
+                require(
+                    (decision.strategy_receipt or {}).get("continuation") == state["continuation"],
+                    "PAPER_CONTINUATION_MANIFEST_CHANGED",
+                )
             if "calendar_plan" in state:
                 plan = CalendarReplan.model_validate(state["calendar_plan"])
                 days = tuple(d.isoformat() for d in plan.first_window)
@@ -394,6 +403,17 @@ class OnlineService:
             native["phase"] == phase and native["opening_sha256"] == digest(row["opening"]),
             "PAPER_PHASE_PROOF",
         )
+        if "continuation" in state and day == state["continuation"]["plan"]["day"]:
+            m = state["continuation"]
+            require(
+                native.get("continuation_runtime")
+                == dict(
+                    manifest_sha256=digest(m),
+                    engine_pin_sha256=digest(m["runtime_pin"]),
+                    original_parent=m["parent_checkpoint"],
+                ),
+                "PAPER_CONTINUATION_RECEIPT_CHANGED",
+            )
         if phase == "closing":
             require(native["close_sha256"] == digest(row["close"]), "PAPER_PHASE_PROOF")
             opened = self._report(state, day, "opening")
@@ -459,6 +479,11 @@ class OnlineService:
                 parent_complete=bool(parent),
                 parent_sha=parent,
             )
+            if "continuation" in state:
+                require(
+                    day == state["continuation"]["plan"]["day"], "PAPER_CONTINUATION_PARENT_FROZEN"
+                )
+                request["continuation"] = state["continuation"]
             request_path = root / (phase + "-request.json")
             if request_path.exists():
                 require(regular(request_path) == canonical(request), "PAPER_REQUEST_CHANGED")
@@ -619,6 +644,16 @@ class OnlineService:
             real_calendar_observation=config.data_mode == "calendar_observed",
         )
         result["runtime_matches"] = state["engine_pin"] == engine_pin()
+        if "continuation" in state:
+            result["origin_runtime_matches"] = result["runtime_matches"]
+            try:
+                self._load()
+                result["runtime_matches"] = True
+                result["continuation_runtime_validated"] = True
+            except Exception as exc:
+                result["runtime_matches"] = False
+                result["continuation_runtime_validated"] = False
+                result["continuation_error"] = str(exc)
         result["latest_account"] = None
         for day, row in state["days"].items():
             row["recovery_required"] = row["status"] in {"failed", "running"}

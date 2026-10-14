@@ -63,7 +63,15 @@ def config_for(plan, account):
 def prepare(service, reader, plan, admission):
     plan = IntradayPlan.model_validate(plan)
     state, config = service._load()
-    require(config.scenario_manifest_sha256 == digest(plan), "PAPER_INTRADAY_PLAN_IDENTITY")
+    continuation = state.get("continuation")
+    successor = continuation is not None and str(plan.day) == continuation["plan"]["day"]
+    if successor:
+        from .intraday_continuation import manifest_gate
+
+        extension = manifest_gate(continuation, config)
+        require(plan == extension.plan, "PAPER_CONTINUATION_PLAN_CHANGED")
+    else:
+        require(config.scenario_manifest_sha256 == digest(plan), "PAPER_INTRADAY_PLAN_IDENTITY")
     daily = reader.read(config, "daily", plan.daily_capture)
     facts = reader.intraday(config, admission)
     old = state["days"].get(str(plan.day))
@@ -75,7 +83,14 @@ def prepare(service, reader, plan, admission):
             "PAPER_IDEMPOTENCY_CONFLICT",
         )
         return old
-    require(state["days"] == {} and state["head"] is None, "PAPER_INTRADAY_NEW_ACCOUNT")
+    if successor:
+        require(
+            state["last_day"] == str(extension.origin_plan.day)
+            and state["head"] == extension.parent_checkpoint,
+            "PAPER_CONTINUATION_PARENT_CHANGED",
+        )
+    else:
+        require(state["days"] == {} and state["head"] is None, "PAPER_INTRADAY_NEW_ACCOUNT")
     at = now()
     logical = datetime.fromisoformat(facts["completed_at"])
     require(
@@ -95,10 +110,24 @@ def prepare(service, reader, plan, admission):
         and datetime.fromisoformat(daily["completed_at"]) <= logical,
         "PAPER_INTRADAY_PRIOR_SIGNAL",
     )
-    signal = signals.decide(
-        "equal-weight",
-        {s: [r["close"] for r in daily["securities"][s]["rows"]] for s in config.universe},
-        Decimal(config.initial_cash),
+    previous = service.report(state["last_day"], "closing") if successor else None
+    account = previous["native"]["account"] if previous else None
+    scheduled = signals.scheduled("equal-weight", str(plan.day), daily["signal_day"], not successor)
+    if successor:
+        require(not scheduled, "PAPER_CONTINUATION_REBALANCE_REQUIRED")
+    signal = (
+        signals.decide(
+            "equal-weight",
+            {s: [r["close"] for r in daily["securities"][s]["rows"]] for s in config.universe},
+            Decimal(account["nav"] if account else config.initial_cash),
+        )
+        if scheduled
+        else None
+    )
+    targets = (
+        signal["targets"]
+        if scheduled
+        else {s: account["positions"][s]["quantity"] for s in config.universe}
     )
     receipt = dict(
         strategy_id="equal-weight",
@@ -109,6 +138,16 @@ def prepare(service, reader, plan, admission):
         action_adjudications={},
         model="new-account prior-close equal-weight; future complete-minute execution",
     )
+    if successor:
+        receipt.update(
+            model="same native account; monthly equal-weight holds actual quantities",
+            continuation=continuation,
+            scheduled=False,
+            targets=targets,
+            equity_from="previous_native_checkpoint",
+            equity=account["nav"],
+            parent=state["head"],
+        )
     rows = []
     for fact in facts["assessment"]["rows"]:
         sid = fact["security"]
@@ -151,13 +190,13 @@ def prepare(service, reader, plan, admission):
         received_at=at,
         calendar_available_at=daily["calendar"]["source"]["observed_at"],
         decision_deadline=plan.intent_deadline,
-        expected_parent=None,
+        expected_parent=state["head"] if successor else None,
         strategy_version=config.strategy_version,
         strategy_receipt=receipt,
         strategy_receipt_sha256=digest(receipt),
         data_manifest_sha256=digest([plan.daily_capture, admission]),
         rows=rows,
-        targets=signal["targets"],
+        targets=targets,
         reason="Prior close strategy intent, future minute quote required",
         evidence_kind="live_local_capture",
         clock_basis="wall_clock",
