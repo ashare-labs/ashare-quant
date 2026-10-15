@@ -172,6 +172,9 @@ class PortfolioPosition(Contract):
     value: str
     average_price: str
     dividend_receivable: str
+    restricted_shares: int = 0
+    pending_shares: int = 0
+    pending_share_value: str = "0"
 
 
 class PortfolioAccount(Contract):

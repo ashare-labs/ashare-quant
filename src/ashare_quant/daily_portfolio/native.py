@@ -98,8 +98,12 @@ class Source(AbstractDataSource):
         return {
             **{k: float(row[k]) for k in ("open", "high", "low", "close", "volume")},
             "datetime": int(dt.strftime("%Y%m%d") + "000000"),
-            "limit_up": float("nan") if self.host.data.no_price_limits else float(row["upper_limit"]),
-            "limit_down": float("nan") if self.host.data.no_price_limits else float(row["lower_limit"]),
+            "limit_up": float("nan")
+            if self.host.data.no_price_limits
+            else float(row["upper_limit"]),
+            "limit_down": float("nan")
+            if self.host.data.no_price_limits
+            else float(row["lower_limit"]),
         }
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, **kwargs):
@@ -256,6 +260,10 @@ class Mod(AbstractMod):
     def start_up(self, env, config):
         self.env, self.data = env, runtime["data"]
         runtime["mod"] = self
+        if self.data.corporate_actions is not None:
+            from .corporate_native import install
+
+            install(self)
         self.day, self.phase = self.data.days[0], "DECIDE"
         self.decisions, self.orders, self.trades, self.accounts, self.submissions = (
             [],
@@ -265,6 +273,7 @@ class Mod(AbstractMod):
             [],
         )
         self.order_events, self.observations = [], []
+        self.corporate_daily_pnl = []
         env.set_event_source(RecordedEventSource(env, runtime["records"]))
         env.set_data_source(Source(self))
         env.set_price_board(Board(self))
@@ -308,6 +317,8 @@ class Mod(AbstractMod):
         prior = (
             self.accounts[-1]
             if self.accounts
+            else self.account()
+            if runtime["manifest"]["execution"].get("initial_positions")
             else {
                 "cash": runtime["manifest"]["execution"]["initial_cash"],
                 "equity": runtime["manifest"]["execution"]["initial_cash"],
@@ -430,7 +441,8 @@ class Mod(AbstractMod):
         positions = {}
         for sid in self.data.ids:
             pos = p.get_position(sid, POSITION_DIRECTION.LONG)
-            if pos.quantity or pos.dividend_receivable:
+            formal = self.data.corporate_actions is not None
+            if pos.quantity or pos.dividend_receivable or (formal and pos.pending_stock):
                 positions[sid] = {
                     "quantity": int(pos.quantity),
                     "sellable": int(pos.closable),
@@ -438,6 +450,15 @@ class Mod(AbstractMod):
                     "value": repr(float(pos.market_value)),
                     "average_price": repr(float(pos.avg_price)),
                     "dividend_receivable": repr(float(pos.dividend_receivable)),
+                    **(
+                        {
+                            "restricted_shares": pos.restricted_stock,
+                            "pending_shares": pos.pending_stock,
+                            "pending_share_value": repr(float(pos.pending_stock * pos.last_price)),
+                        }
+                        if formal
+                        else {}
+                    ),
                 }
         return {
             "date": self.day,
@@ -451,7 +472,18 @@ class Mod(AbstractMod):
         for sid in self.data.ids:
             pos = self.env.portfolio.get_position(sid, POSITION_DIRECTION.LONG)
             pos.update_last_price(float(self.data.row(sid, self.day)["close"]))
+        for action in self.data.corporate_actions or []:
+            if action["record_date"] == self.day:
+                # get_position returns a detached temporary object when no
+                # holding exists. Register zero bases in the actual Account too.
+                self.env.portfolio.stock_account._get_or_create_pos(
+                    action["security"], POSITION_DIRECTION.LONG
+                ).record(action)
         self.accounts.append(self.account())
+        if self.data.corporate_actions is not None:
+            self.corporate_daily_pnl.append(
+                {"date": self.day, "pnl": repr(float(self.env.portfolio.stock_account.daily_pnl))}
+            )
         self.observe("day_close")
 
     def get_state(self):
@@ -468,6 +500,7 @@ class Mod(AbstractMod):
                     "submissions",
                     "order_events",
                     "observations",
+                    "corporate_daily_pnl",
                 )
             },
             sort_keys=True,
@@ -487,7 +520,11 @@ class Mod(AbstractMod):
             "historical_pit_verified": False,
             "state_mode": self.data.document.get("state_mode", "synthetic_known"),
             "economic_acceptance": self.data.document.get("economic_acceptance", "synthetic_only"),
-            **({"price_limit_policy": self.data.document["price_limit_policy"]} if self.data.no_price_limits else {}),
+            **(
+                {"price_limit_policy": self.data.document["price_limit_policy"]}
+                if self.data.no_price_limits
+                else {}
+            ),
             "source_refs": self.data.document["source_refs"],
             "assumptions": self.data.document.get("assumptions", []),
             "jq_comparison": "not_collected",
@@ -506,6 +543,29 @@ class Mod(AbstractMod):
             ),
             "action_coverage": self.data.document["action_coverage"],
             "listing_coverage": self.data.document["listing_coverage"],
+            **(
+                {
+                    "initial_position_model": "research_seed_previous_close",
+                    "initial_positions": runtime["manifest"]["execution"]["initial_positions"],
+                }
+                if runtime["manifest"]["execution"].get("initial_positions")
+                else {}
+            ),
+            **(
+                {
+                    "corporate_account_model": self.data.document["corporate_account_model"],
+                    "corporate_daily_pnl": self.corporate_daily_pnl,
+                    "corporate_schedule_sha256": digest(self.data.document["corporate_schedule"]),
+                    "corporate_entitlements": {
+                        sid: self.env.portfolio.get_position(
+                            sid, POSITION_DIRECTION.LONG
+                        ).get_state()["corporate_entitlements_v1"]
+                        for sid in self.data.ids
+                    },
+                }
+                if self.data.corporate_actions is not None
+                else {}
+            ),
         }
         self.env.persist_helper.complete, self.env.persist_helper.receipt = True, self.result
         self.env.persist_helper.persist()

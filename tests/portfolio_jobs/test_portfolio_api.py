@@ -23,6 +23,71 @@ from ashare_quant.portfolio_jobs.contracts import PortfolioSelection
 P = "/api/v1/portfolio"
 
 
+def test_formal_corporate_source_survives_projection_publication_and_resume(tmp_path):
+    source = os.getenv("ASHARE_QUANT_TEST_CORPORATE_INPUT")
+    if not source:
+        pytest.skip("Caller-supplied AD CorporateHistoryView + owner price export required")
+    app = create_app(str(tmp_path / "corporate.sqlite3"))
+    jobs = app.state.portfolio_jobs
+    descriptor = jobs.import_data(Path(source), "corporate-2022")
+    with TestClient(app) as client:
+        selection = dict(
+            dataset_id=descriptor.dataset_id,
+            securities=["000651.XSHE"],
+            start_date="2022-04-06",
+            end_date="2022-04-11",
+            accept_retrospective_state=True,
+        )
+        report = client.post(P + "/preflight", json=selection).json()
+        assert report["ready"], report
+        version = client.post(P + "/strategies", json={"algorithm": "equal-weight"}).json()
+        request = selection | dict(
+            name="Formal dividend test",
+            idempotency_key="corporate",
+            strategy_version_id=version["version_id"],
+            assumption_ack_sha256=report["assumption_ack_sha256"],
+        )
+        job = client.post(P + "/jobs", json=request).json()
+        work_one(app.state.m2_jobs, job["job_id"], _fault="corporate_cash:7")
+        state = client.get(P + "/jobs/" + job["job_id"]).json()
+        assert state["status"] == "failed" and state["can_resume"], state
+        assert (
+            client.post(P + "/jobs/" + job["job_id"] + "/resume", json={}).json()["status"]
+            == "queued"
+        )
+        assert work_one(app.state.m2_jobs, job["job_id"]) == job["job_id"]
+        response = client.get(P + "/jobs/" + job["job_id"] + "/result")
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["audit"]["passed"]
+        receipt = result["receipt"]
+        journal = receipt["corporate_entitlements"]["000651.XSHE"]
+        assert len(journal) == 1
+        entry = next(iter(journal.values()))
+        assert entry["basis"] > 0 and Decimal(entry["cash"]) == entry["basis"]
+        assert len(entry["stages"]) == 3  # record, ex, cash; no zero-valued stock leg.
+        assert all(
+            p["restricted_shares"] == p["pending_shares"] == 0
+            for d in result["days"]
+            for p in d["positions"].values()
+        )
+        frozen = json.loads((jobs.directory(job["job_id"]) / "input.json").read_text())
+        assert (
+            frozen["corporate_schedule"]
+            == json.loads(Path(source).read_text())["corporate_schedule"]
+        )
+        later = client.post(P + "/preflight", json=selection | {"start_date": "2022-04-08"}).json()
+        assert not later["ready"] and any(
+            "RECORD_BASIS_OUTSIDE_RUN" in g.get("detail", "") for g in later["gaps"]
+        )
+        diagnostic = client.post(
+            P + "/preflight", json=selection | {"mode": "price_only_no_limits"}
+        ).json()
+        assert not diagnostic["ready"] and any(
+            g.get("code") == "PORTFOLIO_CORPORATE_PRICE_ONLY_CONFLICT" for g in diagnostic["gaps"]
+        )
+
+
 @pytest.fixture
 def host(tmp_path):
     folder = os.getenv("ASHARE_QUANT_TEST_PORTFOLIO_EXPORTS")
