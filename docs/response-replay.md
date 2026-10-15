@@ -8,6 +8,12 @@
 
 在 A宽工作树运行（使用已配置 native 依赖的 Python，无需安装）：
 
+公共 AD 包不内置发行人原始材料。使用公共版本时，先显式设置
+`ASHARE_PILOT_EVIDENCE=/path/to/separately-held-pilot-evidence`；该目录应包含
+原基线及 `replan-20261014-15` 子目录。AQ 隔离读端只透传这一项证据位置，
+AD 仍按源码内固定摘要核对清单和每份材料。目录缺失或内容被修改时保持拒绝；
+不要把材料复制回 AD 包或 Git 历史。
+
 ```sh
 /Users/yinming/Workspace/ashare-quant/.venv/bin/python -B scripts/replay_sealed_responses.py \
   --evidence-root /Users/yinming/Documents/Codex/2026-10-12/task-2 \
@@ -50,6 +56,11 @@
 ASHARE_RESPONSE_CORPUS=/path/to/corpus ASHARE_CALENDAR_AD_SOURCE=/path/to/ad-replay/src \
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /path/to/native-python -B -m pytest tests/paper/test_response_replay.py -q
 ```
+
+`tests/paper/test_external_owner_evidence.py` 另外验证公共 AD 的计划、阶段和分钟读端，
+以及未设置目录、目录缺失、清单摘要错误的拒绝。设置上述证据目录、
+`ASHARE_CALENDAR_AD_PYTHON`，再显式提供 `ASHARE_EXTERNAL_PHASE_PACKET` 和
+`ASHARE_EXTERNAL_INTRADAY_PACKET` 两个已有 packet JSON 路径即可运行；测试只读原包。
 
 限制：execution-01 在生成 packet 前崩溃，只有逐源原文、请求/收讫和 attempt.finished_at；回放明确使用后者作为结束边界，不能冒称恢复了不存在的 packet.completed_at。封存中没有真实 429/503 或进程崩溃，相关项均为派生故障。重取调度保留原始间隔，只证明 122 对 342 的请求量差，不能据此声称立即实盘重试一定成功或节省相同耗时。持续超前、其他源错误或预算耗尽仍阻断。行情可用性、源时钟原因和下一交易日真实运行仍需各自证据；本结果不是新增真实市场结果，也不改变当前固定包 `cc61cae`。AD/AQ 候选需成对合并，不能单独将 AD v3 投入只认识 v1/v2 的旧 AQ。
 

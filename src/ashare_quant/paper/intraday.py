@@ -1,7 +1,6 @@
 """Owner-only adapter for the independent intraday paper identity."""
 
 import json
-import os
 import subprocess
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -11,7 +10,7 @@ from ashare_quant.daily_portfolio import signals
 from ashare_quant.m2_jobs.files import digest, sha
 
 from .intraday_contracts import IntradayPlan, continuous
-from .online_adapter import OwnerReader, scoped_action_effect
+from .online_adapter import OwnerReader, owner_environment, scoped_action_effect
 from .online_contracts import OnlineDecision, OnlineSession, OpeningInput
 from .risk import profiles, require
 
@@ -38,7 +37,7 @@ class IntradayReader(OwnerReader):
             capture_output=True,
             text=True,
             timeout=30,
-            env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
+            env=owner_environment(),
         )
         require(r.returncode == 0, "PAPER_OWNER_READ_REJECTED", r.stderr[-3000:])
         require(self.pin() == config.admission_reader_sha256, "PAPER_OWNER_READER_CHANGED")
