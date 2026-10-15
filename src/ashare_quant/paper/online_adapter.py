@@ -282,6 +282,8 @@ def execution_from_owner(config, row, reader, phase, capture):
         evidence_kind="live_local_capture",
         clock_basis="wall_clock",
     )
+    if config.response_replay_sha256 is not None:
+        common.update(evidence_kind="sealed_response_replay", clock_basis="controlled_replay")
     if phase == "opening":
         require(
             packet["kind"] == "opening"

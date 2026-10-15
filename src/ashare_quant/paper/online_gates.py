@@ -29,7 +29,11 @@ def opening_gate(config, decision, opening):
         require(proof is not None, "PAPER_OPENING_ADMISSION_REQUIRED")
         require(
             proof.schema_version
-            == ("ad-intraday-observation.v1" if intraday else "ad-calendar-phase-observation.v5"),
+            in (
+                {"ad-intraday-observation.v1", "ad-intraday-observation.v2"}
+                if intraday
+                else {"ad-calendar-phase-observation.v5"}
+            ),
             "PAPER_EXECUTION_PROOF_SCHEMA",
         )
         require(proof.observed_at == opening.received_at, "PAPER_OPENING_ADMISSION_CLOCK")

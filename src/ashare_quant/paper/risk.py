@@ -200,6 +200,8 @@ def evidence_gate(config, value):
         "calendar_observed": ("live_local_capture", "wall_clock"),
         "calendar_fixture": ("calendar_fixture", "fixture_clock"),
     }[config.data_mode]
+    if getattr(config, "response_replay_sha256", None) is not None:
+        evidence, clock = "sealed_response_replay", "controlled_replay"
     require(
         value.evidence_kind == evidence and value.clock_basis == clock,
         "PAPER_EVIDENCE_MODE_MISMATCH",

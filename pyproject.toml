@@ -101,6 +101,7 @@ include = [
   "/docs/tdx-minute-integration.json",
   "/docs/paper-integration.md",
   "/docs/paper-execution.md",
+  "/docs/response-replay.md",
   "/docs/rqalpha/RQAlpha-LICENSE.txt",
 ]
 

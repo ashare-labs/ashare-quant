@@ -29,6 +29,17 @@ class OnlineSession(SessionConfig):
     replay_binding_sha256: None = None
     cash_dividend_policy: Literal["reject"] = "reject"
     admission_reader_sha256: Sha
+    response_replay_sha256: Sha | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @model_validator(mode="after")
+    def replay_identity(self):
+        if self.response_replay_sha256 is not None and (
+            not self.account_id.startswith("replay-only-") or self.data_mode != "calendar_observed"
+        ):
+            raise ValueError(
+                "Sealed response replay requires a separate replay-only observed-path account"
+            )
+        return self
 
 
 class CalendarReplan(Contract):
@@ -56,15 +67,15 @@ class CalendarReplan(Contract):
 
 
 class OnlineDecision(Decision):
-    evidence_kind: Literal["live_local_capture", "calendar_fixture"]
-    clock_basis: Literal["wall_clock", "fixture_clock"]
+    evidence_kind: Literal["live_local_capture", "calendar_fixture", "sealed_response_replay"]
+    clock_basis: Literal["wall_clock", "fixture_clock", "controlled_replay"]
 
 
 class OnlineClose(CloseInput):
     # Preserve legacy sealed packets without imposing their pilot cutoff on settlement.
     deadline: AwareDatetime | None = Field(default=None, exclude_if=lambda v: v is None)
-    evidence_kind: Literal["live_local_capture", "calendar_fixture"]
-    clock_basis: Literal["wall_clock", "fixture_clock"]
+    evidence_kind: Literal["live_local_capture", "calendar_fixture", "sealed_response_replay"]
+    clock_basis: Literal["wall_clock", "fixture_clock", "controlled_replay"]
 
 
 class OpeningRow(Contract):
@@ -90,7 +101,11 @@ class OpeningAdmissionRow(Contract):
 
 
 class OpeningAdmission(Contract):
-    schema_version: Literal["ad-calendar-phase-observation.v5", "ad-intraday-observation.v1"]
+    schema_version: Literal[
+        "ad-calendar-phase-observation.v5",
+        "ad-intraday-observation.v1",
+        "ad-intraday-observation.v2",
+    ]
     capture_id: Sha
     observed_at: AwareDatetime
     rows: tuple[OpeningAdmissionRow, ...] = Field(min_length=1, max_length=3)
@@ -100,8 +115,8 @@ class OpeningInput(Contract):
     trading_date: date
     intent_id: Sha
     received_at: AwareDatetime
-    evidence_kind: Literal["live_local_capture", "calendar_fixture"]
-    clock_basis: Literal["wall_clock", "fixture_clock"]
+    evidence_kind: Literal["live_local_capture", "calendar_fixture", "sealed_response_replay"]
+    clock_basis: Literal["wall_clock", "fixture_clock", "controlled_replay"]
     rows: tuple[OpeningRow, ...] = Field(min_length=1, max_length=3)
     execution_admission: OpeningAdmission | None = Field(
         default=None, exclude_if=lambda v: v is None

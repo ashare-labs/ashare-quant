@@ -98,6 +98,7 @@ def completed_proof(payload, row, parent, base_cursor, *, complete=True):
     if json.loads(row["decision"]).get("evidence_kind") in {
         "live_local_capture",
         "calendar_fixture",
+        "sealed_response_replay",
     }:
         from .online_contracts import OnlineDecision
 

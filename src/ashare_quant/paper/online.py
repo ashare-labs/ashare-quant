@@ -574,7 +574,10 @@ class OnlineService:
                     phase=phase,
                     native=native,
                     checkpoint_sha256=checkpoint_sha,
-                    real_calendar_observation=config.data_mode == "calendar_observed",
+                    real_calendar_observation=(
+                        config.data_mode == "calendar_observed"
+                        and config.response_replay_sha256 is None
+                    ),
                     continuous_paper_accepted=False,
                 )
                 if stage:
@@ -657,7 +660,9 @@ class OnlineService:
         result = dict(
             state,
             continuous_paper_accepted=False,
-            real_calendar_observation=config.data_mode == "calendar_observed",
+            real_calendar_observation=(
+                config.data_mode == "calendar_observed" and config.response_replay_sha256 is None
+            ),
         )
         result["runtime_matches"] = state["engine_pin"] == engine_pin()
         if selected_continuation(state) is not None:

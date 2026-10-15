@@ -45,7 +45,7 @@ class IntradayReader(OwnerReader):
         return json.loads(r.stdout)
 
 
-def config_for(plan, account):
+def config_for(plan, account, *, response_replay_sha256=None):
     plan = IntradayPlan.model_validate(plan)
     return OnlineSession(
         account_id=account,
@@ -57,7 +57,15 @@ def config_for(plan, account):
         scenario_manifest_sha256=digest(plan),
         admission_reader_sha256=plan.admission_reader_sha256,
         risk=profiles()["target_then_native_cash_v1"],
+        response_replay_sha256=response_replay_sha256,
     )
+
+
+def observation_labels(config, packet):
+    replay = config.response_replay_sha256 is not None
+    evidence = "sealed_response_replay" if replay else "live_local_capture"
+    require(packet["evidence_kind"] == evidence, "PAPER_EVIDENCE_MODE_MISMATCH")
+    return dict(evidence_kind=evidence, clock_basis="controlled_replay" if replay else "wall_clock")
 
 
 def prepare(service, reader, plan, admission):
@@ -76,6 +84,7 @@ def prepare(service, reader, plan, admission):
         require(config.scenario_manifest_sha256 == digest(plan), "PAPER_INTRADAY_PLAN_IDENTITY")
     daily = reader.read(config, "daily", plan.daily_capture)
     facts = reader.intraday(config, admission)
+    labels = observation_labels(config, facts)
     old = state["days"].get(str(plan.day))
     if old:
         receipt = old["decision"]["strategy_receipt"]
@@ -98,7 +107,7 @@ def prepare(service, reader, plan, admission):
     require(
         plan.start_at <= logical <= at <= plan.intent_deadline
         and continuous(at)
-        and facts["not_before"] == plan.start_at.isoformat()
+        and datetime.fromisoformat(facts["not_before"]) == plan.start_at
         and facts["kind"] == "admission"
         and facts["day"] == str(plan.day)
         and facts["assessment"]["ready"]
@@ -200,8 +209,7 @@ def prepare(service, reader, plan, admission):
         rows=rows,
         targets=targets,
         reason="Prior close strategy intent, future minute quote required",
-        evidence_kind="live_local_capture",
-        clock_basis="wall_clock",
+        **labels,
     )
     return service._prepare(d)
 
@@ -211,6 +219,7 @@ def deliver(service, reader, plan, capture):
     state, config = service._load()
     row = state["days"][str(plan.day)]
     p = reader.intraday(config, capture)
+    labels = observation_labels(config, p)
     decision = OnlineDecision.model_validate(row["decision"])
     require(
         p["kind"] == "execution"
@@ -261,8 +270,7 @@ def deliver(service, reader, plan, capture):
         trading_date=plan.day,
         intent_id=row["intent_id"],
         received_at=p["completed_at"],
-        evidence_kind="live_local_capture",
-        clock_basis="wall_clock",
+        **labels,
         rows=prices,
         execution_admission=dict(
             schema_version=p["schema"],
