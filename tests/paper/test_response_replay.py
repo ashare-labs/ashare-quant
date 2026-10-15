@@ -60,6 +60,10 @@ def test_real_responses_twice_have_identical_reports_and_keep_market_labels(tmp_
     assert report["clock_refresh"]["native_account_matches_original"] is True
     assert report["clock_refresh"]["tolerated_future_microseconds"] == 0
     cases = {c["name"]: c for c in report["cases"]}
+    compound = cases["zero-volume-and-clock"]
+    assert compound["requests"] == 120 and compound["refresh"]["rounds"] == 0
+    assert "INTRADAY_MINUTE_PRICE_OR_VOLUME:600000" in compound["blockers"]
+    assert compound["ready"] is False
     assert cases["clock-refresh-exhausted"]["ready"] is False
     recovered = cases["clock-refresh-recovered"]
     assert recovered["ready"] is True and recovered["requests"] == 122

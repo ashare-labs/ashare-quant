@@ -32,7 +32,7 @@
 | 重复/进程恢复 | prepare、deliver、advance 重复不改状态和检查点；派生原生进程交易中断后 resume，现金、费用、成交、取消余量与正常路径一致 |
 | 封存完整性 | 改原文或改 envelope 完成时刻均在账户创建之前失败；两次独立运行 report 字节一致 |
 
-9 组原始采集记录、16 组派生故障/单位输入、2 组派生重取调度；另执行原生恢复、重复投递和新分钟冲突。故障按 `source_unavailable`、`source_contract_blocked`、`invalid_receipt_timeline`、`program_error` 分类，原始 TypeError 在 `originals` 中单独保存。
+9 组原始采集记录、17 组派生故障/单位输入、2 组派生重取调度；另执行原生恢复、重复投递和新分钟冲突。故障按 `source_unavailable`、`source_contract_blocked`、`invalid_receipt_timeline`、`program_error` 分类，原始 TypeError 在 `originals` 中单独保存。
 
 本次定向修复：
 
@@ -52,3 +52,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /path/to/native-python -B -m pytest tes
 ```
 
 限制：execution-01 在生成 packet 前崩溃，只有逐源原文、请求/收讫和 attempt.finished_at；回放明确使用后者作为结束边界，不能冒称恢复了不存在的 packet.completed_at。封存中没有真实 429/503 或进程崩溃，相关项均为派生故障。重取调度保留原始间隔，只证明 122 对 342 的请求量差，不能据此声称立即实盘重试一定成功或节省相同耗时。持续超前、其他源错误或预算耗尽仍阻断。行情可用性、源时钟原因和下一交易日真实运行仍需各自证据；本结果不是新增真实市场结果，也不改变当前固定包 `cc61cae`。AD/AQ 候选需成对合并，不能单独将 AD v3 投入只认识 v1/v2 的旧 AQ。
+
+后续零量组合反例使用真实 14 日 execution 的独立派生输入，同时把 600000 两份分钟成交量置零、SSE 标签置为收讫之后的整秒。默认允许两轮重取，仍只处理最初 120 次响应，保留零量和时钟两个原因；实际 AQ deliver 拒绝且账户字节不变。单命令现为 28 个场景。
+
+安装包验证可沿用同一入口并加 `--installed-aq`，此时不会把 checkout 的 `src` 加入路径。先把 AQ wheel 安装到隔离目录并令该目录位于 Python 搜索路径首位，再用 `--ad-source` 指向独立安装的新 AD owner 目录。普通 AQ 依赖的固定 AD 0.8 不替换；盘中 owner 显式按路径及源 SHA 绑定。122 次仍只是离线派生请求调度，不能当作实网恢复率或耗时成绩。

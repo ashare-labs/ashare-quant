@@ -352,10 +352,15 @@ def run(args):
     )
     packets, captures = {}, {}
 
-    def case(name, source_name, mutation=None):
+    def case(name, source_name, mutation=None, *, quote_refresh_rounds=0):
         event = events[source_name]
         attempt, packet = replay(
-            phases, event, corpus / "blobs", mutation=mutation, corpus_sha256=corpus_sha
+            phases,
+            event,
+            corpus / "blobs",
+            mutation=mutation,
+            corpus_sha256=corpus_sha,
+            quote_refresh_rounds=quote_refresh_rounds,
         )
         item = dict(
             name=name,
@@ -370,6 +375,7 @@ def run(args):
             blockers=packet["assessment"]["blockers"] if packet else [],
             source_diagnostics=packet["assessment"].get("source_diagnostics", []) if packet else [],
             refresh=packet.get("refresh") if packet else None,
+            requests=len(attempt["responses"]),
         )
         item["outcome"] = (
             "admitted"
@@ -504,6 +510,21 @@ def run(args):
                 ),
                 "REPLAY_ERROR_FIDELITY",
             )
+    compound = case(
+        "zero-volume-and-clock",
+        "14-execution",
+        dict(source="minute_600000", operation="zero_volume_and_future_quote"),
+        quote_refresh_rounds=2,
+    )
+    require(
+        not compound["ready"]
+        and compound["error"] is None
+        and compound["requests"] == 120
+        and compound["refresh"] == dict(rounds=0, retryable=False, status="blocked_other_evidence")
+        and "INTRADAY_MINUTE_PRICE_OR_VOLUME:600000" in compound["blockers"]
+        and any(b.startswith("CURRENT_LIMITS_UNVERIFIED:") for b in compound["blockers"]),
+        "REPLAY_ZERO_VOLUME_CLOCK_CAUSES",
+    )
     # Recovery is an actual next capture, never an invented live retry.
     require(
         packets["15-admission-04"]["assessment"]["ready"]
@@ -638,7 +659,13 @@ def run(args):
             "REPLAY_DUPLICATE_INTENT",
         )
         clock.set(events["14-execution"]["completed_at"])
-        for name in ("missing-minute", "fractional-shares", "old-minute", "minute-503"):
+        for name in (
+            "missing-minute",
+            "fractional-shares",
+            "old-minute",
+            "minute-503",
+            "zero-volume-and-clock",
+        ):
             before = service.path.read_bytes()
             try:
                 intraday.deliver(service, reader, plans[0], captures[name])

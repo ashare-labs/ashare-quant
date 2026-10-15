@@ -12,6 +12,11 @@ def main():
     source.add_argument("--evidence-root", type=Path)
     source.add_argument("--corpus", type=Path)
     parser.add_argument("--ad-source", type=Path, required=True)
+    parser.add_argument(
+        "--installed-aq",
+        action="store_true",
+        help="Use AQ from the Python environment instead of this checkout's src (wheel validation)",
+    )
     parser.add_argument("--output", type=Path, required=True, help="Must not exist")
     parser.add_argument(
         "--recipe",
@@ -19,7 +24,9 @@ def main():
         default=Path(__file__).resolve().parents[1] / "examples/response-replay-20261014-15.json",
     )
     args = parser.parse_args()
-    sys.path[:0] = [str(Path(__file__).resolve().parents[1] / "src"), str(args.ad_source.resolve())]
+    sys.path[:0] = (
+        [] if args.installed_aq else [str(Path(__file__).resolve().parents[1] / "src")]
+    ) + [str(args.ad_source.resolve())]
     from ashare_quant.paper.response_replay import run
 
     return run(args)
