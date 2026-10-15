@@ -10,7 +10,83 @@ from ashare_quant.daily_portfolio.inputs import InputNumberError, Inputs
 from ashare_quant.daily_portfolio.inputs import digest as history_digest
 from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, require, sha
 
-from .contracts import PortfolioDataset, PortfolioPreflight, PortfolioScope
+from .contracts import PortfolioDataset, PortfolioPreflight, PortfolioScope, PortfolioSelection
+
+
+def check_frozen_data(manifest, raw):
+    """Cross-check existing frozen identities; never reopen the mutable catalogue."""
+    request, report = manifest.request, manifest.preflight
+    selection = PortfolioSelection.model_validate(
+        {name: getattr(request, name) for name in PortfolioSelection.model_fields}
+    )
+    # v1's acknowledgement predates the default historical_pit_verified field.
+    acknowledged = report.model_dump(
+        mode="json", exclude={"assumption_ack_sha256", "historical_pit_verified"}
+    )
+    require(
+        report.ready
+        and not report.gaps
+        and selection == report.selection
+        and request.assumption_ack_sha256 == report.assumption_ack_sha256 == digest(acknowledged),
+        "PORTFOLIO_FROZEN_DATA_CONFLICT",
+        "Frozen request selection or acknowledgement differs from its accepted preflight",
+    )
+    document = json.loads(raw)
+    descriptor, session = manifest.data_identity, manifest.session
+    require(
+        selection.dataset_id == descriptor.dataset_id
+        and descriptor.dataset_id
+        == digest({"name": descriptor.name, "input_sha256": descriptor.input_sha256})
+        and document["source_projection"]
+        == {
+            "dataset_id": descriptor.dataset_id,
+            "original_input_sha256": descriptor.input_sha256,
+        }
+        and sha(raw)
+        == manifest.files["input.json"]
+        == report.input_sha256
+        == session["details"]["input_sha256"]
+        and session["run_id"] == manifest.job_id.removeprefix("m2job-")
+        and session["native_identity"] == history_digest(session["details"]),
+        "PORTFOLIO_FROZEN_DATA_CONFLICT",
+        "Frozen source, projected input or native session identity differs",
+    )
+    start, end = str(selection.start_date), str(selection.end_date)
+    days = [day for day in document["calendar"] if start <= day <= end]
+    diagnostic = selection.mode == "price_only_no_limits"
+    require(
+        report.scope
+        == manifest.execution_scope
+        == PortfolioScope(
+            securities=selection.securities,
+            start_date=start,
+            end_date=end,
+            trading_dates=days,
+        )
+        and document["securities"] == list(selection.securities)
+        and set(selection.securities) <= set(descriptor.securities)
+        and set(days) <= {str(day) for day in descriptor.trading_dates}
+        and report.economic_scope
+        == (
+            "price_only_no_limits_not_total_return"
+            if diagnostic
+            else "source_covered_conditional_research"
+        )
+        and diagnostic
+        == (document.get("price_limit_policy") == "disabled_for_price_only_diagnostic")
+        and diagnostic == (document.get("research_model") == "price_only_no_actions")
+        and document["assumptions"] == list(report.assumptions)
+        and document["limitations"] == list(report.limitations)
+        and document["real_market_data"] is True
+        and report.real_market_data
+        and descriptor.real_market_data
+        and (
+            document.get("state_mode") != "retrospective_model"
+            or selection.accept_retrospective_state
+        ),
+        "PORTFOLIO_FROZEN_DATA_CONFLICT",
+        "Frozen execution scope or research mode differs from its input and preflight",
+    )
 
 
 def validate(document, selection):

@@ -17,7 +17,7 @@ from .contracts import (
     PortfolioManifest,
     PortfolioSelection,
 )
-from .data import Datasets
+from .data import Datasets, check_frozen_data
 from .executor import Executor
 from .registry import ALGORITHMS, FEES, Registry, check_frozen_strategy, strategy_files
 from .repository import Repository
@@ -156,6 +156,7 @@ class PortfolioJobs(Jobs):
                 prepared_proof=proof,
                 files={name: sha(raw) for name, raw in files.items()},
             )
+            check_frozen_data(manifest, files["input.json"])
             atomic(root / "accepted-manifest.json", manifest)
             self.guard()
             return self.view(self.repo.insert(manifest))
@@ -176,17 +177,19 @@ class PortfolioJobs(Jobs):
                 and regular(root / "session.json") == canonical(manifest.session)
                 and digest(manifest.session) == manifest.session_sha256
             )
+            captured = {name: regular(root / name) for name in manifest.files}
             for name, expected in manifest.files.items():
                 require(
-                    sha(regular(root / name)) == expected,
+                    sha(captured[name]) == expected,
                     "PORTFOLIO_INPUT_CHANGED",
                     "An immutable task input changed",
                 )
             require(
-                json.loads(regular(root / "submission.json"))
+                json.loads(captured["submission.json"])
                 == manifest.request.model_dump(mode="json")
             )
-            check_frozen_strategy(manifest, {name: regular(root / name) for name in manifest.files})
+            check_frozen_strategy(manifest, captured)
+            check_frozen_data(manifest, captured["input.json"])
             if execution:
                 runtime_fingerprint(native=True)
                 if row["checkpoint_sha256"] and row["status"] not in {"running", "cancelling"}:

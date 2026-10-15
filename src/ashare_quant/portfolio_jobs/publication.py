@@ -15,7 +15,7 @@ from ashare_quant.m2_jobs.contracts import ResultReference
 from ashare_quant.m2_jobs.files import atomic, canonical, digest, regular, require, sha, sync_dir
 
 from .contracts import PortfolioResult
-from .data import validate
+from .data import check_frozen_data, validate
 from .registry import check_frozen_strategy
 
 
@@ -33,6 +33,7 @@ def names(manifest):
 
 def project(manifest, captured):
     check_frozen_strategy(manifest, captured)
+    check_frozen_data(manifest, captured["input.json"])
     for name, expected in manifest.files.items():
         require(sha(captured[name]) == expected)
     require(

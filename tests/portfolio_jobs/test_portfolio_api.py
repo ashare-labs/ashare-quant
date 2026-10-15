@@ -635,3 +635,176 @@ def test_diagnostic_assumptions_distinguish_source_provenance(host):
         host, create(host, **selection, assumption_ack_sha256=report["assumption_ack_sha256"])
     )
     assert result["assumptions"] == result["receipt"]["assumptions"] == report["assumptions"]
+
+
+def rewrite_frozen_data_identity(host, job, change):
+    """Out-of-band corruption fixture: deliberately rewrite records and their hashes."""
+    jobs = host[1]
+    jid = job["job_id"]
+    root = jobs.directory(jid)
+    manifest = jobs.repo.manifest(jobs.repo.row(jid))
+    data = manifest.model_dump(mode="json")
+    other = jobs.import_data(
+        Path(os.environ["ASHARE_QUANT_TEST_PORTFOLIO_EXPORTS"]) / "w2024-model.json", "other"
+    )
+    if change == "request_dataset":
+        data["request"]["dataset_id"] = other.dataset_id
+    elif change == "request_mode":
+        data["request"]["mode"] = "price_only_no_limits"
+    elif change == "request_ack":
+        data["request"]["assumption_ack_sha256"] = "0" * 64
+    elif change == "data_identity":
+        data["data_identity"] = other.model_dump(mode="json")
+    elif change == "source_projection":
+        document = json.loads((root / "input.json").read_bytes())
+        document["source_projection"] = {
+            "dataset_id": other.dataset_id,
+            "original_input_sha256": other.input_sha256,
+        }
+        raw = canonical(document)
+        (root / "input.json").write_bytes(raw)
+        data["files"]["input.json"] = data["preflight"]["input_sha256"] = sha(raw)
+        data["session"]["details"]["input_sha256"] = sha(raw)
+    elif change == "coherent_mode":
+        data["request"]["mode"] = data["preflight"]["selection"]["mode"] = "price_only_no_limits"
+        data["preflight"]["economic_scope"] = "price_only_no_limits_not_total_return"
+    elif change == "coherent_ack":
+        data["request"]["assumption_ack_sha256"] = "0" * 64
+        data["preflight"]["assumption_ack_sha256"] = "0" * 64
+    elif change == "coherent_scope":
+        data["execution_scope"]["trading_dates"].pop()
+        data["preflight"]["scope"]["trading_dates"].pop()
+    elif change == "native_input":
+        data["session"]["details"]["input_sha256"] = "0" * 64
+    elif change == "account_alias":
+        data["session"]["run_id"] = "a" * 32
+    else:
+        raise AssertionError(change)
+    if change in {"source_projection", "coherent_mode", "coherent_scope"}:
+        ack = digest(
+            {
+                k: v
+                for k, v in data["preflight"].items()
+                if k not in {"assumption_ack_sha256", "historical_pit_verified"}
+            }
+        )
+        data["preflight"]["assumption_ack_sha256"] = ack
+        data["request"]["assumption_ack_sha256"] = ack
+    from ashare_quant.daily_portfolio.inputs import digest as native_digest
+
+    data["session"]["native_identity"] = native_digest(data["session"]["details"])
+    raw = canonical(data["session"])
+    (root / "session.json").write_bytes(raw)
+    data["session_sha256"] = digest(data["session"])
+    data["session_file_sha256"] = sha(raw)
+    for field in ("native_identity", "session_sha256", "session_file_sha256"):
+        data["prepared_proof"][field] = (
+            data["session"][field] if field == "native_identity" else data[field]
+        )
+    raw = canonical(data["request"])
+    (root / "submission.json").write_bytes(raw)
+    data["files"]["submission.json"] = sha(raw)
+    altered = type(manifest).model_validate(data)
+    (root / "accepted-manifest.json").write_bytes(canonical(altered))
+    with jobs.repo.store.connection(transaction=True) as db:
+        db.execute(
+            "UPDATE m2_jobs SET manifest=?,manifest_sha256=?,request=?,request_hash=?,account_id=? WHERE job_id=?",
+            (
+                canonical(altered).decode(),
+                digest(altered),
+                canonical(altered.request).decode(),
+                digest(altered.request),
+                "bt-" + altered.session["run_id"],
+                jid,
+            ),
+        )
+    return altered
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "request_dataset",
+        "request_mode",
+        "request_ack",
+        "data_identity",
+        "source_projection",
+        "coherent_mode",
+        "coherent_ack",
+        "coherent_scope",
+        "native_input",
+        "account_alias",
+    ],
+)
+def test_frozen_data_misbinding_refuses_reads_resume_and_execution(host, change):
+    app, jobs, client, _ = host
+    job = create(host)
+    altered = rewrite_frozen_data_identity(host, job, change)
+    endpoint = P + "/jobs/" + job["job_id"]
+    replies = [client.get(endpoint + suffix) for suffix in ("", "/manifest", "/result")]
+    replies += [client.post(endpoint + suffix, json={}) for suffix in ("/cancel", "/resume")]
+    replies.append(client.post(P + "/jobs", json=altered.request.model_dump(mode="json")))
+    for reply in replies:
+        assert reply.status_code == 409, reply.text
+        assert reply.json()["error"]["code"] == "PORTFOLIO_FROZEN_DATA_CONFLICT", reply.text
+    work_one(app.state.m2_jobs, job["job_id"])
+    row = jobs.repo.row(job["job_id"])
+    assert row["status"] == "failed" and row["result"] is None
+    assert json.loads(row["error"])["code"] == "PORTFOLIO_FROZEN_DATA_CONFLICT"
+    assert not (jobs.directory(job["job_id"]) / "native.chk").exists()
+
+
+@pytest.mark.parametrize(
+    "change", ["request_dataset", "request_mode", "request_ack", "data_identity"]
+)
+def test_completed_receipt_cannot_publish_mismatched_data_identity(host, change):
+    from ashare_quant.portfolio_jobs.publication import names, project
+
+    _, jobs, client, _ = host
+    job = create(host)
+    finish(host, job)
+    root = jobs.directory(job["job_id"])
+    published = root / jobs.get(job["job_id"]).result.publication
+    altered = rewrite_frozen_data_identity(host, job, change)
+    captured = {name: (published / name).read_bytes() for name in names(altered)}
+    captured.update({name: (root / name).read_bytes() for name in altered.files})
+    captured["manifest.json"] = canonical(altered)
+    with pytest.raises(DomainError) as refused:
+        project(altered, captured)
+    assert refused.value.code == "PORTFOLIO_FROZEN_DATA_CONFLICT"
+    assert client.get(P + "/jobs/" + job["job_id"] + "/result").status_code == 409
+
+
+def test_supported_import_resume_and_upgrade_preserve_accepted_data_identity(host, tmp_path):
+    from ashare_quant.database_upgrade import upgrade_copy
+
+    _, jobs, client, request = host
+    job = create(host)
+    manifest_path = jobs.directory(job["job_id"]) / "accepted-manifest.json"
+    frozen = manifest_path.read_bytes()
+    inputs = Path(os.environ["ASHARE_QUANT_TEST_PORTFOLIO_EXPORTS"])
+    assert (
+        jobs.import_data(inputs / "w2020-model.json", "real-2020").dataset_id
+        == request["dataset_id"]
+    )
+    assert (
+        jobs.import_data(inputs / "w2024-model.json", "real-2020").dataset_id
+        != request["dataset_id"]
+    )
+    assert create(host)["job_id"] == job["job_id"]
+    jobs.cancel(job["job_id"])
+    jobs.resume(job["job_id"])
+    result = finish(host, job)
+    assert (
+        result["request"]["dataset_id"]
+        == result["data_identity"]["dataset_id"]
+        == request["dataset_id"]
+    )
+    assert manifest_path.read_bytes() == frozen
+    destination = tmp_path / "upgraded"
+    upgrade = upgrade_copy(jobs.repo.store.path, destination)
+    assert not upgrade["old_tasks_migrated"] and not upgrade["old_task_execution_authorized"]
+    with TestClient(create_app(str(destination / "control.sqlite3"))) as upgraded:
+        assert upgraded.get(P + "/jobs").json() == {"items": []}
+    assert manifest_path.read_bytes() == frozen
+    assert client.get(P + "/jobs/" + job["job_id"] + "/result").json() == result
