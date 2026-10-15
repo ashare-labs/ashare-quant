@@ -105,6 +105,7 @@ class OpeningAdmission(Contract):
         "ad-calendar-phase-observation.v5",
         "ad-intraday-observation.v1",
         "ad-intraday-observation.v2",
+        "ad-intraday-observation.v3",
     ]
     capture_id: Sha
     observed_at: AwareDatetime

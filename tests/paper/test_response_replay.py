@@ -57,6 +57,14 @@ def test_real_responses_twice_have_identical_reports_and_keep_market_labels(tmp_
     assert report["native"]["15-opening"]["trades"] == []
     assert report["native"]["15-opening"]["positions"] == report["native"]["15-opening"]["sellable"]
     assert report["native"]["derived_utc_and_crash_recovery"] == report["native"]["14-opening"]
+    assert report["clock_refresh"]["native_account_matches_original"] is True
+    assert report["clock_refresh"]["tolerated_future_microseconds"] == 0
+    cases = {c["name"]: c for c in report["cases"]}
+    assert cases["clock-refresh-exhausted"]["ready"] is False
+    recovered = cases["clock-refresh-recovered"]
+    assert recovered["ready"] is True and recovered["requests"] == 122
+    assert recovered["classification"] == "derived_response_schedule"
+    assert recovered["actual_one_attempt_observation"] is False
     for name in ("first", "second"):
         account = json.loads((tmp_path / name / "account/state.json").read_bytes())
         assert account["config"]["account_id"].startswith("replay-only-")

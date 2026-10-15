@@ -30,7 +30,11 @@ def opening_gate(config, decision, opening):
         require(
             proof.schema_version
             in (
-                {"ad-intraday-observation.v1", "ad-intraday-observation.v2"}
+                {
+                    "ad-intraday-observation.v1",
+                    "ad-intraday-observation.v2",
+                    "ad-intraday-observation.v3",
+                }
                 if intraday
                 else {"ad-calendar-phase-observation.v5"}
             ),

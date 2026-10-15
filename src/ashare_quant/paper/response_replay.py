@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from ashare_data import daily_observation as daily
 from ashare_data import intraday_observation as owner
+from ashare_data.intraday_refresh import QUOTE_SOURCES
 from ashare_data.model import timestamp
 from ashare_data.response_replay import replay
 
@@ -270,6 +271,47 @@ def baseline(event, corpus):
         return dict(program_error=type(exc).__name__, message=str(exc))
 
 
+def quote_refresh_schedule(events, names):
+    """Explicitly derived scheduling of unchanged, already verified receipts.
+
+    Retain the full first capture and the four quote receipts of later captures,
+    including their original gaps. This does not assert these requests occurred
+    in one actual attempt or that immediate live retries would give these bytes.
+    """
+    first, last = events[names[0]], events[names[-1]]
+    responses, origins = [], []
+    for index, name in enumerate(names):
+        event = events[name]
+        selected = (
+            event["responses"]
+            if index == 0
+            else [r for r in event["responses"] if r["name"] in QUOTE_SOURCES]
+        )
+        for original in selected:
+            responses.append(dict(original, sequence=len(responses)))
+            origins.append(
+                dict(
+                    record_sha256=event["record_sha256"],
+                    source=original["name"],
+                    original_sequence=original["sequence"],
+                )
+            )
+    return dict(
+        first,
+        responses=responses,
+        completed_at=last["completed_at"],
+        completion_basis="last original capture.completed_at; derived request schedule",
+        derived_schedule=dict(
+            classification="derived_response_schedule",
+            market_result=False,
+            original_captures=names,
+            response_origins=origins,
+            receipt_times_and_body_bytes_changed=False,
+            actual_one_attempt_observation=False,
+        ),
+    )
+
+
 def run(args):
     output = args.output.resolve()
     corpus = args.corpus.resolve() if args.corpus else output / "corpus"
@@ -327,6 +369,7 @@ def run(args):
             ready=packet["assessment"]["ready"] if packet else False,
             blockers=packet["assessment"]["blockers"] if packet else [],
             source_diagnostics=packet["assessment"].get("source_diagnostics", []) if packet else [],
+            refresh=packet.get("refresh") if packet else None,
         )
         item["outcome"] = (
             "admitted"
@@ -467,6 +510,85 @@ def run(args):
         and packets["15-execution-02"]["assessment"]["ready"],
         "REPLAY_RECOVERY",
     )
+    # Use production capture's finite refresh policy with retained real receipts.
+    # These are *derived scheduling* cases, distinct from the nine actual attempts.
+    for name, tails, limit, ready in [
+        ("clock-refresh-exhausted", ["15-admission-03"], 1, False),
+        ("clock-refresh-recovered", ["15-admission-03", "15-admission-04"], 2, True),
+    ]:
+        event = quote_refresh_schedule(events, ["15-admission-02", *tails])
+        dump(output / "derived-inputs" / (name + ".json"), event)
+        attempt, packet = replay(
+            phases,
+            event,
+            corpus / "blobs",
+            corpus_sha256=corpus_sha,
+            quote_refresh_rounds=limit,
+        )
+        require(
+            packet is not None
+            and packet["assessment"]["ready"] == ready
+            and len(packet["responses"]) == 114 + 4 * limit
+            and packet["refresh"]["rounds"] == limit,
+            "REPLAY_QUOTE_REFRESH_RESULT",
+            name,
+        )
+        require(
+            packet["refresh"]["status"] == ("ready" if ready else "retry_limit_reached"),
+            "REPLAY_QUOTE_REFRESH_STATUS",
+            name,
+        )
+        require(
+            packet["sources"]
+            == {
+                r["name"]: {k: v for k, v in r.items() if k not in {"name", "sequence"}}
+                for r in event["responses"]
+            },
+            "REPLAY_QUOTE_REFRESH_PROJECTION",
+        )
+        report["cases"].append(
+            dict(
+                name=name,
+                input="15-admission-02",
+                classification="derived_response_schedule",
+                market_result=False,
+                capture_id=attempt["capture_id"],
+                ready=ready,
+                status=attempt["status"],
+                refresh=packet["refresh"],
+                blockers=packet["assessment"]["blockers"],
+                source_diagnostics=packet["assessment"]["source_diagnostics"],
+                requests=len(packet["responses"]),
+                initial_requests=114,
+                repeated_full_capture_requests=114 * (limit + 1),
+                original_captures=event["derived_schedule"]["original_captures"],
+                original_bytes_and_receipts_preserved=True,
+                actual_one_attempt_observation=False,
+            )
+        )
+        packets[name], captures[name] = packet, attempt["capture_id"]
+    # A simultaneous suspension timeout cannot be hidden by a quote refresh.
+    blocked_attempt, blocked_packet = replay(
+        phases,
+        events["15-admission-01"],
+        corpus / "blobs",
+        corpus_sha256=corpus_sha,
+        quote_refresh_rounds=2,
+    )
+    require(
+        blocked_packet["refresh"]["status"] == "blocked_other_evidence"
+        and len(blocked_packet["responses"]) == 114
+        and blocked_attempt["status"] == "blocked",
+        "REPLAY_REFRESH_MUST_NOT_HIDE_TIMEOUT",
+    )
+    report["clock_refresh"] = dict(
+        strict_snapshot_comparison_unchanged=True,
+        tolerated_future_microseconds=0,
+        original_timeout_stays_blocked=blocked_attempt["capture_id"],
+        source_rounding_rule_verified=False,
+        source_host_clock_offset_verified=False,
+        policy="strict-receipt-order-quote-refresh.v1",
+    )
     print("Derived source/clock/order/units cases replayed; running native accounts", flush=True)
 
     def reference(key):
@@ -589,7 +711,10 @@ def run(args):
                 raise AssertionError("15 failed admission was accepted")
             require(service.path.read_bytes() == before, "REPLAY_REJECTED_WRITE")
         clock.set(reference("prepare15")["decision"]["received_at"])
-        intraday.prepare(service, reader, plans[1], captures["15-admission-04"])
+        # The recovered source selection reaches actual admission and native
+        # holding-day execution; its final account must match the original.
+        intraday.prepare(service, reader, plans[1], captures["clock-refresh-recovered"])
+        report["clock_refresh"]["admitted_capture"] = captures["clock-refresh-recovered"]
         clock.set(events["15-execution-01"]["completed_at"])
         before = service.path.read_bytes()
         try:
@@ -609,6 +734,7 @@ def run(args):
             account_summary(second) == account_summary(reference("opening15")), "REPLAY_15_ACCOUNT"
         )
         report["native"]["15-opening"] = account_summary(second)
+        report["clock_refresh"]["native_account_matches_original"] = True
         before = service.path.read_bytes()
         intraday.deliver(service, reader, plans[1], captures["15-execution-02"])
         require(
