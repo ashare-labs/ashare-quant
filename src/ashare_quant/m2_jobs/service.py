@@ -52,6 +52,21 @@ class Jobs:
     def identity(self):
         return JobServiceIdentity(backend_version=__version__, source_sha256=self.source)
 
+    def for_job(self, row):
+        try:
+            portfolio = json.loads(row["manifest"]).get("schema_version") == "portfolio-job-manifest.v1"
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise DomainError("M2_JOB_IDENTITY_CONFLICT", "Stored task identity is malformed", 409) from exc
+        if portfolio:
+            from ashare_quant.portfolio_jobs.service import PortfolioJobs
+
+            return PortfolioJobs(self.repo.store, self.config)
+        return self
+
+    @staticmethod
+    def publish(*args):
+        return publication.publish(*args)
+
     def guard(self):
         require(
             source_sha256() == self.source,
@@ -372,7 +387,8 @@ class Jobs:
         return self.view(self.repo.row(job_id))
 
     def list(self):
-        return JobList(items=tuple(self.view(row) for row in self.repo.rows()))
+        return JobList(items=tuple(self.view(row) for row in self.repo.rows()
+            if json.loads(row["manifest"]).get("schema_version") != "portfolio-job-manifest.v1"))
 
     def logs(self, job_id):
         self.check(self.repo.row(job_id))

@@ -23,6 +23,10 @@ class Inputs:
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
+        self.no_price_limits = doc.get("price_limit_policy") == "disabled_for_price_only_diagnostic"
+        if self.no_price_limits:
+            require(accept_price_only_research and doc.get("research_model") == "price_only_no_actions",
+                    "PRICE_LIMIT_OPT_OUT_REQUIRES_PRICE_ONLY_DIAGNOSTIC")
         require(doc["schema"] == "ad-daily-portfolio.v1", "OWNER_EXPORT_SCHEMA")
         require(
             doc["producer"]["name"] == "ashare-data" or doc["real_market_data"] is False,
@@ -88,7 +92,7 @@ class Inputs:
                             lo <= min(op, cl) <= max(op, cl) <= hi,
                             f"INCONSISTENT_OHLC:{sid}:{day}",
                         )
-                    for field in ("suspended", "upper_limit", "lower_limit"):
+                    for field in (("suspended",) if self.no_price_limits else ("suspended", "upper_limit", "lower_limit")):
                         if row.get(field) is None:
                             self.gaps.append({"security": sid, "date": day, "field": field})
                     if row.get("suspended") is not None:
@@ -195,6 +199,7 @@ class Inputs:
             "state_mode": self.document.get("state_mode", "synthetic_known"),
             "assumptions": self.document.get("assumptions", []),
             "economic_acceptance": self.document.get("economic_acceptance", "synthetic_only"),
+            **({"price_limit_policy": self.document["price_limit_policy"]} if self.no_price_limits else {}),
             "action_coverage": self.document["action_coverage"],
             "research_model": self.document.get("research_model", "corporate_action_accounting"),
         }

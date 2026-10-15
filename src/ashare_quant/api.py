@@ -102,6 +102,8 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     mount_m2_results(app)
     from .m2_jobs.api import mount as mount_m2_jobs
     mount_m2_jobs(app, store, m2_jobs_configuration, jobs=jobs)
+    from .portfolio_jobs.api import mount as mount_portfolio_jobs
+    mount_portfolio_jobs(app, store, m2_jobs_configuration)
     from .diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
     roots = dict(research_stores) if research_stores is not None else json.loads(os.getenv("ASHARE_QUANT_RESEARCH_STORES", "{}"))

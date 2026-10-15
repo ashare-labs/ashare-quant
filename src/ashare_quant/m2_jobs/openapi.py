@@ -1,12 +1,12 @@
 """Feature-scoped OpenAPI so legacy D0/BR1 keep their own stable service contract."""
 
 
-def document(app):
+def document(app, *, prefixes=None, title="A宽 M2 finite research"):
     full = app.openapi()
     paths = {
         name: value
         for name, value in full["paths"].items()
-        if name.startswith(
+        if name.startswith(prefixes or
             ("/api/v1/m2/jobs", "/api/v1/m2/results", "/api/v1/m2/data", "/api/v1/m2/strategies", "/api/v1/m2/python-strategies")
         )
     }
@@ -32,7 +32,7 @@ def document(app):
         collect(schemas[name])
     return {
         "openapi": full["openapi"],
-        "info": {"title": "A宽 M2 finite research", "version": full["info"]["version"]},
+        "info": {"title": title, "version": full["info"]["version"]},
         "paths": paths,
         "components": {"schemas": dict(sorted(schemas.items()))},
     }

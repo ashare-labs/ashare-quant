@@ -9,7 +9,6 @@ from ashare_quant.python_strategies.supervision import BoundedOutput, check_phas
 
 from .files import lock, regular, worker_slot
 from .process import stop
-from .publication import publish
 
 
 def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
@@ -25,7 +24,8 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
                     with lock(jobs.directory(candidate) / "host-writer.lock") as writer:
                         row = jobs.repo.row(candidate)
                         try:
-                            manifest = jobs.check(row, execution=True)
+                            target = jobs.for_job(row)
+                            manifest = target.check(row, execution=True)
                         except DomainError as exc:
                             refused = jobs.repo.claim(candidate)
                             if refused:
@@ -40,7 +40,7 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
                         if claimed is None:
                             continue
                         _work(
-                            jobs,
+                            target,
                             claimed,
                             manifest,
                             (serial.fileno(), writer.fileno()),
@@ -146,7 +146,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                 error_path = root / error_name
                 if error_path.exists():
                     reported = json.loads(regular(error_path))
-                    if str(reported.get("code", "")).startswith("PYTHON_") or reported.get("code") in {
+                    if str(reported.get("code", "")).startswith(("PYTHON_", "PORTFOLIO_")) or reported.get("code") in {
                         "M2_JOB_RESOURCE_LIMIT", "M2_JOB_PARENT_LOST",
                     }:
                         error = {**reported, "returncode": process.returncode}
@@ -166,7 +166,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
         cancelled = jobs.repo.heartbeat(job_id, token)
         if not cancelled and error is None and proof["complete"]:
             notify("before_publish")
-            reference = publish(
+            reference = jobs.publish(
                 root, manifest, invocation, row["attempt_count"], jobs.repo.logs(job_id)
             )
             notify("after_publish")

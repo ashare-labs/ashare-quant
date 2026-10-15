@@ -89,6 +89,10 @@ def run(args):
             "runtime": runtime_fingerprint(native=True),
         }
         identity = digest(identity_details)
+        if getattr(args, "prepare_only", False):
+            return identity_details
+        if getattr(args, "expected_native_identity", None):
+            require(identity == args.expected_native_identity, "FROZEN_NATIVE_IDENTITY_CHANGED")
         checkpoint = AtomicFile(root / "native.chk", identity)
         previous = checkpoint.read()
         if previous and previous["complete"]:
@@ -164,7 +168,7 @@ def run(args):
                 "sys_simulation": {
                     "matching_type": "current_bar",
                     "signal": False,
-                    "price_limit": True,
+                    "price_limit": not data.no_price_limits,
                     "volume_limit": volume_ratio is not None,
                     **({"volume_percent": float(volume_ratio)} if volume_ratio is not None else {}),
                     "inactive_limit": False,
@@ -182,7 +186,7 @@ def run(args):
                     "dividend_tax_rate": 0,
                 },
                 "sys_risk": {
-                    "validate_price": True,
+                    "validate_price": not data.no_price_limits,
                     "validate_is_trading": True,
                     "validate_cash": True,
                 },

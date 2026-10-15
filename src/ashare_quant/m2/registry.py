@@ -70,5 +70,5 @@ class StrategyRegistry:
 
     def list(self):
         with self.store.connection() as db:
-            rows = db.execute("SELECT version_id,body FROM m2_strategies ORDER BY version_id").fetchall()
+            rows = db.execute("SELECT version_id,body FROM m2_strategies WHERE json_extract(body, '$.definition.template') != 'daily_portfolio.v1' ORDER BY version_id").fetchall()
         return tuple(self._decode(row[1], row[0]) for row in rows)

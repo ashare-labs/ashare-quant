@@ -98,8 +98,8 @@ class Source(AbstractDataSource):
         return {
             **{k: float(row[k]) for k in ("open", "high", "low", "close", "volume")},
             "datetime": int(dt.strftime("%Y%m%d") + "000000"),
-            "limit_up": float(row["upper_limit"]),
-            "limit_down": float(row["lower_limit"]),
+            "limit_up": float("nan") if self.host.data.no_price_limits else float(row["upper_limit"]),
+            "limit_down": float("nan") if self.host.data.no_price_limits else float(row["lower_limit"]),
         }
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, **kwargs):
@@ -205,9 +205,13 @@ class Board(AbstractPriceBoard):
         return float(h.data.row(sid, day)["open" if h.phase == "EXECUTE" else "close"])
 
     def get_limit_up(self, sid):
+        if self.host.data.no_price_limits:
+            return float("nan")
         return float(self.host.data.row(sid, self.host.day)["upper_limit"])
 
     def get_limit_down(self, sid):
+        if self.host.data.no_price_limits:
+            return float("nan")
         return float(self.host.data.row(sid, self.host.day)["lower_limit"])
 
 
@@ -483,6 +487,7 @@ class Mod(AbstractMod):
             "historical_pit_verified": False,
             "state_mode": self.data.document.get("state_mode", "synthetic_known"),
             "economic_acceptance": self.data.document.get("economic_acceptance", "synthetic_only"),
+            **({"price_limit_policy": self.data.document["price_limit_policy"]} if self.data.no_price_limits else {}),
             "source_refs": self.data.document["source_refs"],
             "assumptions": self.data.document.get("assumptions", []),
             "jq_comparison": "not_collected",

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ashare-quant"
-version = "0.11.0.dev18"
+version = "0.11.0.dev19"
 description = "A宽 local bounded research backend with portable owner bindings"
 readme = "README.md"
 license-files = ["docs/licensing.md", "docs/rqalpha/RQAlpha-LICENSE.txt"]
@@ -88,6 +88,8 @@ include = [
   "/tools/round_one_reference_mechanisms.py",
   "/docs/compatibility.md", "/docs/research.md", "/docs/strategies.md",
   "/docs/task-service.md",
+  "/docs/portfolio-jobs.md",
+  "/docs/portfolio-openapi-v1.json",
   "/docs/task-service-integration.json",
   "/docs/diagnostics.md", "/docs/development.md", "/docs/licensing.md",
   "/docs/second-batch.md",

@@ -15,6 +15,7 @@ LEASE_SECONDS = 15
 
 
 class Repository:
+    view_type = JobView
     def __init__(self, store, policy=None):
         self.store = store
         with store.initialization() as snapshot:
@@ -100,7 +101,7 @@ class Repository:
         expired = (
             row["status"] in {"running", "cancelling"} and (row["lease_until"] or 0) <= time.time()
         )
-        return JobView(
+        return self.view_type(
             job_id=row["job_id"],
             request=manifest.request,
             status=row["status"],

@@ -1,0 +1,3151 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "A宽 portfolio jobs",
+    "version": "0.11.0.dev19"
+  },
+  "paths": {
+    "/api/v1/portfolio/catalogue": {
+      "get": {
+        "summary": "Catalogue",
+        "operationId": "catalogue_api_v1_portfolio_catalogue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioCatalogue"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Catalogue Api V1 Portfolio Catalogue Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/preflight": {
+      "post": {
+        "summary": "Preflight",
+        "operationId": "preflight_api_v1_portfolio_preflight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioPreflight"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Preflight Api V1 Portfolio Preflight Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/strategies": {
+      "get": {
+        "summary": "Strategies",
+        "operationId": "strategies_api_v1_portfolio_strategies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortfolioStrategyVersion"
+                  },
+                  "type": "array",
+                  "title": "Response Strategies Api V1 Portfolio Strategies Get"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Strategies Api V1 Portfolio Strategies Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register",
+        "operationId": "register_api_v1_portfolio_strategies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioStrategyDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioStrategyVersion"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Register Api V1 Portfolio Strategies Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/strategies/{version_id}": {
+      "get": {
+        "summary": "Strategy",
+        "operationId": "strategy_api_v1_portfolio_strategies__version_id__get",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioStrategyVersion"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Strategy Api V1 Portfolio Strategies  Version Id  Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/service": {
+      "get": {
+        "summary": "Service",
+        "operationId": "service_api_v1_portfolio_service_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioServiceStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Service Api V1 Portfolio Service Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs": {
+      "get": {
+        "summary": "Listing",
+        "operationId": "listing_api_v1_portfolio_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioJobList"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Listing Api V1 Portfolio Jobs Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create",
+        "operationId": "create_api_v1_portfolio_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioJobView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Create Api V1 Portfolio Jobs Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs/{job_id}": {
+      "get": {
+        "summary": "Get",
+        "operationId": "get_api_v1_portfolio_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioJobView"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Get Api V1 Portfolio Jobs  Job Id  Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs/{job_id}/manifest": {
+      "get": {
+        "summary": "Manifest",
+        "operationId": "manifest_api_v1_portfolio_jobs__job_id__manifest_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioManifest"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Manifest Api V1 Portfolio Jobs  Job Id  Manifest Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs/{job_id}/logs": {
+      "get": {
+        "summary": "Logs",
+        "operationId": "logs_api_v1_portfolio_jobs__job_id__logs_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobLogs"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Logs Api V1 Portfolio Jobs  Job Id  Logs Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs/{job_id}/cancel": {
+      "post": {
+        "summary": "Cancel",
+        "operationId": "cancel_api_v1_portfolio_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioJobView"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Cancel Api V1 Portfolio Jobs  Job Id  Cancel Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs/{job_id}/resume": {
+      "post": {
+        "summary": "Resume",
+        "operationId": "resume_api_v1_portfolio_jobs__job_id__resume_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioJobView"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Resume Api V1 Portfolio Jobs  Job Id  Resume Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/jobs/{job_id}/result": {
+      "get": {
+        "summary": "Result",
+        "operationId": "result_api_v1_portfolio_jobs__job_id__result_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Result Api V1 Portfolio Jobs  Job Id  Result Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionRequest": {
+        "properties": {},
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ActionRequest"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "api_version": {
+            "type": "string",
+            "const": "v1",
+            "title": "Api Version",
+            "default": "v1"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse"
+      },
+      "JobLog": {
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "event": {
+            "type": "string",
+            "title": "Event"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sequence",
+          "at",
+          "event",
+          "details"
+        ],
+        "title": "JobLog"
+      },
+      "JobLogs": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobLog"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "items"
+        ],
+        "title": "JobLogs"
+      },
+      "JsonValue": {},
+      "PortfolioAccount": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "cash": {
+            "type": "string",
+            "title": "Cash"
+          },
+          "equity": {
+            "type": "string",
+            "title": "Equity"
+          },
+          "positions": {
+            "patternProperties": {
+              "^[0-9]{6}\\.(XSHG|XSHE)$": {
+                "$ref": "#/components/schemas/PortfolioPosition"
+              }
+            },
+            "type": "object",
+            "title": "Positions"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "cash",
+          "equity",
+          "positions"
+        ],
+        "title": "PortfolioAccount"
+      },
+      "PortfolioCatalogue": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "portfolio-jobs.v1",
+            "title": "Contract Version",
+            "default": "portfolio-jobs.v1"
+          },
+          "service_identity": {
+            "$ref": "#/components/schemas/PortfolioIdentity"
+          },
+          "native_ready": {
+            "type": "boolean",
+            "title": "Native Ready"
+          },
+          "native_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Error"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioDataset"
+            },
+            "type": "array",
+            "title": "Datasets"
+          },
+          "fee_models": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Fee Models"
+          },
+          "strategy_algorithms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strategy Algorithms"
+          },
+          "preflight_required": {
+            "type": "boolean",
+            "const": true,
+            "title": "Preflight Required",
+            "default": true
+          },
+          "dataset_registration": {
+            "type": "string",
+            "const": "local_cli_only",
+            "title": "Dataset Registration",
+            "default": "local_cli_only"
+          },
+          "python_registration": {
+            "type": "string",
+            "const": "not_supported_use_registered_algorithms",
+            "title": "Python Registration",
+            "default": "not_supported_use_registered_algorithms"
+          },
+          "account_policy": {
+            "type": "string",
+            "const": "new_isolated_account_per_job",
+            "title": "Account Policy",
+            "default": "new_isolated_account_per_job"
+          },
+          "instrument_scope": {
+            "type": "string",
+            "const": "main_board_ordinary_a_shares",
+            "title": "Instrument Scope",
+            "default": "main_board_ordinary_a_shares"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "service_identity",
+          "native_ready",
+          "native_error",
+          "datasets",
+          "fee_models",
+          "strategy_algorithms"
+        ],
+        "title": "PortfolioCatalogue"
+      },
+      "PortfolioCreate": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dataset Id"
+          },
+          "securities": {
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Securities"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "accept_retrospective_state": {
+            "type": "boolean",
+            "title": "Accept Retrospective State",
+            "default": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "covered_research",
+              "price_only_no_limits"
+            ],
+            "title": "Mode",
+            "default": "covered_research"
+          },
+          "contract_version": {
+            "type": "string",
+            "const": "portfolio-jobs.v1",
+            "title": "Contract Version",
+            "default": "portfolio-jobs.v1"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^\\S(?:[^\\r\\n]*\\S)?$",
+            "title": "Name"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Idempotency Key"
+          },
+          "strategy_version_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Strategy Version Id"
+          },
+          "initial_cash": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Initial Cash",
+            "default": "1000000.00"
+          },
+          "fee_model": {
+            "type": "string",
+            "const": "fixed-commission-tax.v1",
+            "title": "Fee Model",
+            "default": "fixed-commission-tax.v1"
+          },
+          "volume_ratio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0\\.[0-9]+|1(?:\\.0+)?)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Ratio"
+          },
+          "assumption_ack_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Assumption Ack Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "securities",
+          "start_date",
+          "end_date",
+          "name",
+          "idempotency_key",
+          "strategy_version_id",
+          "assumption_ack_sha256"
+        ],
+        "title": "PortfolioCreate"
+      },
+      "PortfolioDataset": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dataset Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "input_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Input Sha256"
+          },
+          "securities": {
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+            },
+            "type": "array",
+            "title": "Securities"
+          },
+          "trading_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Trading Dates"
+          },
+          "real_market_data": {
+            "type": "boolean",
+            "title": "Real Market Data"
+          },
+          "state_mode": {
+            "type": "string",
+            "title": "State Mode"
+          },
+          "action_coverage": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Action Coverage"
+          },
+          "source_refs": {
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Source Refs"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "name",
+          "input_sha256",
+          "securities",
+          "trading_dates",
+          "real_market_data",
+          "state_mode",
+          "action_coverage",
+          "source_refs",
+          "limitations"
+        ],
+        "title": "PortfolioDataset"
+      },
+      "PortfolioDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "cash": {
+            "type": "string",
+            "title": "Cash"
+          },
+          "equity": {
+            "type": "string",
+            "title": "Equity"
+          },
+          "positions": {
+            "patternProperties": {
+              "^[0-9]{6}\\.(XSHG|XSHE)$": {
+                "$ref": "#/components/schemas/PortfolioPosition"
+              }
+            },
+            "type": "object",
+            "title": "Positions"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "day_fee": {
+            "type": "string",
+            "title": "Day Fee"
+          },
+          "cumulative_fee": {
+            "type": "string",
+            "title": "Cumulative Fee"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "cash",
+          "equity",
+          "positions",
+          "at",
+          "day_fee",
+          "cumulative_fee"
+        ],
+        "title": "PortfolioDay"
+      },
+      "PortfolioDecision": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "cutoff": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Cutoff"
+          },
+          "history_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "History Sha256"
+          },
+          "prior_account_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Prior Account Sha256"
+          },
+          "rebalance": {
+            "type": "boolean",
+            "title": "Rebalance"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "at",
+          "cutoff",
+          "history_sha256",
+          "prior_account_sha256",
+          "rebalance",
+          "signal"
+        ],
+        "title": "PortfolioDecision"
+      },
+      "PortfolioIdentity": {
+        "properties": {
+          "backend_version": {
+            "type": "string",
+            "title": "Backend Version"
+          },
+          "source_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256"
+          },
+          "contract_version": {
+            "type": "string",
+            "const": "portfolio-jobs.v1",
+            "title": "Contract Version",
+            "default": "portfolio-jobs.v1"
+          },
+          "independent_review_status": {
+            "type": "string",
+            "const": "not_reviewed",
+            "title": "Independent Review Status",
+            "default": "not_reviewed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "backend_version",
+          "source_sha256"
+        ],
+        "title": "PortfolioIdentity"
+      },
+      "PortfolioJobList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioJobView"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PortfolioJobList"
+      },
+      "PortfolioJobView": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "portfolio-jobs.v1",
+            "title": "Contract Version",
+            "default": "portfolio-jobs.v1"
+          },
+          "job_id": {
+            "type": "string",
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PortfolioCreate"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "cancelling",
+              "cancelled",
+              "failed",
+              "succeeded"
+            ],
+            "title": "Status"
+          },
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "manifest_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Manifest Sha256"
+          },
+          "session_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session Sha256"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "title": "Attempt Count"
+          },
+          "committed_cursor": {
+            "type": "integer",
+            "title": "Committed Cursor"
+          },
+          "total_cursors": {
+            "type": "integer",
+            "title": "Total Cursors"
+          },
+          "checkpoint_complete": {
+            "type": "boolean",
+            "title": "Checkpoint Complete"
+          },
+          "cancellation_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Requested At"
+          },
+          "recovery_required": {
+            "type": "boolean",
+            "title": "Recovery Required"
+          },
+          "can_resume": {
+            "type": "boolean",
+            "title": "Can Resume"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResultReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "request",
+          "status",
+          "account_id",
+          "manifest_sha256",
+          "session_sha256",
+          "created_at",
+          "updated_at",
+          "attempt_count",
+          "committed_cursor",
+          "total_cursors",
+          "checkpoint_complete",
+          "cancellation_requested_at",
+          "recovery_required",
+          "can_resume",
+          "result",
+          "error"
+        ],
+        "title": "PortfolioJobView"
+      },
+      "PortfolioManifest": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "portfolio-job-manifest.v1",
+            "title": "Schema Version",
+            "default": "portfolio-job-manifest.v1"
+          },
+          "job_id": {
+            "type": "string",
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PortfolioCreate"
+          },
+          "service_identity": {
+            "$ref": "#/components/schemas/PortfolioIdentity"
+          },
+          "execution_scope": {
+            "$ref": "#/components/schemas/PortfolioScope"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/PortfolioStrategyVersion"
+          },
+          "data_identity": {
+            "$ref": "#/components/schemas/PortfolioDataset"
+          },
+          "preflight": {
+            "$ref": "#/components/schemas/PortfolioPreflight"
+          },
+          "session": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Session"
+          },
+          "session_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session Sha256"
+          },
+          "session_file_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session File Sha256"
+          },
+          "prepared_proof": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Prepared Proof"
+          },
+          "files": {
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "type": "object",
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "request",
+          "service_identity",
+          "execution_scope",
+          "strategy",
+          "data_identity",
+          "preflight",
+          "session",
+          "session_sha256",
+          "session_file_sha256",
+          "prepared_proof",
+          "files"
+        ],
+        "title": "PortfolioManifest"
+      },
+      "PortfolioOrder": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "security": {
+            "type": "string",
+            "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+            "title": "Security"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "filled": {
+            "type": "integer",
+            "title": "Filled"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "FILLED",
+              "CANCELLED",
+              "REJECTED"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "security",
+          "date",
+          "at",
+          "side",
+          "quantity",
+          "filled",
+          "status",
+          "message"
+        ],
+        "title": "PortfolioOrder"
+      },
+      "PortfolioPosition": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "sellable": {
+            "type": "integer",
+            "title": "Sellable"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "average_price": {
+            "type": "string",
+            "title": "Average Price"
+          },
+          "dividend_receivable": {
+            "type": "string",
+            "title": "Dividend Receivable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quantity",
+          "sellable",
+          "price",
+          "value",
+          "average_price",
+          "dividend_receivable"
+        ],
+        "title": "PortfolioPosition"
+      },
+      "PortfolioPreflight": {
+        "properties": {
+          "selection": {
+            "$ref": "#/components/schemas/PortfolioSelection"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "gaps": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "assumptions": {
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          },
+          "economic_scope": {
+            "type": "string",
+            "title": "Economic Scope"
+          },
+          "real_market_data": {
+            "type": "boolean",
+            "title": "Real Market Data"
+          },
+          "historical_pit_verified": {
+            "type": "boolean",
+            "const": false,
+            "title": "Historical Pit Verified",
+            "default": false
+          },
+          "input_sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sha256"
+          },
+          "assumption_ack_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Assumption Ack Sha256"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "selection",
+          "ready",
+          "gaps",
+          "assumptions",
+          "limitations",
+          "economic_scope",
+          "real_market_data",
+          "input_sha256",
+          "assumption_ack_sha256",
+          "scope"
+        ],
+        "title": "PortfolioPreflight"
+      },
+      "PortfolioResult": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "portfolio-result.v1",
+            "title": "Contract Version",
+            "default": "portfolio-result.v1"
+          },
+          "job_id": {
+            "type": "string",
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id"
+          },
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PortfolioCreate"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/PortfolioStrategyVersion"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PortfolioScope"
+          },
+          "service_identity": {
+            "$ref": "#/components/schemas/PortfolioIdentity"
+          },
+          "data_identity": {
+            "$ref": "#/components/schemas/PortfolioDataset"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PortfolioSummary"
+          },
+          "account": {
+            "$ref": "#/components/schemas/PortfolioAccount"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioDay"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioTrade"
+            },
+            "type": "array",
+            "title": "Trades"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioOrder"
+            },
+            "type": "array",
+            "title": "Orders"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "receipt": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Receipt"
+          },
+          "audit": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Audit"
+          },
+          "recovery": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Recovery"
+          },
+          "assumptions": {
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          },
+          "economic_scope": {
+            "type": "string",
+            "title": "Economic Scope"
+          },
+          "historical_pit_verified": {
+            "type": "boolean",
+            "const": false,
+            "title": "Historical Pit Verified",
+            "default": false
+          },
+          "result_status": {
+            "type": "string",
+            "const": "completed_not_independently_reviewed",
+            "title": "Result Status",
+            "default": "completed_not_independently_reviewed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "account_id",
+          "request",
+          "strategy",
+          "scope",
+          "service_identity",
+          "data_identity",
+          "summary",
+          "account",
+          "days",
+          "trades",
+          "orders",
+          "decisions",
+          "receipt",
+          "audit",
+          "recovery",
+          "assumptions",
+          "limitations",
+          "economic_scope"
+        ],
+        "title": "PortfolioResult"
+      },
+      "PortfolioScope": {
+        "properties": {
+          "securities": {
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+            },
+            "type": "array",
+            "title": "Securities"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "trading_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Trading Dates"
+          },
+          "warmup_sessions": {
+            "type": "integer",
+            "const": 120,
+            "title": "Warmup Sessions",
+            "default": 120
+          },
+          "frequency": {
+            "type": "string",
+            "const": "1d",
+            "title": "Frequency",
+            "default": "1d"
+          },
+          "timezone": {
+            "type": "string",
+            "const": "Asia/Shanghai",
+            "title": "Timezone",
+            "default": "Asia/Shanghai"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "securities",
+          "start_date",
+          "end_date",
+          "trading_dates"
+        ],
+        "title": "PortfolioScope"
+      },
+      "PortfolioSelection": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dataset Id"
+          },
+          "securities": {
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Securities"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "accept_retrospective_state": {
+            "type": "boolean",
+            "title": "Accept Retrospective State",
+            "default": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "covered_research",
+              "price_only_no_limits"
+            ],
+            "title": "Mode",
+            "default": "covered_research"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "securities",
+          "start_date",
+          "end_date"
+        ],
+        "title": "PortfolioSelection"
+      },
+      "PortfolioServiceStatus": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "m2-job-service.v1",
+            "title": "Contract Version",
+            "default": "m2-job-service.v1"
+          },
+          "job_contract_version": {
+            "type": "string",
+            "const": "portfolio-jobs.v1",
+            "title": "Job Contract Version",
+            "default": "portfolio-jobs.v1"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ServicePolicy"
+          },
+          "policy_sha256": {
+            "type": "string",
+            "title": "Policy Sha256"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "unaccepted_task_directories": {
+            "type": "integer",
+            "title": "Unaccepted Task Directories",
+            "default": 0
+          },
+          "recovery_required": {
+            "type": "integer",
+            "title": "Recovery Required"
+          },
+          "available_pending": {
+            "type": "integer",
+            "title": "Available Pending"
+          },
+          "queue_order": {
+            "type": "string",
+            "const": "created_at_then_rowid",
+            "title": "Queue Order",
+            "default": "created_at_then_rowid"
+          },
+          "resource_scope": {
+            "type": "string",
+            "const": "per_database_local_trusted_processes",
+            "title": "Resource Scope",
+            "default": "per_database_local_trusted_processes"
+          },
+          "counts_scope": {
+            "type": "string",
+            "const": "shared_v6_and_portfolio_queue",
+            "title": "Counts Scope",
+            "default": "shared_v6_and_portfolio_queue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "policy",
+          "policy_sha256",
+          "counts",
+          "recovery_required",
+          "available_pending"
+        ],
+        "title": "PortfolioServiceStatus"
+      },
+      "PortfolioSignal": {
+        "properties": {
+          "selected": {
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+            },
+            "type": "array",
+            "title": "Selected"
+          },
+          "scores": {
+            "patternProperties": {
+              "^[0-9]{6}\\.(XSHG|XSHE)$": {
+                "type": "string"
+              }
+            },
+            "type": "object",
+            "title": "Scores"
+          },
+          "weights": {
+            "patternProperties": {
+              "^[0-9]{6}\\.(XSHG|XSHE)$": {
+                "type": "string"
+              }
+            },
+            "type": "object",
+            "title": "Weights"
+          },
+          "targets": {
+            "patternProperties": {
+              "^[0-9]{6}\\.(XSHG|XSHE)$": {
+                "type": "integer"
+              }
+            },
+            "type": "object",
+            "title": "Targets"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "selected",
+          "scores",
+          "weights",
+          "targets"
+        ],
+        "title": "PortfolioSignal"
+      },
+      "PortfolioStrategyDefinition": {
+        "properties": {
+          "template": {
+            "type": "string",
+            "const": "daily_portfolio.v1",
+            "title": "Template",
+            "default": "daily_portfolio.v1"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "equal-weight",
+              "daily-equal-weight",
+              "momentum",
+              "trend",
+              "weekly-reversal",
+              "low-volatility",
+              "momentum-low-volatility"
+            ],
+            "title": "Algorithm"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "algorithm"
+        ],
+        "title": "PortfolioStrategyDefinition"
+      },
+      "PortfolioStrategyVersion": {
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Version Id"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PortfolioStrategyDefinition"
+          },
+          "source_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256"
+          },
+          "parameter_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Parameter Sha256"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version_id",
+          "definition",
+          "source_sha256",
+          "parameter_sha256",
+          "created_at"
+        ],
+        "title": "PortfolioStrategyVersion"
+      },
+      "PortfolioSummary": {
+        "properties": {
+          "initial_cash": {
+            "type": "string",
+            "title": "Initial Cash"
+          },
+          "final_cash": {
+            "type": "string",
+            "title": "Final Cash"
+          },
+          "final_equity": {
+            "type": "string",
+            "title": "Final Equity"
+          },
+          "net_change": {
+            "type": "string",
+            "title": "Net Change"
+          },
+          "net_return": {
+            "type": "string",
+            "title": "Net Return"
+          },
+          "max_drawdown": {
+            "type": "string",
+            "title": "Max Drawdown"
+          },
+          "commission_total": {
+            "type": "string",
+            "title": "Commission Total"
+          },
+          "tax_total": {
+            "type": "string",
+            "title": "Tax Total"
+          },
+          "fee_total": {
+            "type": "string",
+            "title": "Fee Total"
+          },
+          "trade_count": {
+            "type": "integer",
+            "title": "Trade Count"
+          },
+          "order_count": {
+            "type": "integer",
+            "title": "Order Count"
+          },
+          "benchmark": {
+            "type": "null",
+            "title": "Benchmark"
+          },
+          "annualized_return": {
+            "type": "null",
+            "title": "Annualized Return"
+          },
+          "sharpe": {
+            "type": "null",
+            "title": "Sharpe"
+          },
+          "metric_scope": {
+            "type": "string",
+            "title": "Metric Scope"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "initial_cash",
+          "final_cash",
+          "final_equity",
+          "net_change",
+          "net_return",
+          "max_drawdown",
+          "commission_total",
+          "tax_total",
+          "fee_total",
+          "trade_count",
+          "order_count",
+          "metric_scope"
+        ],
+        "title": "PortfolioSummary"
+      },
+      "PortfolioTrade": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "security": {
+            "type": "string",
+            "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+            "title": "Security"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price"
+          },
+          "commission": {
+            "type": "string",
+            "title": "Commission"
+          },
+          "tax": {
+            "type": "string",
+            "title": "Tax"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "order_id",
+          "date",
+          "at",
+          "security",
+          "side",
+          "quantity",
+          "price",
+          "commission",
+          "tax"
+        ],
+        "title": "PortfolioTrade"
+      },
+      "ResultReference": {
+        "properties": {
+          "result_id": {
+            "type": "string",
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Result Id"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "snapshot_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Snapshot Sha256"
+          },
+          "evidence_manifest_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Evidence Manifest Sha256"
+          },
+          "publication": {
+            "type": "string",
+            "pattern": "^publication-[1-9][0-9]*$",
+            "title": "Publication"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "result_id",
+          "href",
+          "snapshot_sha256",
+          "evidence_manifest_sha256",
+          "publication"
+        ],
+        "title": "ResultReference"
+      },
+      "ServicePolicy": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "m2-job-service-policy.v1",
+            "title": "Schema Version",
+            "default": "m2-job-service-policy.v1"
+          },
+          "max_workers": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Max Workers",
+            "default": 1
+          },
+          "max_pending": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Max Pending",
+            "default": 32
+          },
+          "max_attempts": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Max Attempts",
+            "default": 8
+          },
+          "admission_wait_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Admission Wait Seconds",
+            "default": 2
+          },
+          "execution_seconds": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Execution Seconds",
+            "default": 120
+          },
+          "preparation_seconds": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Preparation Seconds",
+            "default": 60
+          },
+          "module_load_seconds": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Module Load Seconds",
+            "default": 5
+          },
+          "callback_seconds": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Callback Seconds",
+            "default": 5
+          },
+          "output_bytes": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1024.0,
+            "title": "Output Bytes",
+            "default": 1048576
+          },
+          "file_bytes": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1048576.0,
+            "title": "File Bytes",
+            "default": 67108864
+          },
+          "rss_bytes": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 16777216.0,
+            "title": "Rss Bytes",
+            "default": 1073741824
+          },
+          "cpu_seconds": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Cpu Seconds",
+            "default": 120
+          },
+          "open_files": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 64.0,
+            "title": "Open Files",
+            "default": 256
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ServicePolicy"
+      },
+      "ValidationResponse": {
+        "properties": {
+          "detail": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ValidationResponse"
+      }
+    }
+  }
+}
