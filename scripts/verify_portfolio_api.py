@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
@@ -175,9 +175,10 @@ def main():
                     datetime.fromisoformat(t["at"]).tzinfo is not None
                     for t in result["days"] + result["orders"] + result["trades"]
                 )
-                assert sum(Decimal(day["day_fee"]) for day in result["days"]) == Decimal(
-                    result["summary"]["fee_total"]
-                )
+                with localcontext(prec=50):
+                    assert sum(Decimal(day["day_fee"]) for day in result["days"]) == Decimal(
+                        result["summary"]["fee_total"]
+                    )
                 assert result["days"][-1]["cumulative_fee"] == result["summary"]["fee_total"]
                 save(case_root / "result.json", result)
                 save(case_root / "logs.json", http("/jobs/" + job["job_id"] + "/logs"))

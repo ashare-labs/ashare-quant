@@ -8,14 +8,15 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, getcontext, localcontext
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
-from ashare_quant.m2_jobs.files import sha
+from ashare_quant.contracts import DomainError
+from ashare_quant.m2_jobs.files import canonical, digest, sha
 from ashare_quant.m2_jobs.worker import work_one
 from ashare_quant.portfolio_jobs.contracts import PortfolioSelection
 
@@ -78,9 +79,10 @@ def test_http_matches_standalone_and_reopens(host, tmp_path):
         datetime.fromisoformat(t["at"]).utcoffset().total_seconds() == 8 * 3600
         for t in result["trades"] + result["orders"] + result["days"]
     )
-    assert sum(Decimal(day["day_fee"]) for day in result["days"]) == Decimal(
-        result["summary"]["fee_total"]
-    )
+    with localcontext(prec=50):
+        assert sum(Decimal(day["day_fee"]) for day in result["days"]) == Decimal(
+            result["summary"]["fee_total"]
+        )
     assert result["days"][-1]["cumulative_fee"] == result["summary"]["fee_total"]
     assert result["account"]["at"] is None
     assert result["summary"]["benchmark"] is None and result["summary"]["sharpe"] is None
@@ -475,3 +477,161 @@ work_one(app.state.m2_jobs, job_id, _stage=stage)
     assert jobs.get(jid).attempt_count == 2
     assert sha(checkpoint.read_bytes()) == checkpoint_sha
     assert len({t["id"] for t in result["trades"]}) == len(result["trades"])
+
+
+def test_registry_key_body_alias_is_refused_by_every_entrypoint(host):
+    _, jobs, client, request = host
+    first = request["strategy_version_id"]
+    other = client.post(P + "/strategies", json={"algorithm": "trend"}).json()
+    with jobs.repo.store.connection(transaction=True) as db:
+        raw = db.execute(
+            "SELECT body FROM m2_strategies WHERE version_id=?", (other["version_id"],)
+        ).fetchone()[0]
+        db.execute("UPDATE m2_strategies SET body=? WHERE version_id=?", (raw, first))
+    responses = [
+        client.get(P + "/strategies/" + first),
+        client.get(P + "/strategies"),
+        client.post(P + "/strategies", json={"algorithm": "equal-weight"}),
+        client.post(P + "/jobs", json=request),
+    ]
+    assert all(r.status_code == 409 for r in responses), [r.text for r in responses]
+    assert all(r.json()["error"]["code"] == "PORTFOLIO_STRATEGY_CONFLICT" for r in responses)
+    assert client.get(P + "/strategies/" + other["version_id"]).json() == other
+    assert not jobs.repo.rows() and not list(jobs.root.glob("m2job-*"))
+
+
+def test_create_rechecks_requested_id_even_if_registry_returns_another_version(host, monkeypatch):
+    _, jobs, client, request = host
+    other = client.post(P + "/strategies", json={"algorithm": "trend"}).json()
+    version = jobs.strategies.get(other["version_id"])
+    monkeypatch.setattr(jobs.strategies, "get", lambda _: version)
+    response = client.post(P + "/jobs", json=request)
+    assert (
+        response.status_code == 409
+        and response.json()["error"]["code"] == "PORTFOLIO_STRATEGY_CONFLICT"
+    )
+    assert not jobs.repo.rows() and not list(jobs.root.glob("m2job-*"))
+
+
+@pytest.mark.parametrize("change", ["version", "executable", "prepared_session"])
+def test_coherently_rehashed_frozen_strategy_substitution_is_refused(host, change):
+    from ashare_quant.portfolio_jobs.publication import project
+
+    app, jobs, client, _ = host
+    job = create(host)
+    jid, root = job["job_id"], jobs.directory(job["job_id"])
+    manifest = jobs.check(jobs.repo.row(jid))
+    other = client.post(P + "/strategies", json={"algorithm": "trend"}).json()
+    data = manifest.model_dump(mode="json")
+    if change == "version":
+        # Legal B, valid per-file hashes, but the accepted request still asks for A.
+        data["strategy"] = other
+        (root / "strategy.json").write_bytes(canonical(other))
+        data["files"]["strategy.json"] = sha((root / "strategy.json").read_bytes())
+    elif change == "executable":
+        path = root / "equal-weight/strategy.py"
+        path.write_text(path.read_text().replace("'equal-weight'", "'trend'"))
+        data["files"]["equal-weight/strategy.py"] = sha(path.read_bytes())
+    else:
+        data["session"]["details"]["strategy"] = "trend"
+        (root / "session.json").write_bytes(canonical(data["session"]))
+        data["session_sha256"] = digest(data["session"])
+        data["session_file_sha256"] = sha((root / "session.json").read_bytes())
+    altered = type(manifest).model_validate(data)
+    (root / "accepted-manifest.json").write_bytes(canonical(altered))
+    with jobs.repo.store.connection(transaction=True) as db:
+        db.execute(
+            "UPDATE m2_jobs SET manifest=?,manifest_sha256=? WHERE job_id=?",
+            (canonical(altered).decode(), digest(altered), jid),
+        )
+    response = client.get(P + "/jobs/" + jid)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] in {
+        "PORTFOLIO_STRATEGY_CONFLICT",
+        "PORTFOLIO_FROZEN_STRATEGY_CONFLICT",
+    }
+    captured = {name: (root / name).read_bytes() for name in altered.files}
+    with pytest.raises(DomainError) as refused:
+        project(altered, captured)
+    assert refused.value.code in {
+        "PORTFOLIO_STRATEGY_CONFLICT",
+        "PORTFOLIO_FROZEN_STRATEGY_CONFLICT",
+    }
+    work_one(app.state.m2_jobs, jid)
+    assert jobs.repo.row(jid)["status"] == "failed"
+    assert not (root / "native.chk").exists()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("open", "not-a-price"),
+        ("high", "garbage"),
+        ("low", []),
+        ("close", "not-a-price"),
+        ("volume", {}),
+        ("upper_limit", "bad-limit"),
+        ("lower_limit", "bad-limit"),
+        ("open", "NaN"),
+        ("open", "Infinity"),
+        ("open", "x" * 1000),
+    ],
+)
+def test_bad_numeric_observations_give_field_gap_and_never_allocate(host, tmp_path, field, value):
+    _, jobs, client, request = host
+    _, document = jobs.datasets.read(request["dataset_id"])
+    # A damaged copy is only a negative fixture, never positive market evidence.
+    day = "2020-02-04" if field != "close" else request["end_date"]
+    row = next(r for r in document["daily"] if r["security"] == "000001.XSHE" and r["date"] == day)
+    row[field] = value
+    path = tmp_path / "bad-number.json"
+    path.write_text(json.dumps(document))
+    entry = jobs.import_data(path, "numeric-refusal")
+    selection = {k: request[k] for k in PortfolioSelection.model_fields if k in request} | {
+        "dataset_id": entry.dataset_id
+    }
+    response = client.post(P + "/preflight", json=selection)
+    assert response.status_code == 200, response.text
+    report = response.json()
+    assert not report["ready"]
+    gap = next(g for g in report["gaps"] if g.get("field") == field)
+    assert gap["security"] == "000001.XSHE" and gap["date"] == day
+    assert gap["code"] in {"INVALID_DAILY_NUMBER", "INVALID_LIMIT_PRICE"}
+    assert len(gap["value_preview"]) <= 160
+    refused = client.post(P + "/jobs", json=request | selection)
+    assert refused.status_code == 422 and refused.json()["error"]["code"] == "PORTFOLIO_DATA_GAPS"
+    assert refused.json()["error"]["details"]["gaps"] == report["gaps"]
+    assert not jobs.repo.rows() and not list(jobs.root.glob("m2job-*"))
+
+
+def test_native_decimal_context_cannot_round_fee_assertions_or_result_reads(host, tmp_path):
+    with localcontext():
+        # The native import can set prec=10. Keep it local even in isolated runs.
+        import rqalpha.mod.rqalpha_mod_sys_accounts.api.api_stock  # noqa: F401
+
+        getcontext().prec = 10
+        test_http_matches_standalone_and_reopens(host, tmp_path)
+        jobs = host[1]
+        job = jobs.list().items[0]
+        result = jobs.result(job.job_id).model_dump(mode="json")
+        assert result == host[2].get(P + "/jobs/" + job.job_id + "/result").json()
+        assert getcontext().prec == 10
+    # The context manager restores its caller; no global test-suite precision reset.
+
+
+def test_diagnostic_assumptions_distinguish_source_provenance(host):
+    _, jobs, client, request = host
+    selection = {k: request[k] for k in PortfolioSelection.model_fields if k in request} | {
+        "mode": "price_only_no_limits"
+    }
+    report = client.post(P + "/preflight", json=selection).json()
+    assert report["ready"], report
+    provenance, effective = report["assumptions"]
+    assert provenance["scope"] == "source_provenance_only"
+    _, original = jobs.datasets.read(request["dataset_id"])
+    assert provenance["original_assumptions"] == original["assumptions"]
+    assert "excluded" in effective
+    result = finish(
+        host, create(host, **selection, assumption_ack_sha256=report["assumption_ack_sha256"])
+    )
+    assert result["assumptions"] == result["receipt"]["assumptions"] == report["assumptions"]

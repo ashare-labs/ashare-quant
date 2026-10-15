@@ -1,0 +1,13 @@
+{
+  "schema": "paper-observation-universe.v1",
+  "securities": [
+    "000001.XSHE",
+    "600000.XSHG",
+    "600036.XSHG",
+    "000651.XSHE",
+    "600519.XSHG",
+    "000333.XSHE",
+    "000858.XSHE",
+    "601318.XSHG"
+  ]
+}

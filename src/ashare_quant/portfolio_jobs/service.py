@@ -19,7 +19,7 @@ from .contracts import (
 )
 from .data import Datasets
 from .executor import Executor
-from .registry import ALGORITHMS, FEES, Registry, execution_manifest
+from .registry import ALGORITHMS, FEES, Registry, check_frozen_strategy, strategy_files
 from .repository import Repository
 
 
@@ -104,6 +104,7 @@ class PortfolioJobs(Jobs):
             )
             self.executor.package()
             strategy = self.strategies.get(request.strategy_version_id)
+            Registry.decode(canonical(strategy), request.strategy_version_id)
             minimum = (
                 2
                 if strategy.definition.algorithm == "weekly-reversal"
@@ -123,21 +124,12 @@ class PortfolioJobs(Jobs):
             job_id = "m2job-" + uuid.uuid4().hex
             root = self.directory(job_id)
             root.mkdir(mode=0o700)
-            execution = execution_manifest(request, strategy)
-            execution["task_account_id"] = "bt-" + job_id.removeprefix("m2job-")
             algorithm = strategy.definition.algorithm
             (root / algorithm).mkdir()
             files = {
                 "submission.json": canonical(request),
                 "input.json": canonical(document),
-                "execution.json": canonical(execution),
-                "strategy.json": canonical(strategy),
-                algorithm + "/config.json": canonical(execution["strategies"][0]),
-                algorithm + "/strategy.py": (
-                    "from ashare_quant.daily_portfolio.signals import decide\n"
-                    "def on_decision(history, prior_equity):\n"
-                    f"    return decide({algorithm!r}, history, prior_equity)\n"
-                ).encode(),
+                **strategy_files(request, strategy, "bt-" + job_id.removeprefix("m2job-")),
             }
             for name, raw in files.items():
                 atomic(root / name, raw)
@@ -194,7 +186,7 @@ class PortfolioJobs(Jobs):
                 json.loads(regular(root / "submission.json"))
                 == manifest.request.model_dump(mode="json")
             )
-            Registry.decode(canonical(manifest.strategy))
+            check_frozen_strategy(manifest, {name: regular(root / name) for name in manifest.files})
             if execution:
                 runtime_fingerprint(native=True)
                 if row["checkpoint_sha256"] and row["status"] not in {"running", "cancelling"}:

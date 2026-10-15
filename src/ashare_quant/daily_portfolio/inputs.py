@@ -3,7 +3,7 @@
 import hashlib
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 from pathlib import Path
 
 
@@ -18,6 +18,31 @@ def require(ok, message):
         raise ValueError(message)
 
 
+class InputNumberError(ValueError):
+    """A numeric refusal with an exact source location, also usable by HTTP preflight."""
+
+    def __init__(self, code, security, day, field, value):
+        super().__init__(f"{code}:{security}:{day}:{field}")
+        self.gap = {
+            "code": code,
+            "security": security,
+            "date": day,
+            "field": field,
+            "detail": "Expected a finite positive number (volume may be zero)",
+            "value_preview": str(value)[:160],
+        }
+
+
+def source_number(value, security, day, field, code="INVALID_DAILY_NUMBER"):
+    try:
+        number = Decimal(str(value))
+        if number.is_finite() and (number >= 0 if field == "volume" else number > 0):
+            return number
+    except (DecimalException, ValueError, TypeError):
+        pass
+    raise InputNumberError(code, security, day, field, value)
+
+
 class Inputs:
     def __init__(self, path, manifest, window, *, accept_price_only_research=False):
         raw = Path(path).read_bytes()
@@ -25,8 +50,10 @@ class Inputs:
         self.document = doc = json.loads(raw)
         self.no_price_limits = doc.get("price_limit_policy") == "disabled_for_price_only_diagnostic"
         if self.no_price_limits:
-            require(accept_price_only_research and doc.get("research_model") == "price_only_no_actions",
-                    "PRICE_LIMIT_OPT_OUT_REQUIRES_PRICE_ONLY_DIAGNOSTIC")
+            require(
+                accept_price_only_research and doc.get("research_model") == "price_only_no_actions",
+                "PRICE_LIMIT_OPT_OUT_REQUIRES_PRICE_ONLY_DIAGNOSTIC",
+            )
         require(doc["schema"] == "ad-daily-portfolio.v1", "OWNER_EXPORT_SCHEMA")
         require(
             doc["producer"]["name"] == "ashare-data" or doc["real_market_data"] is False,
@@ -77,12 +104,7 @@ class Inputs:
                     if value is None:
                         self.gaps.append({"security": sid, "date": day, "field": field})
                     else:
-                        number = Decimal(str(value))
-                        require(
-                            number.is_finite()
-                            and (number >= 0 if field == "volume" else number > 0),
-                            f"INVALID_DAILY_NUMBER:{sid}:{day}:{field}",
-                        )
+                        source_number(value, sid, day, field)
                 if day >= window["start"]:
                     if all(row.get(f) is not None for f in ("open", "high", "low", "close")):
                         op, hi, lo, cl = (
@@ -92,15 +114,18 @@ class Inputs:
                             lo <= min(op, cl) <= max(op, cl) <= hi,
                             f"INCONSISTENT_OHLC:{sid}:{day}",
                         )
-                    for field in (("suspended",) if self.no_price_limits else ("suspended", "upper_limit", "lower_limit")):
+                    for field in (
+                        ("suspended",)
+                        if self.no_price_limits
+                        else ("suspended", "upper_limit", "lower_limit")
+                    ):
                         if row.get(field) is None:
                             self.gaps.append({"security": sid, "date": day, "field": field})
                     if row.get("suspended") is not None:
                         require(type(row["suspended"]) is bool, "SUSPENSION_MUST_BE_BOOLEAN")
                     for field in ("upper_limit", "lower_limit"):
                         if row.get(field) is not None:
-                            n = Decimal(str(row[field]))
-                            require(n.is_finite() and n > 0, "INVALID_LIMIT_PRICE")
+                            source_number(row[field], sid, day, field, "INVALID_LIMIT_PRICE")
                     if all(row.get(f) is not None for f in ("upper_limit", "lower_limit")):
                         require(
                             Decimal(str(row["lower_limit"])) <= Decimal(str(row["upper_limit"])),
@@ -124,15 +149,25 @@ class Inputs:
                     "NON_ADJACENT_DIVIDEND_RECORD_EX_DATE_UNSUPPORTED",
                 )
                 require(action["pay_date"] >= action["ex_date"], "DIVIDEND_PAY_BEFORE_EX")
-                value = Decimal(str(action["cash_per_share"]))
-                require(value.is_finite() and value > 0, "INVALID_DIVIDEND_VALUE")
+                source_number(
+                    action["cash_per_share"],
+                    action["security"],
+                    action["ex_date"],
+                    "cash_per_share",
+                    "INVALID_DIVIDEND_VALUE",
+                )
             else:
                 require(
                     action["credit_date"] == action["tradable_date"] == action["ex_date"],
                     "SEPARATE_SHARE_CREDIT_TRADABILITY_UNSUPPORTED",
                 )
-                value = Decimal(str(action["ratio"]))
-                require(value.is_finite() and value > 0, "INVALID_SPLIT_RATIO")
+                source_number(
+                    action["ratio"],
+                    action["security"],
+                    action["ex_date"],
+                    "ratio",
+                    "INVALID_SPLIT_RATIO",
+                )
         coverage = doc.get("action_coverage", {})
         self.price_only = doc.get("research_model") == "price_only_no_actions"
         if self.price_only:
@@ -199,7 +234,11 @@ class Inputs:
             "state_mode": self.document.get("state_mode", "synthetic_known"),
             "assumptions": self.document.get("assumptions", []),
             "economic_acceptance": self.document.get("economic_acceptance", "synthetic_only"),
-            **({"price_limit_policy": self.document["price_limit_policy"]} if self.no_price_limits else {}),
+            **(
+                {"price_limit_policy": self.document["price_limit_policy"]}
+                if self.no_price_limits
+                else {}
+            ),
             "action_coverage": self.document["action_coverage"],
             "research_model": self.document.get("research_model", "corporate_action_accounting"),
         }

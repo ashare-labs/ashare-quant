@@ -98,9 +98,8 @@ def freeze(root, packet, capture_id, ad_source_sha256, *, initial_cash="1000000.
     deadline = _timestamp(trading_day + "T09:05:00+08:00")
     require(received <= logical, "PAPER_OBSERVATION_LATE_INPUT")
     universe = tuple(sorted(packet["securities"]))
-    manifest = json.loads(
-        regular(Path(__file__).resolve().parents[3] / "examples/daily_portfolio/manifest.json")
-    )
+    # The frozen candidate scope must also be available from an installed wheel.
+    manifest = json.loads(regular(Path(__file__).with_name("observation-universe.json")))
     require(
         len(universe) == 3 and set(universe) <= set(manifest["securities"]),
         "PAPER_OBSERVATION_UNIVERSE",

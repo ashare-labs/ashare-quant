@@ -38,23 +38,35 @@ class Registry:
         self.store = store
 
     @staticmethod
-    def decode(raw):
-        version = PortfolioStrategyVersion.model_validate_json(raw)
+    def decode(raw, expected_version_id):
+        try:
+            version = PortfolioStrategyVersion.model_validate_json(raw)
+        except (ValueError, TypeError) as exc:
+            raise DomainError(
+                "PORTFOLIO_STRATEGY_CONFLICT", "Stored strategy version is malformed", 409
+            ) from exc
+        require(
+            version.version_id == expected_version_id,
+            "PORTFOLIO_STRATEGY_CONFLICT",
+            "Requested strategy ID differs from its frozen version body",
+        )
         require(
             version.source_sha256 == sha(source()),
             "PORTFOLIO_STRATEGY_CHANGED",
             "Use the strategy version's original installed algorithm",
         )
-        require(version.parameter_sha256 == digest(version.definition))
         require(
-            version.version_id
+            version.parameter_sha256 == digest(version.definition)
+            and version.version_id
             == digest(
                 {
                     "api": "portfolio-strategy.v1",
                     "definition": version.definition.model_dump(mode="json"),
                     "source_sha256": version.source_sha256,
                 }
-            )
+            ),
+            "PORTFOLIO_STRATEGY_CONFLICT",
+            "Strategy definition differs from its immutable identity",
         )
         return version
 
@@ -82,20 +94,69 @@ class Registry:
     def get(self, version_id):
         with self.store.connection() as db:
             row = db.execute(
-                "SELECT body FROM m2_strategies WHERE version_id=?", (version_id,)
+                "SELECT version_id,body FROM m2_strategies WHERE version_id=?", (version_id,)
             ).fetchone()
-        if row is None or json.loads(row[0])["definition"]["template"] != "daily_portfolio.v1":
+        if row is None:
             raise DomainError(
                 "PORTFOLIO_STRATEGY_NOT_FOUND", "Register a portfolio strategy version", 404
             )
-        return self.decode(row[0])
+        return self.decode(row[1], version_id)
 
     def list(self):
         with self.store.connection() as db:
             rows = db.execute(
-                "SELECT body FROM m2_strategies WHERE json_extract(body, '$.definition.template')='daily_portfolio.v1' ORDER BY version_id"
+                "SELECT version_id,body FROM m2_strategies ORDER BY version_id"
             ).fetchall()
-        return tuple(self.decode(row[0]) for row in rows)
+        result = []
+        for key, raw in rows:
+            try:
+                template = json.loads(raw)["definition"]["template"]
+            except (ValueError, KeyError, TypeError) as exc:
+                raise DomainError(
+                    "PORTFOLIO_STRATEGY_CONFLICT", "Stored strategy record is malformed", 409
+                ) from exc
+            if template == "daily_portfolio.v1":
+                result.append(self.decode(raw, key))
+        return tuple(result)
+
+
+def strategy_files(request, strategy, account_id):
+    """Derive the exact executable bytes from the requested immutable version."""
+    Registry.decode(canonical(strategy), request.strategy_version_id)
+    execution = execution_manifest(request, strategy)
+    execution["task_account_id"] = account_id
+    algorithm = strategy.definition.algorithm
+    return {
+        "execution.json": canonical(execution),
+        "strategy.json": canonical(strategy),
+        algorithm + "/config.json": canonical(execution["strategies"][0]),
+        algorithm + "/strategy.py": (
+            "from ashare_quant.daily_portfolio.signals import decide\n"
+            "def on_decision(history, prior_equity):\n"
+            f"    return decide({algorithm!r}, history, prior_equity)\n"
+        ).encode(),
+    }
+
+
+def check_frozen_strategy(manifest, captured):
+    """Bind request, frozen executable, prepared session and published receipt."""
+    files = strategy_files(
+        manifest.request, manifest.strategy, "bt-" + manifest.job_id.removeprefix("m2job-")
+    )
+    require(
+        all(captured.get(name) == raw for name, raw in files.items()),
+        "PORTFOLIO_FROZEN_STRATEGY_CONFLICT",
+        "Frozen strategy or executable bytes differ from the requested version",
+    )
+    algorithm = manifest.strategy.definition.algorithm
+    details = manifest.session["details"]
+    require(
+        details["strategy"] == algorithm
+        and details["manifest"] == json.loads(files["execution.json"])
+        and details["strategy_source_sha256"] == sha(files[algorithm + "/strategy.py"]),
+        "PORTFOLIO_FROZEN_STRATEGY_CONFLICT",
+        "Prepared native session differs from the requested executable",
+    )
 
 
 def execution_manifest(request, strategy):

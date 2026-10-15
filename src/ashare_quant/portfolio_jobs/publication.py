@@ -16,6 +16,7 @@ from ashare_quant.m2_jobs.files import atomic, canonical, digest, regular, requi
 
 from .contracts import PortfolioResult
 from .data import validate
+from .registry import check_frozen_strategy
 
 
 def names(manifest):
@@ -31,6 +32,7 @@ def names(manifest):
 
 
 def project(manifest, captured):
+    check_frozen_strategy(manifest, captured)
     for name, expected in manifest.files.items():
         require(sha(captured[name]) == expected)
     require(
@@ -40,6 +42,11 @@ def project(manifest, captured):
     )
     proof = json.loads(captured["proof.json"])
     receipt = json.loads(captured["receipt.json"])
+    require(
+        receipt["strategy"] == manifest.strategy.definition.algorithm,
+        "PORTFOLIO_FROZEN_STRATEGY_CONFLICT",
+        "Native receipt does not belong to the requested algorithm",
+    )
     details = manifest.session["details"]
     identity = native_digest(details)
     require(

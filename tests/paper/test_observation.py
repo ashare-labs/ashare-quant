@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import signal
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -37,6 +38,22 @@ def packet(monkeypatch):
 
 def freeze(root, packet):
     return observation.freeze(root, packet, digest(packet), "a" * 64)
+
+
+def test_packaged_universe_preserves_frozen_example_scope():
+    bundled = json.loads(Path(observation.__file__).with_name("observation-universe.json").read_text())
+    example = json.loads(
+        (Path(__file__).resolve().parents[2] / "examples/daily_portfolio/manifest.json").read_text()
+    )
+    assert bundled["securities"] == example["securities"]
+
+
+def test_security_outside_packaged_scope_is_refused(packet, tmp_path):
+    packet["securities"]["600999.XSHG"] = packet["securities"].pop("600000.XSHG")
+    with pytest.raises(DomainError) as error:
+        freeze(tmp_path, packet)
+    assert error.value.code == "PAPER_OBSERVATION_UNIVERSE"
+    assert not list(tmp_path.iterdir())
 
 
 def test_next_day_candidate_is_not_an_account_or_order(packet, tmp_path):

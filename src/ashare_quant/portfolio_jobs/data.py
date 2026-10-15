@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.daily_portfolio.inputs import Inputs
+from ashare_quant.daily_portfolio.inputs import InputNumberError, Inputs
 from ashare_quant.daily_portfolio.inputs import digest as history_digest
 from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, require, sha
 
@@ -149,8 +149,15 @@ class Datasets:
         economic = "source_covered_conditional_research"
         if selection.mode == "price_only_no_limits":
             economic = "price_only_no_limits_not_total_return"
-            assumptions += [
-                "Corporate actions and price limits are excluded from this diagnostic book; it is not a complete economic backtest."
+            # Preserve upstream statements as provenance, not as active execution rules.
+            assumptions = [
+                {
+                    "id": "source_export_assumptions",
+                    "scope": "source_provenance_only",
+                    "text": "These describe the original export, not this diagnostic execution; price limits and corporate actions are excluded.",
+                    "original_assumptions": assumptions,
+                },
+                "Corporate actions and price limits are excluded from this diagnostic book; it is not a complete economic backtest.",
             ]
             limitations += [
                 "No price-limit constraint; no corporate-action cash or shares; not total return."
@@ -299,6 +306,8 @@ class Datasets:
             scope = PortfolioScope(
                 securities=selection.securities, start_date=start, end_date=end, trading_dates=days
             )
+        except InputNumberError as exc:
+            gaps.append(exc.gap)
         except (DomainError, ValueError, KeyError, TypeError, IndexError) as exc:
             gaps.append(
                 {
