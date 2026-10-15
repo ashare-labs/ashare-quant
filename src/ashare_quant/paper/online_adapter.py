@@ -17,6 +17,18 @@ from .risk import require
 UNIVERSE = ("600000.XSHG", "600036.XSHG", "601318.XSHG")
 
 
+def owner_environment():
+    """Pass the explicit external corpus location to the isolated owner.
+
+    The public owner validates its fixed manifest and blob hashes. This only
+    selects their location; it does not expose arbitrary caller environment.
+    """
+    env = {"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"}
+    if evidence := os.environ.get("ASHARE_PILOT_EVIDENCE"):
+        env["ASHARE_PILOT_EVIDENCE"] = str(Path(evidence).expanduser().resolve())
+    return env
+
+
 @dataclass(frozen=True)
 class OwnerReader:
     python: str
@@ -59,7 +71,7 @@ class OwnerReader:
             capture_output=True,
             text=True,
             timeout=30,
-            env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
+            env=owner_environment(),
         )
         require(result.returncode == 0, "PAPER_OWNER_READ_REJECTED", result.stderr[-3000:])
         require(self.pin() == config.admission_reader_sha256, "PAPER_OWNER_READER_CHANGED")
@@ -81,7 +93,7 @@ class OwnerReader:
             capture_output=True,
             text=True,
             timeout=30,
-            env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
+            env=owner_environment(),
         )
         require(result.returncode == 0, "PAPER_OWNER_READ_REJECTED", result.stderr[-3000:])
         require(self.pin() == before, "PAPER_OWNER_READER_CHANGED")
