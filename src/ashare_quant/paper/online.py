@@ -335,11 +335,14 @@ class OnlineService:
         return self._deliver(phase, value)
 
     def deliver_observed(self, reader, day, phase, capture):
+        from .calendar_successor import bound_reader_config
         from .online_adapter import execution_from_owner
 
         state, config = self._load()
         require(config.data_mode == "calendar_observed", "PAPER_EVIDENCE_MODE_MISMATCH")
-        value = execution_from_owner(config, state["days"][day], reader, phase, capture)
+        value = execution_from_owner(
+            bound_reader_config(state, config, day), state["days"][day], reader, phase, capture
+        )
         return self._deliver(phase, value)
 
     def _deliver(self, phase, value):

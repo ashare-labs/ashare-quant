@@ -41,6 +41,15 @@ class Authorization(Contract):
 
 
 def selected_continuation(state):
+    if "calendar_successor" in state:
+        require(
+            not any(
+                k in state
+                for k in ("continuation", "archived_continuation", "runtime_authorization")
+            ),
+            "PAPER_RUNTIME_AUTHORIZATION_SHAPE",
+        )
+        return state["calendar_successor"]
     migrated = "runtime_authorization" in state
     require(
         ("archived_continuation" in state) == migrated

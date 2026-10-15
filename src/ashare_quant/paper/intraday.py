@@ -81,8 +81,11 @@ def prepare(service, reader, plan, admission):
         require(plan == extension.plan, "PAPER_CONTINUATION_PLAN_CHANGED")
     else:
         require(config.scenario_manifest_sha256 == digest(plan), "PAPER_INTRADAY_PLAN_IDENTITY")
-    daily = reader.read(config, "daily", plan.daily_capture)
-    facts = reader.intraday(config, admission)
+    from .calendar_successor import bound_reader_config
+
+    owner_config = bound_reader_config(state, config, plan.day)
+    daily = reader.read(owner_config, "daily", plan.daily_capture)
+    facts = reader.intraday(owner_config, admission)
     labels = observation_labels(config, facts)
     old = state["days"].get(str(plan.day))
     if old:
@@ -217,7 +220,9 @@ def deliver(service, reader, plan, capture):
     plan = IntradayPlan.model_validate(plan)
     state, config = service._load()
     row = state["days"][str(plan.day)]
-    p = reader.intraday(config, capture)
+    from .calendar_successor import bound_reader_config
+
+    p = reader.intraday(bound_reader_config(state, config, plan.day), capture)
     labels = observation_labels(config, p)
     decision = OnlineDecision.model_validate(row["decision"])
     require(

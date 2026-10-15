@@ -26,6 +26,10 @@ def owner_environment():
     env = {"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"}
     if evidence := os.environ.get("ASHARE_PILOT_EVIDENCE"):
         env["ASHARE_PILOT_EVIDENCE"] = str(Path(evidence).expanduser().resolve())
+    if extension := os.environ.get("ASHARE_ACTION_EXTENSION"):
+        env["ASHARE_ACTION_EXTENSION"] = str(Path(extension).expanduser().resolve())
+    if selected := os.environ.get("ASHARE_ACTION_EXTENSION_SHA256"):
+        env["ASHARE_ACTION_EXTENSION_SHA256"] = selected
     return env
 
 
@@ -77,15 +81,19 @@ class OwnerReader:
         require(self.pin() == config.admission_reader_sha256, "PAPER_OWNER_READER_CHANGED")
         return json.loads(result.stdout)
 
-    def reviewed_plan(self):
+    def reviewed_plan(self, *, successor=False):
         """Read the pinned owner's finite interval and official calendar proof."""
         before = self.pin()
         boot = (
             "import sys,json;sys.path.insert(0,sys.argv[1]);"
             "from ashare_data.action_scope import load_baseline,REPLAN_SHA256;"
+            "import ashare_data.action_scope as scope;"
             "m,_=load_baseline(replan=True);"
+            "h=scope.baseline_identity(replan=True) if hasattr(scope,'baseline_identity') else REPLAN_SHA256;"
             "print(json.dumps(dict(first_window=[m['from_day'],m['through_day']],"
-            "scope=[c+'.XSHG' for c in m['securities']],action_baseline_sha256=REPLAN_SHA256,"
+            "scope=[c+'.XSHG' for c in m['securities']],action_baseline_sha256=h,"
+            "baseline_lineage=m.get('baseline_lineage',[h]),"
+            "reviewed_at=m['completed_at'],"
             "calendar_source_sha256=m['sources'][m['scope_review']['calendar_source']]['sha256'])))"
         )
         result = subprocess.run(
@@ -97,7 +105,16 @@ class OwnerReader:
         )
         require(result.returncode == 0, "PAPER_OWNER_READ_REJECTED", result.stderr[-3000:])
         require(self.pin() == before, "PAPER_OWNER_READER_CHANGED")
-        return dict(json.loads(result.stdout), admission_reader_sha256=before)
+        owned = json.loads(result.stdout)
+        if not successor:
+            # Existing CalendarReplan consumers expand this exact mapping into
+            # a strict contract. Keep its public shape unchanged.
+            owned.pop("baseline_lineage")
+            owned.pop("reviewed_at")
+        return dict(owned, admission_reader_sha256=before)
+
+    def reviewed_successor(self):
+        return self.reviewed_plan(successor=True)
 
 
 def scoped_action_effect(state, fact, day, *, require_binding=False):
@@ -137,10 +154,18 @@ def scoped_action_effect(state, fact, day, *, require_binding=False):
         # require an explicit reviewed migration, never a hand-edited receipt.
         for prior in state.get("days", {}).values():
             old = prior["decision"]["strategy_receipt"]["action_adjudications"][fact["security"]]
+            allowed = [review["baseline_sha256"]]
+            if "calendar_successor" in state:
+                successor = state["calendar_successor"]
+                require(
+                    successor["plan"]["day"] == day
+                    and successor["plan"]["action_baseline_sha256"] == review["baseline_sha256"],
+                    "PAPER_ACTION_BASELINE_CHANGED",
+                )
+                allowed = successor["action_baseline_lineage"]
             require(
                 old["genesis"] == genesis
-                and old["action_scope"]["price_share_code_review"]["baseline_sha256"]
-                == review["baseline_sha256"],
+                and old["action_scope"]["price_share_code_review"]["baseline_sha256"] in allowed,
                 "PAPER_ACTION_BASELINE_CHANGED",
             )
     inventory = fact.get("cash_inventory", {})
