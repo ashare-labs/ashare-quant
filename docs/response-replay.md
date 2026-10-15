@@ -55,4 +55,4 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /path/to/native-python -B -m pytest tes
 
 后续零量组合反例使用真实 14 日 execution 的独立派生输入，同时把 600000 两份分钟成交量置零、SSE 标签置为收讫之后的整秒。默认允许两轮重取，仍只处理最初 120 次响应，保留零量和时钟两个原因；实际 AQ deliver 拒绝且账户字节不变。单命令现为 28 个场景。
 
-安装包验证可沿用同一入口并加 `--installed-aq`，此时不会把 checkout 的 `src` 加入路径。先把 AQ wheel 安装到隔离目录并令该目录位于 Python 搜索路径首位，再用 `--ad-source` 指向独立安装的新 AD owner 目录。普通 AQ 依赖的固定 AD 0.8 不替换；盘中 owner 显式按路径及源 SHA 绑定。122 次仍只是离线派生请求调度，不能当作实网恢复率或耗时成绩。
+安装包验证可沿用同一入口并加 `--installed-aq`，此时不会把 checkout 的 `src` 加入路径。先把 AQ wheel 安装到隔离目录并令该目录位于 Python 搜索路径首位，再用 `--ad-source` 指向解包后 AD sdist 的 `src`。这是发行包代码，须与独立安装的 AD wheel 逐文件核对。普通 AQ 仍依赖固定 AD 0.8；若在同一进程优先暴露 AD 0.9 的 dist-info，运行依赖检查会按既定规则拒绝，不能放宽或伪造版本来绕过。AD wheel 单独执行采集/读端测试，并通过生产 `IntradayReader` 的隔离子进程验证；回放进程消费等同 wheel 的发行源目录。122 次仍只是离线派生请求调度，不能当作实网恢复率或耗时成绩。
