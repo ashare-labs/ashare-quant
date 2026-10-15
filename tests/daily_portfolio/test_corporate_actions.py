@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import ashare_quant
 from ashare_quant.daily_portfolio.corporate import MODEL, STAGES
 from ashare_quant.daily_portfolio.corporate_export import attach
 from ashare_quant.daily_portfolio.inputs import Inputs
@@ -238,7 +239,11 @@ def native(
         command,
         capture_output=True,
         text=True,
-        env=dict(os.environ, PYTHONPATH=str(REPO / "src"), PYTHONDONTWRITEBYTECODE="1"),
+        env=dict(
+            os.environ,
+            PYTHONPATH=str(Path(ashare_quant.__file__).resolve().parents[1]),
+            PYTHONDONTWRITEBYTECODE="1",
+        ),
     )
     (tmp_path / (invocation + ".log")).write_text(proc.stdout + proc.stderr)
     if expect == "killed":
@@ -393,6 +398,116 @@ def test_native_multiple_entitlements_keep_separate_record_bases_and_payment_dat
     assert result["corporate_entitlements"][SID][second_key]["basis"] == 1400
     assert Decimal(day(result, "2020-02-07")["positions"][SID]["dividend_receivable"]) == 140
     assert Decimal(result["final_account"]["cash"]) == 90395
+
+
+def overlap_fixture(stock="0", first_credit="2020-02-07"):
+    """Two source plans, distinct records; first credit crosses the second ex date."""
+    manifest, doc = fixture()
+    schedule = doc.pop("corporate_schedule")
+    doc.pop("corporate_account_model")
+    doc.pop("corporate_source_replacement")
+    one = schedule["rows"][0]
+    one.update(
+        payment_date="2020-02-10",
+        share_credit_date=first_credit,
+        new_shares_tradable_date="2020-02-10",
+    )
+    two = copy.deepcopy(one)
+    key = SID + ":distribution:synthetic-plan-two"
+    two.update(
+        event_id=key,
+        entitlement_key=key,
+        settlement_keys={s: key + ":" + s for s in STAGES},
+        revision_observation_ids=["synthetic-observation-2"],
+        record_date="2020-02-06",
+        ex_date="2020-02-07",
+        payment_date="2020-02-07",
+        cash_per_share="0.1",
+        capitalization_share_ratio=stock,
+        share_credit_date="2020-02-10" if Decimal(stock) else None,
+        new_shares_tradable_date="2020-02-10" if Decimal(stock) else None,
+    )
+    schedule["rows"].append(two)
+    schedule["coverage"]["rows"][0]["events"] = 2
+    for row in doc["daily"]:
+        price = {"2020-02-06": "9", "2020-02-07": "11", "2020-02-10": "13"}.get(row["date"])
+        if price:
+            row.update(open=price, high=price, low=price, close=price)
+    return manifest, attach(doc, schedule, accept_date_model=True)
+
+
+@pytest.mark.parametrize(
+    "stock,first_credit", [("0", "2020-02-07"), ("0.2", "2020-02-07"), ("0.2", "2020-02-10")]
+)
+def test_overlapping_distributions_preserve_frozen_bases_cost_and_equity(
+    tmp_path, stock, first_credit
+):
+    manifest, doc = overlap_fixture(stock, first_credit)
+    assert load(tmp_path, doc, manifest).preflight()["ready"]
+    credited = 1400 if first_credit == "2020-02-07" else 1000
+    final_quantity = 1400 + int(1000 * Decimal(stock))
+    result = native(
+        tmp_path,
+        doc=doc,
+        targets={"10": 1000, "12": 1000, "8": 1000, "9": credited, "11": final_quantity},
+    )
+    entries = list(result["corporate_entitlements"][SID].values())
+    assert [e["basis"] for e in entries] == [1000, 1000]
+    assert [Decimal(e["cash"]) for e in entries] == [Decimal(260), Decimal(100)]
+    assert len(result["trades"]) == 1  # No artificial trade for either allocation.
+    seventh = day(result, "2020-02-07")
+    position = seventh["positions"][SID]
+    assert position["quantity"] == credited and position["sellable"] == 1000
+    assert position["pending_shares"] == final_quantity - credited
+    assert Decimal(seventh["cash"]) == 90095
+    assert Decimal(seventh["equity"]) == Decimal(90095 + 260 + final_quantity * 11)
+    # Independent gross book-cost invariant: the original 10000 cost less both
+    # cash entitlements, split between credited inventory and pending lots.
+    pending_cost = sum(
+        Decimal(e["pending_cost"])
+        for e in entries
+        if e["event"]["share_credit_date"] and e["event"]["share_credit_date"] > "2020-02-07"
+    )
+    assert abs(Decimal(position["average_price"]) * credited + pending_cost - 9640) < Decimal(
+        "0.00000001"
+    )
+    final = result["final_account"]
+    assert Decimal(final["cash"]) == 90355
+    assert Decimal(final["equity"]) == 90355 + final_quantity * 13
+    assert (
+        final["positions"][SID]["quantity"] == final["positions"][SID]["sellable"] == final_quantity
+    )
+    assert abs(Decimal(final["positions"][SID]["average_price"]) * final_quantity - 9640) < Decimal(
+        "0.00000001"
+    )
+    pnl = {r["date"]: Decimal(r["pnl"]) for r in result["corporate_daily_pnl"]}
+    assert abs(pnl["2020-02-07"] - (final_quantity * 11 - 1400 * 9 + 100)) < Decimal("0.000001")
+    assert "nonintegral share entitlements rejected" in result["corporate_action_policy"]
+    assert result["corporate_action_policy"] != manifest["execution"]["corporate_action_policy"]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["corporate_ex:13", "corporate_cash:13", "corporate_stock_credit:13", "after_replace:13"],
+)
+def test_overlapping_phase_recovery_and_completion_are_exact(tmp_path, fault):
+    _, doc = overlap_fixture("0.2")
+    options = dict(doc=doc, targets={"10": 1000, "12": 1000, "8": 1000, "9": 1400, "11": 1600})
+    baseline = native(tmp_path, root=tmp_path / "baseline", invocation="baseline", **options)
+    crash = tmp_path / "crash"
+    native(tmp_path, root=crash, invocation="kill", fault=fault, expect="killed", **options)
+    assert native(tmp_path, root=crash, invocation="resume", **options) == baseline
+    before = (crash / "native.chk").read_bytes()
+    assert native(tmp_path, root=crash, invocation="repeat", **options) == baseline
+    assert (crash / "native.chk").read_bytes() == before
+
+
+def test_same_record_two_plans_refused_before_native_account(tmp_path):
+    _, doc = overlap_fixture()
+    doc["corporate_schedule"]["rows"][1].update(record_date="2020-02-04", ex_date="2020-02-05")
+    error = native(tmp_path, doc=doc, expect="refused")
+    assert f"CORPORATE_SAME_RECORD_DISTRIBUTIONS_UNSUPPORTED:{SID}:2020-02-04" in error
+    assert not list((tmp_path / "result").iterdir())
 
 
 def test_native_duplicate_sources_do_not_duplicate_credit(tmp_path):

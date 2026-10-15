@@ -19,6 +19,12 @@ MODEL = {
     "corrections": "immutable_run_reject_changed_source",
     "record_basis": "native_quantity_at_record_close",
 }
+
+POLICY = (
+    "Source-scoped distributions with fixed record-close holdings; cash payment, "
+    "share credit and tradability use their separate before-open session dates; "
+    "gross cash without withholding; nonintegral share entitlements rejected."
+)
 STAGES = ("record", "cash", "stock_credit", "stock_tradable")
 
 
@@ -165,7 +171,10 @@ def schedule_rows(doc, ids, window, calendar):
                 "CORPORATE_NONADJACENT_RECORD_EX_UNSUPPORTED",
             )
         marker = (sid, record)
-        require(marker not in dates, "CORPORATE_OVERLAPPING_DISTRIBUTIONS_UNSUPPORTED")
+        require(
+            marker not in dates,
+            f"CORPORATE_SAME_RECORD_DISTRIBUTIONS_UNSUPPORTED:{sid}:{record}",
+        )
         dates.add(marker)
         selected.append(row)
     return sorted(selected, key=lambda r: (r["record_date"], r["security"], r["entitlement_key"]))

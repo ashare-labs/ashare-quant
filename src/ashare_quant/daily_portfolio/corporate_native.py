@@ -133,6 +133,10 @@ def install(host):
                 return delta
             day = str(trading_date)
             with localcontext(prec=50):
+                # Every ex-date basis was fixed at the preceding close. Resolve
+                # those bases before any earlier plan credits shares today.
+                # Pending shares keep their own allocated cost until credit;
+                # they do not become part of a later plan's registered holding.
                 for entry in self.entitlements.values():
                     event = entry["event"]
                     if event["ex_date"] <= day and not self.done(entry, "ex"):
@@ -148,17 +152,22 @@ def install(host):
                         entry["pending_cost"] = str(unit * entry["shares"])
                         self._daily_dividend += float(entry["cash"])
                         self._new_today += entry["shares"]
-                        # At DECIDE the price board exposes the prior raw close.
-                        # Correct native last mark for the ex-date entitlement.
-                        if total:
+                        # All economic shares share the provisional ex mark,
+                        # including earlier entitlements not yet credited. The
+                        # transfer must preserve equity before an observed bar.
+                        economic_quantity = self.quantity + self.pending_stock
+                        economic_total = economic_quantity + entry["shares"]
+                        if economic_total:
                             self._last_price = float(
                                 (
-                                    Decimal(str(self.last_price)) * self.quantity
+                                    Decimal(str(self.last_price)) * economic_quantity
                                     - Decimal(entry["cash"])
                                 )
-                                / total
+                                / economic_total
                             )
                         self.mark(entry, "ex")
+                for entry in self.entitlements.values():
+                    event = entry["event"]
                     if (
                         self.done(entry, "ex")
                         and Decimal(event["cash_per_share"])

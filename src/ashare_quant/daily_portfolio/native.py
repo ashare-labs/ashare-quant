@@ -450,14 +450,10 @@ class Mod(AbstractMod):
                     "value": repr(float(pos.market_value)),
                     "average_price": repr(float(pos.avg_price)),
                     "dividend_receivable": repr(float(pos.dividend_receivable)),
-                    **(
-                        {
-                            "restricted_shares": pos.restricted_stock,
-                            "pending_shares": pos.pending_stock,
-                            "pending_share_value": repr(float(pos.pending_stock * pos.last_price)),
-                        }
-                        if formal
-                        else {}
+                    "restricted_shares": pos.restricted_stock if formal else 0,
+                    "pending_shares": pos.pending_stock if formal else 0,
+                    "pending_share_value": (
+                        repr(float(pos.pending_stock * pos.last_price)) if formal else "0"
                     ),
                 }
         return {
@@ -511,6 +507,8 @@ class Mod(AbstractMod):
             setattr(self, k, v)
 
     def finish(self, event):
+        from .corporate import POLICY
+
         self.result = {
             "schema": "aq-daily-portfolio-result.v1",
             "identity": runtime["identity"],
@@ -538,8 +536,10 @@ class Mod(AbstractMod):
             "observations": self.observations,
             "final_account": self.account(),
             "limitations": self.data.document["limitations"],
-            "corporate_action_policy": runtime["manifest"]["execution"].get(
-                "corporate_action_policy"
+            "corporate_action_policy": (
+                POLICY
+                if self.data.corporate_actions is not None
+                else runtime["manifest"]["execution"].get("corporate_action_policy")
             ),
             "action_coverage": self.data.document["action_coverage"],
             "listing_coverage": self.data.document["listing_coverage"],
