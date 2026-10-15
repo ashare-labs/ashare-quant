@@ -169,6 +169,32 @@ class Inputs:
                     "INVALID_SPLIT_RATIO",
                 )
         coverage = doc.get("action_coverage", {})
+        from .corporate import schedule_rows
+
+        self.corporate_actions = schedule_rows(doc, self.ids, window, self.calendar)
+        initial = manifest.get("execution", {}).get("initial_positions", {})
+        if initial:
+            require(
+                self.corporate_actions is not None
+                and manifest["execution"].get("initial_position_model")
+                == "research_seed_previous_close"
+                and isinstance(initial, dict)
+                and set(initial) <= set(self.ids)
+                and all(type(q) is int and 0 < q <= 2**53 for q in initial.values()),
+                "CORPORATE_INITIAL_HOLDING_MODEL_REQUIRED",
+            )
+            for sid in initial:
+                prior = self.rows.get((sid, self.previous[window["start"]]), {})
+                for field in (
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "upper_limit",
+                    "lower_limit",
+                ):
+                    source_number(prior.get(field), sid, self.previous[window["start"]], field)
         self.price_only = doc.get("research_model") == "price_only_no_actions"
         if self.price_only:
             require(
@@ -234,6 +260,11 @@ class Inputs:
             "state_mode": self.document.get("state_mode", "synthetic_known"),
             "assumptions": self.document.get("assumptions", []),
             "economic_acceptance": self.document.get("economic_acceptance", "synthetic_only"),
+            **(
+                {"corporate_account_model": self.document["corporate_account_model"]}
+                if self.corporate_actions is not None
+                else {}
+            ),
             **(
                 {"price_limit_policy": self.document["price_limit_policy"]}
                 if self.no_price_limits

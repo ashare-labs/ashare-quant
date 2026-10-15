@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "A宽 portfolio jobs",
-    "version": "0.11.0.dev21"
+    "version": "0.11.0.dev23"
   },
   "paths": {
     "/api/v1/portfolio/catalogue": {
@@ -2279,6 +2279,21 @@
           "dividend_receivable": {
             "type": "string",
             "title": "Dividend Receivable"
+          },
+          "restricted_shares": {
+            "type": "integer",
+            "title": "Restricted Shares",
+            "default": 0
+          },
+          "pending_shares": {
+            "type": "integer",
+            "title": "Pending Shares",
+            "default": 0
+          },
+          "pending_share_value": {
+            "type": "string",
+            "title": "Pending Share Value",
+            "default": "0"
           }
         },
         "additionalProperties": false,

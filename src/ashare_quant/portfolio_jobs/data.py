@@ -331,6 +331,11 @@ class Datasets:
                 for d in days
             }
             if selection.mode == "price_only_no_limits":
+                require(
+                    "corporate_schedule" not in doc,
+                    "PORTFOLIO_CORPORATE_PRICE_ONLY_CONFLICT",
+                    "A formal corporate schedule cannot be silently discarded by a price-only selection",
+                )
                 doc.update(
                     actions=[],
                     action_coverage={"status": "unavailable"},

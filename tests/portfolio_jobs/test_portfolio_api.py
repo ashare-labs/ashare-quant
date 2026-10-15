@@ -1,5 +1,6 @@
 """Real exported data only; unavailable external evidence is explicitly skipped."""
 
+import copy
 import json
 import os
 import signal
@@ -21,6 +22,138 @@ from ashare_quant.m2_jobs.worker import work_one
 from ashare_quant.portfolio_jobs.contracts import PortfolioSelection
 
 P = "/api/v1/portfolio"
+
+
+def assert_native_position_projection(result):
+    assert result["account"]["positions"] == result["receipt"]["final_account"]["positions"]
+    assert [
+        {k: v for k, v in day.items() if k not in ("at", "day_fee", "cumulative_fee")}
+        for day in result["days"]
+    ] == result["receipt"]["accounts"]
+    for day in result["receipt"]["accounts"]:
+        for position in day["positions"].values():
+            assert {"restricted_shares", "pending_shares", "pending_share_value"} <= position.keys()
+
+
+def test_formal_corporate_source_survives_projection_publication_and_resume(tmp_path):
+    source = os.getenv("ASHARE_QUANT_TEST_CORPORATE_INPUT")
+    if not source:
+        pytest.skip("Caller-supplied AD CorporateHistoryView + owner price export required")
+    app = create_app(str(tmp_path / "corporate.sqlite3"))
+    jobs = app.state.portfolio_jobs
+    descriptor = jobs.import_data(Path(source), "corporate-2022")
+    with TestClient(app) as client:
+        selection = dict(
+            dataset_id=descriptor.dataset_id,
+            securities=["000651.XSHE"],
+            start_date="2022-04-06",
+            end_date="2022-04-11",
+            accept_retrospective_state=True,
+        )
+        report = client.post(P + "/preflight", json=selection).json()
+        assert report["ready"], report
+        version = client.post(P + "/strategies", json={"algorithm": "equal-weight"}).json()
+        request = selection | dict(
+            name="Formal dividend test",
+            idempotency_key="corporate",
+            strategy_version_id=version["version_id"],
+            assumption_ack_sha256=report["assumption_ack_sha256"],
+        )
+        job = client.post(P + "/jobs", json=request).json()
+        work_one(app.state.m2_jobs, job["job_id"], _fault="corporate_cash:7")
+        state = client.get(P + "/jobs/" + job["job_id"]).json()
+        assert state["status"] == "failed" and state["can_resume"], state
+        assert (
+            client.post(P + "/jobs/" + job["job_id"] + "/resume", json={}).json()["status"]
+            == "queued"
+        )
+        assert work_one(app.state.m2_jobs, job["job_id"]) == job["job_id"]
+        response = client.get(P + "/jobs/" + job["job_id"] + "/result")
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["audit"]["passed"]
+        assert_native_position_projection(result)
+        receipt = result["receipt"]
+        journal = receipt["corporate_entitlements"]["000651.XSHE"]
+        assert len(journal) == 1
+        entry = next(iter(journal.values()))
+        assert entry["basis"] > 0 and Decimal(entry["cash"]) == entry["basis"]
+        assert len(entry["stages"]) == 3  # record, ex, cash; no zero-valued stock leg.
+        assert all(
+            p["restricted_shares"] == p["pending_shares"] == 0
+            for d in result["days"]
+            for p in d["positions"].values()
+        )
+        frozen = json.loads((jobs.directory(job["job_id"]) / "input.json").read_text())
+        assert (
+            frozen["corporate_schedule"]
+            == json.loads(Path(source).read_text())["corporate_schedule"]
+        )
+        later = client.post(P + "/preflight", json=selection | {"start_date": "2022-04-08"}).json()
+        assert not later["ready"] and any(
+            "RECORD_BASIS_OUTSIDE_RUN" in g.get("detail", "") for g in later["gaps"]
+        )
+        diagnostic = client.post(
+            P + "/preflight", json=selection | {"mode": "price_only_no_limits"}
+        ).json()
+        assert not diagnostic["ready"] and any(
+            g.get("code") == "PORTFOLIO_CORPORATE_PRICE_ONLY_CONFLICT" for g in diagnostic["gaps"]
+        )
+
+
+def test_same_record_distribution_gap_creates_no_account(tmp_path):
+    source = os.getenv("ASHARE_QUANT_TEST_CORPORATE_INPUT")
+    if not source:
+        pytest.skip("Caller-supplied formal export required for invalid-schedule admission test")
+    # An intentionally invalid copy for refusal only, never market evidence.
+    document = json.loads(Path(source).read_text())
+    schedule = document["corporate_schedule"]
+    original = next(e for e in schedule["rows"] if e["security"] == "000651.XSHE")
+    duplicate = copy.deepcopy(original)
+    key = original["entitlement_key"] + ":synthetic-second-plan"
+    duplicate.update(
+        event_id=key,
+        entitlement_key=key,
+        settlement_keys={stage: key + ":" + stage for stage in original["settlement_keys"]},
+    )
+    schedule["rows"].append(duplicate)
+    next(c for c in schedule["coverage"]["rows"] if c["security"] == "000651.XSHE")["events"] += 1
+    invalid = tmp_path / "invalid-same-record.json"
+    invalid.write_text(json.dumps(document))
+    app = create_app(str(tmp_path / "refusal.sqlite3"))
+    jobs = app.state.portfolio_jobs
+    descriptor = jobs.import_data(invalid, "invalid-same-record-refusal-only")
+    with TestClient(app) as client:
+        selection = dict(
+            dataset_id=descriptor.dataset_id,
+            securities=["000651.XSHE"],
+            start_date="2022-04-06",
+            end_date="2022-04-11",
+            accept_retrospective_state=True,
+        )
+        report = client.post(P + "/preflight", json=selection).json()
+        assert not report["ready"] and any(
+            "CORPORATE_SAME_RECORD_DISTRIBUTIONS_UNSUPPORTED:000651.XSHE:2022-04-07"
+            in gap.get("detail", "")
+            for gap in report["gaps"]
+        ), report
+        version = client.post(P + "/strategies", json={"algorithm": "equal-weight"}).json()
+        response = client.post(
+            P + "/jobs",
+            json=selection
+            | dict(
+                name="Refused ambiguous record",
+                idempotency_key="invalid",
+                strategy_version_id=version["version_id"],
+                assumption_ack_sha256="0" * 64,
+            ),
+        )
+        assert (
+            response.status_code == 422
+            and response.json()["error"]["code"] == "PORTFOLIO_DATA_GAPS"
+        )
+    assert not jobs.repo.rows() and not list(jobs.root.glob("m2job-*"))
+    assert not list(tmp_path.rglob("native.chk"))
 
 
 @pytest.fixture
@@ -73,6 +206,12 @@ def test_http_matches_standalone_and_reopens(host, tmp_path):
     job = create(host)
     result = finish(host, job)
     assert len(result["days"]) == 5 and result["audit"]["passed"]
+    assert_native_position_projection(result)
+    assert all(
+        p["restricted_shares"] == p["pending_shares"] == 0 and p["pending_share_value"] == "0"
+        for d in result["days"]
+        for p in d["positions"].values()
+    )
     assert {t["security"] for t in result["trades"]} == set(request["securities"])
     assert result["scope"]["timezone"] == "Asia/Shanghai"
     assert all(

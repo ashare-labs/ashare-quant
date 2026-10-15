@@ -60,7 +60,7 @@ def run(args):
     require(
         args.fault == "none"
         or re.fullmatch(
-            r"(before_replace|after_replace|decision_candidate|native_submit|after_event):[1-9][0-9]*",
+            r"(before_replace|after_replace|decision_candidate|native_submit|after_event|corporate_record|corporate_ex|corporate_cash|corporate_stock_credit|corporate_stock_tradable):[1-9][0-9]*",
             args.fault,
         ),
         "INVALID_FAULT",
@@ -152,6 +152,10 @@ def run(args):
                 "end_date": window["end"],
                 "frequency": "1d",
                 "accounts": {"stock": float(execution["initial_cash"])},
+                "init_positions": ",".join(
+                    f"{sid}:{q}"
+                    for sid, q in sorted(execution.get("initial_positions", {}).items())
+                ),
                 "run_type": "b",
                 "rqdatac_uri": "disabled",
                 "auto_update_bundle": False,
