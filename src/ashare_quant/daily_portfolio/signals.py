@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import ROUND_FLOOR, Decimal, localcontext
+from fractions import Fraction
 
 
 def scheduled(strategy, day, previous, first):
@@ -59,14 +60,17 @@ def _decide(strategy, history, equity):
             raise ValueError("RANK_PORTFOLIO_REQUIRES_THREE_SECURITIES")
         variances = {}
         for sid in ids:
-            tail = prices[sid][-21:]
+            # Decimal construction preserves the input, but Decimal division and
+            # accumulation round. Exact factor keys keep equal return multisets
+            # tied regardless of their order, without merging nearby values.
+            tail = [Fraction(p) for p in prices[sid][-21:]]
             returns = [b / a - 1 for a, b in zip(tail[:-1], tail[1:], strict=True)]
             mean = sum(returns) / 20
             variances[sid] = sum((r - mean) ** 2 for r in returns) / 20
         if strategy == "low-volatility":
             scores = variances
         else:
-            momentum = {s: prices[s][-1] / prices[s][-61] - 1 for s in ids}
+            momentum = {s: Fraction(prices[s][-1]) / Fraction(prices[s][-61]) - 1 for s in ids}
             # Equal values receive the same competition rank. Security IDs only
             # break the final portfolio tie, not the numeric factor ranks.
             scores = {
@@ -77,6 +81,9 @@ def _decide(strategy, history, equity):
                 for s in ids
             }
         chosen, denominator = sorted(ids, key=lambda s: (scores[s], s))[:3], 3
+        if strategy == "low-volatility":
+            # Preserve the decimal-string output contract only after selection.
+            scores = {s: Decimal(v.numerator) / Decimal(v.denominator) for s, v in scores.items()}
     else:
         raise ValueError("UNKNOWN_STRATEGY")
     weights = {s: Decimal("0.98") / denominator if s in chosen else Decimal(0) for s in ids}
