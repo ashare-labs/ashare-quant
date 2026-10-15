@@ -37,7 +37,12 @@ def run(args):
     )
     window = next(w for w in manifest["windows"] if w["id"] == args.window)
     source = (question_dir / "strategy.py").read_text()
-    data = Inputs(args.input, manifest, window)
+    data = Inputs(
+        args.input,
+        manifest,
+        window,
+        accept_price_only_research=args.accept_price_only_research,
+    )
     preflight = data.preflight()
     if preflight["state_mode"] == "retrospective_model" and not args.accept_owner_state_model:
         preflight["ready"] = False
@@ -262,13 +267,26 @@ def main():
     p.add_argument(
         "--strategy",
         required=True,
-        choices=["equal-weight", "momentum", "trend", "weekly-reversal", "daily-equal-weight"],
+        choices=[
+            "equal-weight",
+            "momentum",
+            "trend",
+            "weekly-reversal",
+            "daily-equal-weight",
+            "low-volatility",
+            "momentum-low-volatility",
+        ],
     )
     p.add_argument("--window", required=True)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--invocation", default="first")
     p.add_argument("--fault", default="none")
     p.add_argument("--preflight", action="store_true")
+    p.add_argument(
+        "--accept-price-only-research",
+        action="store_true",
+        help="Run an explicitly labeled price-only model without corporate actions; not economic acceptance",
+    )
     p.add_argument("--accept-owner-state-model", action="store_true")
     args = p.parse_args()
     if not re.fullmatch("[A-Za-z0-9_-]+", args.invocation):

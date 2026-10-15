@@ -8,9 +8,9 @@ def scheduled(strategy, day, previous, first):
     if first or strategy in {"trend", "daily-equal-weight"}:
         return True
     today, prior = date.fromisoformat(day), date.fromisoformat(previous)
-    if strategy == "equal-weight":
+    if strategy in {"equal-weight", "low-volatility"}:
         return (today.year, today.month) != (prior.year, prior.month)
-    if strategy in {"momentum", "weekly-reversal"}:
+    if strategy in {"momentum", "weekly-reversal", "momentum-low-volatility"}:
         return today.isocalendar()[:2] != prior.isocalendar()[:2]
     raise ValueError("UNKNOWN_STRATEGY")
 
@@ -54,6 +54,29 @@ def _decide(strategy, history, equity):
         scores = {s: sum(prices[s]) / 120 for s in ids}
         chosen = [s for s in ids if prices[s][-1] > scores[s]]
         denominator = len(ids)
+    elif strategy in {"low-volatility", "momentum-low-volatility"}:
+        if len(ids) < 3:
+            raise ValueError("RANK_PORTFOLIO_REQUIRES_THREE_SECURITIES")
+        variances = {}
+        for sid in ids:
+            tail = prices[sid][-21:]
+            returns = [b / a - 1 for a, b in zip(tail[:-1], tail[1:], strict=True)]
+            mean = sum(returns) / 20
+            variances[sid] = sum((r - mean) ** 2 for r in returns) / 20
+        if strategy == "low-volatility":
+            scores = variances
+        else:
+            momentum = {s: prices[s][-1] / prices[s][-61] - 1 for s in ids}
+            # Equal values receive the same competition rank. Security IDs only
+            # break the final portfolio tie, not the numeric factor ranks.
+            scores = {
+                s: Decimal(
+                    sum(v > momentum[s] for v in momentum.values())
+                    + sum(v < variances[s] for v in variances.values())
+                )
+                for s in ids
+            }
+        chosen, denominator = sorted(ids, key=lambda s: (scores[s], s))[:3], 3
     else:
         raise ValueError("UNKNOWN_STRATEGY")
     weights = {s: Decimal("0.98") / denominator if s in chosen else Decimal(0) for s in ids}

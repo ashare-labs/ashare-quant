@@ -1,5 +1,25 @@
 # 日频多股整链验收入口
 
+新增两个普通配置策略，示例题面在 `examples/daily_portfolio/diversified/manifest.json`。
+`low-volatility` 每月首个交易日将过去20个简单收益的总体方差最低三股各配98%/3；
+`momentum-low-volatility` 每周首个交易日将60日收益降序秩与20日收益方差升序秩相加，
+选秩和最低三股各配98%/3。相同因子值使用相同竞争秩，最终并列按代码；零方差有定义。
+两者都只用前120个收盘和前一已提交权益，价格因子组合不包含财报因子。
+这是常见数学规则的原创实现，沿用仓库授权范围；未复制第三方策略代码或以收益调参。
+
+输入现在拒绝OHLC倒置、开盘/收盘越出高低区间、下限高于上限，以及真实输入声明合成上市覆盖。
+这些检查在创建原生账户前完成；缺失状态及缺根日线继续阻断。
+
+新历史库只有原始价量而没有公司行动覆盖时，默认严格路径仍会阻断。
+价格路径诊断须由输入显式声明 `research_model=price_only_no_actions`、空 actions、
+`action_coverage.status=unavailable`、`state_mode=retrospective_model` 及
+`economic_acceptance=price_only_diagnostic_not_economic_acceptance`，并同时提供
+`--accept-price-only-research --accept-owner-state-model`。没有这些输入声明时，选择开关也不会
+放行公司行动缺口；价格、状态、日历及来源缺口不能由该开关豁免。
+诊断只核模型内现金、交易和估值，不计分红送转，输出收益不能解释为历史总回报或经济验收。
+模型限价必须在输入中注明来源及假设；入口不会推断不存在的状态或把复权因子当作行动账。
+原有有公司行动覆盖的入口、费用、原生账户及JQ对照契约保持原语义。
+
 新增有界策略入口：`weekly-reversal` 每周首个交易日选过去五个收盘收益间隔跌幅前两名，
 并按代码打破并列；`daily-equal-weight` 每交易日对传入证券等权。两者总目标权重均为98%，
 目标仍仅由前一已提交权益与前收盘换算整手，使用相同原生账户和卖后买顺序。

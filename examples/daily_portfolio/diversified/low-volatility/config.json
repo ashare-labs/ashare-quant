@@ -1,0 +1,6 @@
+{
+  "id": "low-volatility",
+  "title": "R11 月度低波动配置",
+  "formula": "lowest 20-return population variance top three; monthly",
+  "lookback_sessions": 21
+}

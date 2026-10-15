@@ -19,7 +19,7 @@ def require(ok, message):
 
 
 class Inputs:
-    def __init__(self, path, manifest, window):
+    def __init__(self, path, manifest, window, *, accept_price_only_research=False):
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
@@ -80,6 +80,14 @@ class Inputs:
                             f"INVALID_DAILY_NUMBER:{sid}:{day}:{field}",
                         )
                 if day >= window["start"]:
+                    if all(row.get(f) is not None for f in ("open", "high", "low", "close")):
+                        op, hi, lo, cl = (
+                            Decimal(str(row[f])) for f in ("open", "high", "low", "close")
+                        )
+                        require(
+                            lo <= min(op, cl) <= max(op, cl) <= hi,
+                            f"INCONSISTENT_OHLC:{sid}:{day}",
+                        )
                     for field in ("suspended", "upper_limit", "lower_limit"):
                         if row.get(field) is None:
                             self.gaps.append({"security": sid, "date": day, "field": field})
@@ -89,6 +97,11 @@ class Inputs:
                         if row.get(field) is not None:
                             n = Decimal(str(row[field]))
                             require(n.is_finite() and n > 0, "INVALID_LIMIT_PRICE")
+                    if all(row.get(f) is not None for f in ("upper_limit", "lower_limit")):
+                        require(
+                            Decimal(str(row["lower_limit"])) <= Decimal(str(row["upper_limit"])),
+                            f"INVERTED_PRICE_LIMITS:{sid}:{day}",
+                        )
         self.actions = doc.get("actions", [])
         seen_actions = set()
         for action in self.actions:
@@ -117,7 +130,27 @@ class Inputs:
                 value = Decimal(str(action["ratio"]))
                 require(value.is_finite() and value > 0, "INVALID_SPLIT_RATIO")
         coverage = doc.get("action_coverage", {})
-        if coverage.get("status") not in {"source_covered", "synthetic_known"}:
+        self.price_only = doc.get("research_model") == "price_only_no_actions"
+        if self.price_only:
+            require(
+                coverage.get("status") == "unavailable"
+                and not self.actions
+                and doc.get("economic_acceptance")
+                == "price_only_diagnostic_not_economic_acceptance"
+                and doc.get("state_mode") == "retrospective_model",
+                "PRICE_ONLY_SCOPE_MUST_EXCLUDE_ECONOMIC_ACCEPTANCE",
+            )
+            if not accept_price_only_research:
+                self.gaps.append(
+                    {
+                        "field": "price_only_opt_in",
+                        "detail": "Explicit --accept-price-only-research required",
+                    }
+                )
+        if (
+            coverage.get("status") not in {"source_covered", "synthetic_known"}
+            and not self.price_only
+        ):
             self.gaps.append({"field": "corporate_actions", "detail": coverage})
         require(
             not doc["real_market_data"] or coverage.get("status") != "synthetic_known",
@@ -128,6 +161,10 @@ class Inputs:
             doc.get("listing_coverage")
             in {"source_covered", "scoped_research_model", "synthetic_known"},
             "LISTING_COVERAGE_REQUIRED",
+        )
+        require(
+            not doc["real_market_data"] or doc["listing_coverage"] != "synthetic_known",
+            "REAL_INPUT_CANNOT_USE_SYNTHETIC_LISTING_COVERAGE",
         )
         self.window = window
         if doc["real_market_data"]:
@@ -159,6 +196,7 @@ class Inputs:
             "assumptions": self.document.get("assumptions", []),
             "economic_acceptance": self.document.get("economic_acceptance", "synthetic_only"),
             "action_coverage": self.document["action_coverage"],
+            "research_model": self.document.get("research_model", "corporate_action_accounting"),
         }
 
     def row(self, sid, day):

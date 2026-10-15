@@ -1,0 +1,6 @@
+{
+  "id": "momentum-low-volatility",
+  "title": "R12 动量低波动秩组合",
+  "formula": "sum of 60-return descending competition rank and 20-return variance ascending competition rank; top three weekly",
+  "lookback_sessions": 61
+}

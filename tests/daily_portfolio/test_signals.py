@@ -88,3 +88,19 @@ def test_daily_equal_weight_varied_universe_and_high_price_lot():
     history = {"A": ["10"] * 120, "B": ["1000"] * 120}
     assert decide("daily-equal-weight", history, "10000")["targets"] == {"A": 400, "B": 0}
     assert scheduled("daily-equal-weight", "2020-02-04", "2020-02-03", False)
+
+
+def test_low_variance_and_competition_rank_ties():
+    history = {s: ["10"] * 120 for s in reversed(IDS[:4])}
+    # A constant price has zero variance; the alternating security has positive variance.
+    history[IDS[0]][-20:] = ["10", "12"] * 10
+    low = decide("low-volatility", history, "10000")
+    assert low["selected"] == IDS[1:4]
+    assert Decimal(low["scores"][IDS[0]]) > 0
+    combined = decide("momentum-low-volatility", history, "10000")
+    assert combined["scores"][IDS[0]] == "3"  # best momentum + three less volatile
+    assert all(combined["scores"][s] == "1" for s in IDS[1:4])
+    assert combined["selected"] == IDS[1:4]
+    assert scheduled("low-volatility", "2020-03-02", "2020-02-28", False)
+    assert not scheduled("low-volatility", "2020-03-03", "2020-03-02", False)
+    assert scheduled("momentum-low-volatility", "2020-03-09", "2020-03-06", False)

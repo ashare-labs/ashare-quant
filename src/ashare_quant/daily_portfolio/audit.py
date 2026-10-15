@@ -208,7 +208,12 @@ def _audit(result, data, manifest):
         "errors": errors,
         "contract_differences": contract_differences,
         "contract_evidence_gaps": contract_evidence_gaps,
-        "economic_scope": "cash_quantity_and_gross_action_replay",
+        "economic_scope": (
+            "price_only_model_book_not_total_return"
+            if data.document.get("research_model") == "price_only_no_actions"
+            else "cash_quantity_and_gross_action_replay"
+        ),
+        "economic_acceptance": data.document.get("economic_acceptance", "synthetic_only"),
         "gross_dividend_entitlement": str(dividend_total),
         "commission": str(fee_total),
         "tax": str(tax_total),
