@@ -163,8 +163,18 @@ def close_gate(config, decision, close):
     evidence_gate(config, close)
     require(close.trading_date == decision.trading_date, "PAPER_CLOSE_DATE")
     at = close.received_at.astimezone(SHANGHAI)
+    from .intraday_contracts import REBALANCE_MODEL
+
+    cutoff = time(15, 5)
+    if config.model == REBALANCE_MODEL:
+        require(
+            close.close_readiness is not None
+            and close.close_readiness.capture_id == close.data_manifest_sha256,
+            "PAPER_CLOSE_READINESS_REQUIRED",
+        )
+        cutoff = time(15)
     require(
-        at.date() == close.trading_date and at.time() >= time(15, 5),
+        at.date() == close.trading_date and at.time() >= cutoff,
         "PAPER_CLOSE_DEADLINE",
     )
     if not config.data_mode.startswith("calendar_"):
@@ -187,7 +197,7 @@ def close_gate(config, decision, close):
         observed = row.observed_at.astimezone(SHANGHAI)
         require(
             observed.date() == close.trading_date
-            and observed.time() >= time(15, 5)
+            and observed.time() >= cutoff
             and row.observed_at <= close.received_at,
             "PAPER_CLOSE_NOT_OBSERVED",
         )

@@ -8,17 +8,18 @@ from pydantic import AwareDatetime, Field, model_validator
 from ashare_quant.contracts import Contract, Money
 
 from .contracts import CloseInput, Decision, Security, SessionConfig, Sha
-from .intraday_contracts import IntradayProof
+from .intraday_contracts import REBALANCE_MODEL, IntradayProof
 
 CONDITIONAL_MODEL = "prior-close-conditional-intent-observed-open.v2"
 INTRADAY_MODEL = "prior-close-intent-next-complete-minute.v1"
 INTRADAY_PARTIAL_MODEL = "prior-close-intent-minute-partial-cancel.v2"
-INTRADAY_MODELS = {INTRADAY_MODEL, INTRADAY_PARTIAL_MODEL}
+INTRADAY_MODELS = {INTRADAY_MODEL, INTRADAY_PARTIAL_MODEL, REBALANCE_MODEL}
 OnlineModel = Literal[
     "prior-close-standing-intent-observed-open.v1",
     "prior-close-conditional-intent-observed-open.v2",
     "prior-close-intent-next-complete-minute.v1",
     "prior-close-intent-minute-partial-cancel.v2",
+    "declared-inventory-target-minute-partial-cancel.v3",
 ]
 
 
@@ -71,11 +72,19 @@ class OnlineDecision(Decision):
     clock_basis: Literal["wall_clock", "fixture_clock", "controlled_replay"]
 
 
+class CloseReadiness(Contract):
+    owner_schema: Literal["ad-current-daily-observation.v2"]
+    policy: Literal["sse-ended-and-repeat-daily-agrees.v1"]
+    capture_id: Sha
+    confirmation_sha256: Sha
+
+
 class OnlineClose(CloseInput):
     # Preserve legacy sealed packets without imposing their pilot cutoff on settlement.
     deadline: AwareDatetime | None = Field(default=None, exclude_if=lambda v: v is None)
     evidence_kind: Literal["live_local_capture", "calendar_fixture", "sealed_response_replay"]
     clock_basis: Literal["wall_clock", "fixture_clock", "controlled_replay"]
+    close_readiness: CloseReadiness | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class OpeningRow(Contract):

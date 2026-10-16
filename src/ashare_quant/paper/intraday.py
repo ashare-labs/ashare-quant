@@ -9,7 +9,7 @@ from pathlib import Path
 from ashare_quant.daily_portfolio import signals
 from ashare_quant.m2_jobs.files import digest, sha
 
-from .intraday_contracts import IntradayPlan, continuous
+from .intraday_contracts import REBALANCE_MODEL, IntradayPlan, continuous
 from .online_adapter import OwnerReader, owner_environment, scoped_action_effect
 from .online_contracts import OnlineDecision, OnlineSession, OpeningInput
 from .risk import profiles, require
@@ -52,10 +52,13 @@ def config_for(plan, account, *, response_replay_sha256=None):
         data_mode="calendar_observed",
         initial_cash=plan.initial_cash,
         universe=plan.universe,
-        strategy_version=sha(Path(signals.__file__).read_bytes()),
+        strategy_version=sha(
+            Path(__file__ if plan.model == REBALANCE_MODEL else signals.__file__).read_bytes()
+        ),
         scenario_manifest_sha256=digest(plan),
         admission_reader_sha256=plan.admission_reader_sha256,
         risk=profiles()["target_then_native_cash_v1"],
+        sell_tax_rate="0.0005" if plan.model == REBALANCE_MODEL else "0.001",
         response_replay_sha256=response_replay_sha256,
     )
 
@@ -125,7 +128,15 @@ def prepare(service, reader, plan, admission):
     )
     previous = service.report(state["last_day"], "closing") if successor else None
     account = previous["native"]["account"] if previous else None
-    scheduled = signals.scheduled("equal-weight", str(plan.day), daily["signal_day"], not successor)
+    rebalance = plan.model == REBALANCE_MODEL
+    if rebalance:
+        require(
+            not successor and daily["signal_day"] == str(plan.initial_inventory.as_of),
+            "PAPER_REBALANCE_SEED_DAY",
+        )
+    scheduled = not rebalance and signals.scheduled(
+        "equal-weight", str(plan.day), daily["signal_day"], not successor
+    )
     if successor:
         require(not scheduled, "PAPER_CONTINUATION_REBALANCE_REQUIRED")
     signal = (
@@ -138,12 +149,14 @@ def prepare(service, reader, plan, admission):
         else None
     )
     targets = (
-        signal["targets"]
-        if scheduled
+        plan.target_quantities
+        if rebalance
+        else signal["targets"]
+        if scheduled or rebalance
         else {s: account["positions"][s]["quantity"] for s in config.universe}
     )
     receipt = dict(
-        strategy_id="equal-weight",
+        strategy_id=plan.strategy_id,
         signal=signal,
         signal_capture=plan.daily_capture,
         admission_capture=admission,
@@ -151,6 +164,13 @@ def prepare(service, reader, plan, admission):
         action_adjudications={},
         model="new-account prior-close equal-weight; future complete-minute execution",
     )
+    if rebalance:
+        receipt.update(
+            model="declared test inventory; explicit acceptance targets; future complete-minute execution",
+            initial_inventory=plan.initial_inventory.model_dump(mode="json"),
+            targets=targets,
+            prior_trades_claimed=False,
+        )
     if successor:
         receipt.update(
             model="same native account; monthly equal-weight holds actual quantities",
@@ -237,8 +257,12 @@ def deliver(service, reader, plan, capture):
     facts = []
     minutes = []
     for r in p["assessment"]["rows"]:
-        e = r["execution"]
         sid = r["security"]
+        e = dict(r["execution"])
+        if plan.model == REBALANCE_MODEL:
+            delta = decision.targets[sid] - plan.initial_inventory.quantities[sid]
+            tick = Decimal(plan.buy_slippage) * (1 if delta > 0 else -1 if delta < 0 else 0)
+            e["match_price"] = str(Decimal(e["raw_close"]) + tick)
         review = r["action_scope"]["price_share_code_review"]
         prices.append(
             dict(

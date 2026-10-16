@@ -8,10 +8,21 @@ from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import SHANGHAI, Contract, Money
 
-from .contracts import Security, Sha
+from .contracts import Quantity, Security, Sha
 from .risk import require
 
 UNIVERSE = ("600000.XSHG", "600036.XSHG", "601318.XSHG")
+REBALANCE_MODEL = "declared-inventory-target-minute-partial-cancel.v3"
+
+
+class DeclaredInventory(Contract):
+    """Test starting inventory, never evidence of previously executed purchases."""
+
+    kind: Literal["declared_test_inventory"] = "declared_test_inventory"
+    as_of: date
+    quantities: dict[Security, Quantity]
+    price_basis: Literal["pinned_prior_daily_close"] = "pinned_prior_daily_close"
+    prior_trades_claimed: Literal[False] = False
 
 
 def continuous(at):
@@ -20,12 +31,13 @@ def continuous(at):
 
 
 class IntradayPlan(Contract):
-    schema_version: Literal["paper-intraday-plan.v1", "paper-intraday-plan.v2"] = (
-        "paper-intraday-plan.v1"
-    )
+    schema_version: Literal[
+        "paper-intraday-plan.v1", "paper-intraday-plan.v2", "paper-intraday-plan.v3"
+    ] = "paper-intraday-plan.v1"
     model: Literal[
         "prior-close-intent-next-complete-minute.v1",
         "prior-close-intent-minute-partial-cancel.v2",
+        "declared-inventory-target-minute-partial-cancel.v3",
     ] = "prior-close-intent-next-complete-minute.v1"
     day: date
     start_at: AwareDatetime
@@ -33,7 +45,7 @@ class IntradayPlan(Contract):
     execution_deadline: AwareDatetime
     universe: tuple[Security, ...] = UNIVERSE
     initial_cash: Money = "30000"
-    strategy_id: Literal["equal-weight"] = "equal-weight"
+    strategy_id: Literal["equal-weight", "acceptance-rebalance"] = "equal-weight"
     admission_reader_sha256: Sha
     action_baseline_sha256: Sha
     daily_capture: Sha
@@ -43,13 +55,46 @@ class IntradayPlan(Contract):
         default=None, exclude_if=lambda v: v is None
     )
     buy_slippage: Literal["0.01"] = "0.01"
+    initial_inventory: DeclaredInventory | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    target_quantities: dict[Security, Quantity] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
     @model_validator(mode="after")
     def bounded(self):
-        partial = self.model == "prior-close-intent-minute-partial-cancel.v2"
+        rebalance = self.model == REBALANCE_MODEL
+        partial = self.model == "prior-close-intent-minute-partial-cancel.v2" or rebalance
+        if rebalance:
+            if not (
+                self.strategy_id == "acceptance-rebalance"
+                and self.initial_inventory is not None
+                and self.initial_inventory.as_of < self.day
+                and set(self.initial_inventory.quantities) == set(self.universe)
+                and self.target_quantities is not None
+                and set(self.target_quantities) == set(self.universe)
+                and all(
+                    q % 100 == 0
+                    for q in (
+                        *self.initial_inventory.quantities.values(),
+                        *self.target_quantities.values(),
+                    )
+                )
+            ):
+                raise ValueError(
+                    "Explicit prior inventory and whole-lot acceptance targets required"
+                )
+        elif (
+            self.strategy_id != "equal-weight"
+            or self.initial_inventory is not None
+            or self.target_quantities is not None
+        ):
+            raise ValueError("Original strategy and empty genesis are immutable")
         if partial:
             if not (
-                self.schema_version == "paper-intraday-plan.v2"
+                self.schema_version
+                == ("paper-intraday-plan.v3" if rebalance else "paper-intraday-plan.v2")
                 and self.remainder_policy == "cancel_after_minute"
                 and 0 < Decimal(self.max_minute_participation) <= 1
             ):
@@ -118,6 +163,16 @@ def plan_for(config, decision):
 
 def decision_gate(config, decision):
     p = plan_for(config, decision)
+    if p.model == REBALANCE_MODEL:
+        from ashare_quant.m2_jobs.files import digest
+
+        require(
+            decision.targets == p.target_quantities
+            and decision.previous_open == p.initial_inventory.as_of
+            and decision.expected_parent is None
+            and digest(decision.strategy_receipt) == decision.strategy_receipt_sha256,
+            "PAPER_REBALANCE_DECLARATION_CHANGED",
+        )
     require(
         decision.trading_date == p.day
         and p.start_at <= decision.logical_at <= decision.received_at <= p.intent_deadline
@@ -155,8 +210,14 @@ def execution_gate(config, decision, opening):
             and continuous(row.minute_end),
             "PAPER_INTRADAY_MINUTE_CAUSALITY",
         )
+        delta = (
+            decision.targets[sid] - p.initial_inventory.quantities[sid]
+            if p.model == REBALANCE_MODEL
+            else 1
+        )
+        tick = Decimal(p.buy_slippage) * (1 if delta > 0 else -1 if delta < 0 else 0)
         require(
-            Decimal(row.match_price) == Decimal(row.raw_close) + Decimal(p.buy_slippage)
+            Decimal(row.match_price) == Decimal(row.raw_close) + tick
             and Decimal(prices[sid].open) == Decimal(row.match_price)
             and prices[sid].raw_sha256 == row.source_sha256
             and prices[sid].source_as_of == row.minute_end,

@@ -7,7 +7,7 @@ from pathlib import Path
 from ashare_quant.m2_jobs.files import digest, regular
 
 from .intraday import IntradayReader, config_for, deliver, now, prepare
-from .intraday_contracts import IntradayPlan
+from .intraday_contracts import REBALANCE_MODEL, IntradayPlan
 from .online import OnlineService
 from .risk import require
 from .service import engine_pin
@@ -45,7 +45,9 @@ def main():
                 "PAPER_INTRADAY_START_ALREADY_PASSED",
             )
             account = (
-                f"intraday-{plan.day:%Y%m%d}-partial"
+                f"acceptance-rebalance-{plan.day:%Y%m%d}"
+                if plan.model == REBALANCE_MODEL
+                else f"intraday-{plan.day:%Y%m%d}-partial"
                 if plan.remainder_policy
                 else "intraday-20261014-independent"
             )

@@ -385,6 +385,21 @@ def execution_from_owner(config, row, reader, phase, capture):
         packet["signal_day"] == row["day"] and packet["signal_ready"] and not packet["revisions"],
         "PAPER_OBSERVATION_REVISION",
     )
+    from .intraday_contracts import REBALANCE_MODEL
+
+    if config.model == REBALANCE_MODEL:
+        proof = packet.get("close_confirmation", {})
+        require(
+            packet.get("schema") == "ad-current-daily-observation.v2"
+            and proof.get("policy") == "sse-ended-and-repeat-daily-agrees.v1",
+            "PAPER_CLOSE_READINESS_REQUIRED",
+        )
+        common["close_readiness"] = dict(
+            owner_schema=packet["schema"],
+            policy=proof["policy"],
+            capture_id=capture,
+            confirmation_sha256=digest(proof),
+        )
     rows = []
     for sid, item in packet["securities"].items():
         last = item["rows"][-1]

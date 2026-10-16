@@ -193,6 +193,22 @@ class DaySource(AbstractDataSource):
         return self.decision.trading_date, self.decision.trading_date
 
     def get_bar(self, instrument, dt, frequency):
+        if (
+            runtime.get("declared_inventory")
+            and frequency == "1d"
+            and dt.date() == self.decision.previous_open
+        ):
+            # Native Account initialises inventory at the sealed previous close.
+            # These are valuation inputs, not a historical execution path.
+            price = float(self.before[instrument.order_book_id].previous_close)
+            return dict(
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=0,
+                datetime=int(dt.strftime("%Y%m%d") + "000000"),
+            )
         require(
             frequency == "1d"
             and dt.date() == self.decision.trading_date
@@ -485,7 +501,7 @@ class PaperMod(AbstractMod):
         )
         env.set_event_source(DayEvents(env, runtime["base_cursor"], self.decision.trading_date))
         env.set_persist_provider(AtomicFile(config.checkpoint, self.identity))
-        install(env)
+        install(env, runtime.get("declared_inventory"))
         block_rqdata_apis()
         env.add_frontend_validator(IntentGuard(self))
         env.event_bus.prepend_listener(EVENT.PRE_BEFORE_TRADING, self.before_actions)
@@ -691,6 +707,14 @@ class PaperMod(AbstractMod):
                 if self.decision.targets[sid] != after["positions"][sid]["quantity"]
             },
         }
+        if runtime.get("declared_inventory"):
+            result["genesis"] = dict(
+                kind="declared_test_inventory",
+                prior_trades_claimed=False,
+                inventory=self.decision.strategy_receipt["intraday_plan"]["initial_inventory"],
+                cash=self.session.initial_cash,
+                source_capture=self.decision.strategy_receipt["intraday_plan"]["daily_capture"],
+            )
         if runtime.get("intraday_partial"):
             result["capacity_policy"] = {
                 "participation": self.decision.strategy_receipt["intraday_plan"][
@@ -792,17 +816,23 @@ def main():
         )
     decision_gate(session, decision)
     require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
+    from .intraday_contracts import REBALANCE_MODEL, plan_for
+    from .online_contracts import INTRADAY_MODELS
+
+    declared = (
+        plan_for(session, decision).initial_inventory if session.model == REBALANCE_MODEL else None
+    )
     runtime.update(
+        declared_inventory={s: q for s, q in declared.quantities.items() if q}
+        if declared
+        else None,
         continuation=request.get("continuation"),
         runtime_authorization=request.get("runtime_authorization"),
         execution_runtime_pin=current_pin,
         online=online,
-        intraday=session.model
-        in {
-            "prior-close-intent-next-complete-minute.v1",
-            "prior-close-intent-minute-partial-cancel.v2",
-        },
-        intraday_partial=session.model == "prior-close-intent-minute-partial-cancel.v2",
+        intraday=session.model in INTRADAY_MODELS,
+        intraday_partial=session.model
+        in {"prior-close-intent-minute-partial-cancel.v2", REBALANCE_MODEL},
         phase=request.get("phase"),
         opening=opening,
         session=session,

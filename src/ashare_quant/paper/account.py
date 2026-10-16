@@ -61,18 +61,29 @@ class RestorableBudgetAccount(BudgetAccount):
                 raise RuntimeError("PAPER_RESTORED_RESERVATION_MISMATCH")
 
 
+class DeclaredInventoryAccount(RestorableBudgetAccount):
+    """Native starting positions, separately declared rather than fabricated trades."""
+
+    def __init__(self, account_type, total_cash, init_positions, financing_rate, env):
+        self._budget_pending, self._budget_terminal, self._budget_trades = {}, {}, {}
+        Account.__init__(self, account_type, total_cash, init_positions, financing_rate, env)
+
+
 class NativePaperPortfolio(Portfolio):
     @classmethod
     def _init_accounts(cls, starting_cash, init_positions, financing_rate, env):
-        if set(starting_cash) != {"STOCK"} or init_positions or financing_rate:
+        if set(starting_cash) != {"STOCK"} or financing_rate:
             raise RuntimeError("PAPER_STOCK_GENESIS_ONLY")
-        return {"STOCK": RestorableBudgetAccount("STOCK", starting_cash["STOCK"], {}, 0, env)}
+        account_class = DeclaredInventoryAccount if init_positions else RestorableBudgetAccount
+        return {"STOCK": account_class("STOCK", starting_cash["STOCK"], init_positions, 0, env)}
 
 
-def install(env):
+def install(env, initial_inventory=None):
     def initialize(_):
         if hasattr(env, "portfolio"):
             raise RuntimeError("PAPER_NATIVE_PORTFOLIO_ALREADY_EXISTS")
-        env.set_portfolio(NativePaperPortfolio(env.config.base.accounts, {}, 0, env))
+        env.set_portfolio(
+            NativePaperPortfolio(env.config.base.accounts, initial_inventory or {}, 0, env)
+        )
 
     env.event_bus.add_listener(EVENT.INIT_PORTFOLIO, initialize)
