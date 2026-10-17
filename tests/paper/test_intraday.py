@@ -2,10 +2,7 @@
 
 import copy
 import json
-import os
-import subprocess
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -14,48 +11,11 @@ from ashare_quant.paper import intraday, online
 from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.storage.artifacts import digest
+from tests.paper.synthetic_owner import prepare_owner
 
 
 def setup(tmp_path, monkeypatch, *, partial=False, volumes=None):
-    source = os.environ.get("ASHARE_CALENDAR_AD_SOURCE")
-    python = os.environ.get("ASHARE_CALENDAR_AD_PYTHON")
-    if not source or not python:
-        pytest.skip("Explicit isolated owner worktree required")
-    boot = r"""
-import sys,json
-from pathlib import Path
-sys.path[:0]=[sys.argv[1],str(Path(sys.argv[1]).parent/'tests')]
-import pytest
-import ashare_data.observations.intraday as obs
-from test_intraday_observation import sources
-root=Path(sys.argv[2]);out={}
-for kind,at,after in [('admission','10:00:30','10:00:00'),('execution','10:03:30','10:00:31')]:
- with pytest.MonkeyPatch.context() as mp:
-  sources(mp,at='2026-10-14T'+at+'+08:00')
-  volumes=json.loads(sys.argv[3])
-  original=obs.phase.fetch
-  def fetch(url,referer):
-   raw=original(url,referer)
-   if 'getKLineData' in url and volumes:
-    data=json.loads(raw)
-    code=next(c for c in volumes if c in url)
-    for row in data: row['volume']=str(volumes[code])
-    return json.dumps(data).encode()
-   return raw
-  mp.setattr(obs.phase,'fetch',fetch)
-  a=obs.capture(root,kind,'2026-10-14','2026-10-14T'+after+'+08:00')
-  assert a['status']=='observed',a
-  out[kind]=a['capture_id']
-print(json.dumps(out))
-"""
-    r = subprocess.run(
-        [python, "-I", "-B", "-c", boot, source, str(tmp_path / "phases"), json.dumps(volumes)],
-        capture_output=True,
-        text=True,
-        timeout=40,
-    )
-    assert r.returncode == 0, r.stdout + r.stderr
-    ids = json.loads(r.stdout)
+    python, source, ids = prepare_owner(tmp_path, monkeypatch, volumes)
     daily = dict(
         signal_day="2026-10-13",
         signal_ready=True,
@@ -85,7 +45,7 @@ print(json.dumps(out))
             assert kind == "daily" and capture == digest(daily)
             return copy.deepcopy(daily)
 
-    reader = Reader(python, Path(source), tmp_path / "ad", tmp_path / "phases")
+    reader = Reader(python, source, tmp_path / "ad", tmp_path / "phases")
     owned = reader.reviewed_plan()
     extra = (
         dict(

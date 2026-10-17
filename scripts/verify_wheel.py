@@ -29,6 +29,8 @@ def main():
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--daily-components", type=Path)
+    parser.add_argument("--paper-intraday-only", action="store_true",
+                        help="Run only the synthetic owner/native paper behavior regressions")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
@@ -87,14 +89,19 @@ def main():
                       "tests/daily_tasks/test_native.py::test_three_real_windows[two_day-2]",
                       "tests/daily_tasks/test_native.py::test_crash_and_resume_keeps_account[native_submit:2]",
                       "tests/daily_tasks/test_end_date_native.py::test_selected_prefix_matches_account_oracle_and_has_no_tail_events[w1-2020-01-03-hold-8735-9995-100-1-1]"]
+        paper_intraday = ["tests/paper/test_intraday.py", "tests/paper/test_intraday_partial.py",
+                          "tests/paper/test_late_close.py", "tests/paper/test_legacy_close_replay.py"]
+        tests = paper_intraday if args.paper_intraday_only else tests + paper_intraday
         test_output = run("tests", [str(python), "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                                   "--basetemp", str(root / "test-output"), *tests], validation)
+                                   "--basetemp", str(root / "test-output"),
+                                   "--junitxml", str(output / "tests.xml"), *tests], validation)
         result = {"wheel": wheel.name, "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
                   "source_sha256": installed["source_sha256"], "noneditable_install": True,
                   "source_identity_matches": True, "validation_tree_contains_src": False,
                   "dependencies": "runtime and test dependencies with locked hashes, new environment",
                   "excluded_development_tools": ["ruff"], "offline": args.offline,
                   "daily_real_components": bool(args.daily_components),
+                  "paper_intraday_only": args.paper_intraday_only,
                   "tests": tests, "test_summary": test_output.strip().splitlines()[-1]}
         (output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result, indent=2))
