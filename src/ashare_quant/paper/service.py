@@ -17,17 +17,16 @@ import jsonpickle
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.identity import source_sha256
-from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
+from ashare_quant.paper.contracts import CloseInput, Decision, SessionConfig
+from ashare_quant.paper.risk import close_gate, decision_gate, reconcile, reconcile_opening, require
 from ashare_quant.runtime import runtime_fingerprint
-
-from .contracts import CloseInput, Decision, SessionConfig
-from .risk import close_gate, decision_gate, reconcile, reconcile_opening, require
+from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, sha
 
 LEASE_SECONDS = 15
 
 
 def engine_pin():
-    from rqprobe.runtime import runtime_identity
+    from ashare_quant.execution.rqalpha.runtime import runtime_identity
 
     return {
         "sources": source_sha256(),
@@ -100,7 +99,7 @@ def completed_proof(payload, row, parent, base_cursor, *, complete=True):
         "calendar_fixture",
         "sealed_response_replay",
     }:
-        from .online_contracts import OnlineDecision
+        from ashare_quant.paper.online_contracts import OnlineDecision
 
         decision_type = OnlineDecision
     require(
@@ -193,7 +192,7 @@ class PaperService:
         )
 
     def alert(self, sid, day, error):
-        from .errors import error_value
+        from ashare_quant.paper.errors import error_value
 
         value = error_value(error)
         with self.db() as db:
@@ -270,7 +269,7 @@ class PaperService:
         try:
             session, config = self.session(sid)
             if config.strategy_id:
-                from .replay import build
+                from ashare_quant.paper.replay import build
 
                 expected, _ = build(self, sid, day, decision.expected_parent)
                 require(
@@ -361,7 +360,7 @@ class PaperService:
             decision = Decision.model_validate_json(row["decision"])
             require(close.intent_id == row["intent_id"], "PAPER_INTENT_MISMATCH")
             if config.strategy_id:
-                from .replay import build, close_for
+                from ashare_quant.paper.replay import build, close_for
 
                 expected, inputs = build(self, sid, day, decision.expected_parent)
                 require(
@@ -510,7 +509,7 @@ class PaperService:
         latest = self.report(sid, session["last_day"]) if session["last_day"] else None
         replay = None
         if config.strategy_id:
-            from .replay import load, provenance
+            from ashare_quant.paper.replay import load, provenance
 
             binding, inputs = load(self, sid, config)
             pending = next((d["day"] for d in days if d["status"] != "committed"), None)

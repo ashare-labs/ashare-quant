@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ashare-quant"
-version = "0.11.0.dev23"
+version = "0.12.0.dev1"
 description = "A宽 local bounded research backend with portable owner bindings"
 readme = "README.md"
 license-files = ["docs/licensing.md", "docs/rqalpha/RQAlpha-LICENSE.txt"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi==0.141.1", "pydantic==2.13.5", "uvicorn==0.52.4",
-  "ashare-data==0.8.0.dev2", "numpy==2.5.3",
+  "ashare-data==0.10.0.dev1", "numpy==2.5.3",
   "jsonpickle==4.1.3", "simplejson==4.2.0", "logbook==1.10.1",
 ]
 
@@ -77,37 +77,13 @@ native = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ashare_quant", "src/rqprobe"]
+packages = ["src/ashare_quant"]
 
 # Only these public inputs enter source distributions. Research evidence stays local.
 [tool.hatch.build.targets.sdist]
 include = [
-  "/.gitignore", "/.python-version", "/README.md", "/pyproject.toml", "/uv.lock",
-  "/requirements-core.txt", "/requirements-native.txt",
-  "/src", "/tests", "/examples", "/scripts",
-  "/tools/round_one_reference_mechanisms.py",
-  "/docs/compatibility.md", "/docs/research.md", "/docs/strategies.md",
-  "/docs/task-service.md",
-  "/docs/portfolio-jobs.md",
-  "/docs/portfolio-openapi-v1.json",
-  "/docs/task-service-integration.json",
-  "/docs/diagnostics.md", "/docs/development.md", "/docs/licensing.md",
-  "/docs/second-batch.md",
-  "/docs/daily-paper.md",
-  "/docs/daily-portfolio.md",
-  "/docs/corporate-accounting.md",
-  "/docs/daily-portfolio-integration.json",
-  "/docs/python-minute.md",
-  "/docs/jq-minute-r7-integration.md",
-  "/docs/jq-minute-r7-integration.json",
-  "/docs/python-minute-integration.json",
-  "/docs/tdx-minute-integration.json",
-  "/docs/paper-integration.md",
-  "/docs/paper-execution.md",
-  "/docs/response-replay.md",
-  "/docs/calendar-successors.md",
-  "/docs/acceptance-rebalance.md",
-  "/docs/rqalpha/RQAlpha-LICENSE.txt",
+  "/.gitignore", "/.python-version", "/README.md", "/CONTRIBUTING.md", "/pyproject.toml", "/uv.lock",
+  "/requirements-core.txt", "/requirements-native.txt", "/src", "/tests", "/examples", "/scripts", "/docs",
 ]
 
 [project.scripts]
@@ -123,11 +99,17 @@ addopts = "-ra"
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-extend-exclude = ["src/rqprobe"]
+extend-exclude = ["src/ashare_quant/execution/rqalpha"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 
+# These reference strategy fixtures run inside engines that inject their API globals.
+[tool.ruff.lint.per-file-ignores]
+"tests/fixtures/minute_reference/gap_native_control.py" = ["F821"]
+"tests/fixtures/minute_reference/gap_ported.py" = ["F403", "F405", "I001"]
+"tests/fixtures/minute_reference/gap_probe.py" = ["F403", "F405", "I001"]
+
 [tool.uv.sources]
 # Build this artifact from the fixed public source with scripts/stage_owner.py before sync.
-ashare-data = { path = "local-dependencies/ashare_data-0.8.0.dev2-py3-none-any.whl" }
+ashare-data = { path = "local-dependencies/ashare_data-0.10.0.dev1-py3-none-any.whl" }

@@ -10,9 +10,8 @@ from ashare_quant.paper.api import create_app
 from ashare_quant.paper.contracts import SessionConfig
 from ashare_quant.paper.risk import profiles
 from ashare_quant.paper.service import PaperService
-
-from .fixtures import close, config, decision, queue
-from .test_replay import bound
+from tests.paper.fixtures import close, config, decision, queue
+from tests.paper.test_replay import bound
 
 
 def policy_config(account):

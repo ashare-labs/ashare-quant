@@ -8,14 +8,13 @@ from decimal import Decimal
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper import intraday
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.online_adapter import execution_from_owner
 from ashare_quant.paper.online_contracts import OnlineClose
 from ashare_quant.paper.risk import close_gate
-
-from .test_intraday import setup
+from ashare_quant.storage.artifacts import digest
+from tests.paper.test_intraday import setup
 
 
 def opened_account(tmp_path, monkeypatch, received):
@@ -202,8 +201,7 @@ def test_legacy_close_deadline_retained_but_not_a_calendar_cutoff(tmp_path, monk
 
 def test_historical_deadline_contract_is_unchanged():
     from ashare_quant.paper.contracts import CloseInput, Decision
-
-    from .fixtures import close, config, decision
+    from tests.paper.fixtures import close, config, decision
 
     session = config()
     intent = Decision.model_validate(decision(session, 0, (100, 100)))

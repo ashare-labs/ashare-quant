@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from ashare_quant.minute import run_backtest
-from ashare_quant.minute.runner import MinuteRunError
-from examples.jq_minute_comparison.audit_execution import audit_run
+from ashare_quant.backtests.minute import run_backtest
+from ashare_quant.backtests.minute.runner import MinuteRunError
+from tests.fixtures.minute_reference.audit_execution import audit_run
 
 ROOT = Path(__file__).resolve().parents[2]
 JQ = dict(
@@ -33,13 +33,13 @@ def messages(events):
 
 @pytest.fixture
 def gap_run(run_minute, minute_warmup_doc):
-    source = (ROOT / "examples/jq_minute_comparison/gap_ported.py").read_text()
+    source = (ROOT / "tests/fixtures/minute_reference/gap_ported.py").read_text()
     return run_minute(source, doc=minute_warmup_doc, config=JQ)
 
 
 def test_complete_real_probe_source_with_one_explicit_raw_price_argument(gap_run):
-    original = (ROOT / "examples/jq_minute_comparison/gap_probe.py").read_text()
-    ported = (ROOT / "examples/jq_minute_comparison/gap_ported.py").read_text()
+    original = (ROOT / "tests/fixtures/minute_reference/gap_probe.py").read_text()
+    ported = (ROOT / "tests/fixtures/minute_reference/gap_ported.py").read_text()
     assert hashlib.sha256(original.encode()).hexdigest() == (
         "15fd3ba5759bd5d05915aba7edd53569986c2643a64a2e1067afd33e926ea6e0"
     )

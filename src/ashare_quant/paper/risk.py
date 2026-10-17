@@ -4,13 +4,13 @@ from datetime import time
 from decimal import Decimal, localcontext
 
 from ashare_quant.contracts import SHANGHAI, DomainError
-from ashare_quant.m2_jobs.files import digest
+from ashare_quant.storage.artifacts import digest
 
 D = Decimal
 
 
 def profiles():
-    from .contracts import RiskPolicy
+    from ashare_quant.paper.contracts import RiskPolicy
 
     return {
         "conservative_v1": RiskPolicy().model_dump(mode="json"),
@@ -62,10 +62,10 @@ def decision_gate(config, decision):
     require(decision.strategy_version == config.strategy_version, "PAPER_STRATEGY_IDENTITY")
     require(set(decision.targets) == set(config.universe), "PAPER_TARGET_SET")
     require(decision.previous_open < decision.trading_date < decision.next_open, "PAPER_CALENDAR")
-    from .online_contracts import INTRADAY_MODELS
+    from ashare_quant.paper.online_contracts import INTRADAY_MODELS
 
     if config.model in INTRADAY_MODELS:
-        from .intraday_contracts import decision_gate as intraday_decision_gate
+        from ashare_quant.paper.intraday_contracts import decision_gate as intraday_decision_gate
 
         intraday_decision_gate(config, decision)
     else:
@@ -97,7 +97,7 @@ def decision_gate(config, decision):
         if config.execution_admission_scope == "per_order":
             require(row.eligible is True, "PAPER_TRADING_STATE_BLOCKED")
         else:
-            from .online_contracts import CONDITIONAL_MODEL
+            from ashare_quant.paper.online_contracts import CONDITIONAL_MODEL
 
             conditional = config.model == CONDITIONAL_MODEL and config.data_mode.startswith(
                 "calendar_"
@@ -163,7 +163,7 @@ def close_gate(config, decision, close):
     evidence_gate(config, close)
     require(close.trading_date == decision.trading_date, "PAPER_CLOSE_DATE")
     at = close.received_at.astimezone(SHANGHAI)
-    from .intraday_contracts import REBALANCE_MODEL
+    from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL
 
     cutoff = time(15, 5)
     if config.model == REBALANCE_MODEL:

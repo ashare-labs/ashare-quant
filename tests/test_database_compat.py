@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from ashare_quant.api import create_app
 from ashare_quant.cli import main
 from ashare_quant.contracts import DomainError
-from ashare_quant.store import Store
+from ashare_quant.storage.store import Store
 
 JOB = "m2job-" + "1" * 32
 CODE = "M2_DATABASE_VERSION_INCOMPATIBLE"
@@ -26,8 +26,8 @@ def files_at(root):
 
 
 def insert_v3(db):
-    db.execute("CREATE TABLE m2_jobs (job_id TEXT PRIMARY KEY, manifest TEXT, status TEXT)")
-    db.execute("INSERT INTO m2_jobs VALUES (?, ?, 'queued')", (JOB, json.dumps({
+    db.execute("CREATE TABLE tasks (job_id TEXT PRIMARY KEY, manifest TEXT, status TEXT)")
+    db.execute("INSERT INTO tasks VALUES (?, ?, 'queued')", (JOB, json.dumps({
         "schema_version": "m2-job-manifest.v3",
         "service_identity": {"backend_version": "0.5.0.dev3", "contract_version": "m2-jobs.v3"},
     })))
@@ -61,18 +61,18 @@ def assert_refusal(response):
 def test_old_list_detail_and_actions_refuse_without_changes(old_database):
     before = files_at(old_database.parent)
     app = create_app(str(old_database))
-    assert not hasattr(app.state, "m2_jobs")
+    assert not hasattr(app.state, "tasks")
     with TestClient(app) as client:
-        for url in ["/api/v1/m2/jobs", f"/api/v1/m2/jobs/{JOB}",
-                    f"/api/v1/m2/jobs/{JOB}/logs", "/api/v1/health"]:
+        for url in ["/api/v1/tasks/daily/jobs", f"/api/v1/tasks/daily/jobs/{JOB}",
+                    f"/api/v1/tasks/daily/jobs/{JOB}/logs", "/api/v1/health"]:
             assert_refusal(client.get(url))
-        for url in ["/api/v1/m2/jobs", f"/api/v1/m2/jobs/{JOB}/resume",
-                    f"/api/v1/m2/jobs/{JOB}/cancel"]:
+        for url in ["/api/v1/tasks/daily/jobs", f"/api/v1/tasks/daily/jobs/{JOB}/resume",
+                    f"/api/v1/tasks/daily/jobs/{JOB}/cancel"]:
             assert_refusal(client.post(url, json={}))
     assert files_at(old_database.parent) == before
 
 
-@pytest.mark.parametrize("arguments", [["jobs"], ["job-status", JOB], ["job-worker", "--once"]])
+@pytest.mark.parametrize("arguments", [["tasks"], ["task-status", JOB], ["task-worker", "--once"]])
 def test_old_cli_refuses_without_changes(old_database, arguments):
     before = files_at(old_database.parent)
     result = subprocess.run([sys.executable, "-m", "ashare_quant.cli", "--db", str(old_database),
@@ -88,7 +88,7 @@ def test_serve_reaches_structured_http_refusal(old_database, monkeypatch):
 
     def run(app, **kwargs):
         with TestClient(app) as client:
-            assert_refusal(client.get("/api/v1/m2/jobs"))
+            assert_refusal(client.get("/api/v1/tasks/daily/jobs"))
         called.append(kwargs)
 
     monkeypatch.setattr("uvicorn.run", run)
@@ -107,12 +107,12 @@ def test_wal_only_old_tasks_are_detected_without_touching_sidecars(tmp_path):
         assert Path(str(path) + "-wal").stat().st_size > 0
         before = files_at(tmp_path)
         with TestClient(create_app(str(path))) as client:
-            assert_refusal(client.get("/api/v1/m2/jobs"))
+            assert_refusal(client.get("/api/v1/tasks/daily/jobs"))
         with pytest.raises(DomainError, match="旧版") as error:
             Store(path)
         assert error.value.code == CODE
         assert files_at(tmp_path) == before
-        assert db.execute("SELECT status FROM m2_jobs").fetchone()[0] == "queued"
+        assert db.execute("SELECT status FROM tasks").fetchone()[0] == "queued"
     finally:
         db.close()
 
@@ -122,5 +122,25 @@ def test_fresh_v6_database_can_reopen(tmp_path):
     for _ in range(2):
         with TestClient(create_app(str(path))) as client:
             assert client.get("/api/v1/health").status_code == 200
-            assert client.get("/api/v1/m2/jobs").status_code == 200
-            assert client.get("/api/v1/m2/jobs/catalogue").json()["contract_version"] == "m2-jobs.v6"
+            assert client.get("/api/v1/tasks/daily/jobs").status_code == 200
+            assert client.get("/api/v1/tasks/daily/jobs/catalogue").json()["contract_version"] == "m2-jobs.v6"
+
+
+def test_previous_table_layout_is_refused_without_creating_new_task_storage(tmp_path):
+    path = tmp_path / "previous-layout.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE m2_jobs (job_id TEXT PRIMARY KEY, manifest TEXT, status TEXT)")
+        db.execute("INSERT INTO m2_jobs VALUES (?, ?, 'queued')", (JOB, json.dumps({
+            "schema_version": "m2-job-manifest.v6",
+            "service_identity": {"backend_version": "0.11.0.dev1", "source_sha256": "1" * 64},
+        })))
+        db.execute("PRAGMA user_version=3")
+    db.close()
+    before = files_at(tmp_path)
+    with TestClient(create_app(str(path))) as client:
+        response = client.post(f"/api/v1/tasks/daily/jobs/{JOB}/resume", json={})
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "M2_DATABASE_SCHEMA_INCOMPATIBLE"
+        assert response.json()["error"]["details"]["database_modified"] is False
+    assert files_at(tmp_path) == before
+    assert not path.with_name(path.name + ".tasks").exists()

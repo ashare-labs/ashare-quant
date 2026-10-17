@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from examples.jq_minute_comparison.align import NAMES, captures, compare_aligned
-from examples.jq_minute_comparison.compare import audit_jq, audit_observed_marks, read_rows
+from tests.fixtures.minute_reference.align import NAMES, captures, compare_aligned
+from tests.fixtures.minute_reference.compare import audit_jq, audit_observed_marks, read_rows
 
 POLICIES = ["next_open-reject", "next_open-resize", "jq_current-reject", "jq_current-resize"]
 P2_PROBES = ["checkpoint_cash", "checkpoint_t1", "future_nested_fill"]
@@ -54,7 +54,7 @@ def mutate(rows, kind, platform="jq"):
         if kind == "future_nested_fill":
             from datetime import timedelta
 
-            from examples.jq_minute_comparison.compare import timestamp
+            from tests.fixtures.minute_reference.compare import timestamp
 
             later = (timestamp(returned["time"]) + timedelta(minutes=8)).isoformat(sep=" ")
             returned["order"]["add_time"] = later

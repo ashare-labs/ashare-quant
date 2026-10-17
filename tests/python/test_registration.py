@@ -11,13 +11,13 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from ashare_quant.api import create_app
+from ashare_quant.backtests.daily.parameter_policy import RegisteredPythonParameters
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2.parameter_policy import RegisteredPythonParameters
-from ashare_quant.m2_jobs.service import Jobs
-from ashare_quant.python_strategies.spec import PythonDescriptor
-from ashare_quant.python_strategies.supervision import BoundedOutput, check_phase
+from ashare_quant.strategies.python.spec import PythonDescriptor
+from ashare_quant.strategies.python.supervision import BoundedOutput, check_phase
+from ashare_quant.tasks.daily.service import Jobs
 
-NORMAL = """from ashare_quant.strategy_api import TargetShares
+NORMAL = """from ashare_quant.strategies.api import TargetShares
 print("OWNED_MODULE_LOADED")
 def on_decision(context, data, parameters):
     return TargetShares(100)
@@ -36,15 +36,15 @@ def test_local_registration_is_immutable_and_http_is_metadata_only(store, tmp_pa
     other.write_text(NORMAL + "\n# new version\n")
     assert jobs.register_python(other, PythonDescriptor()).version_id != version.version_id
     with TestClient(create_app(str(store.path))) as client:
-        url = "/api/v1/m2/python-strategies"
+        url = "/api/v1/tasks/daily/python-strategies"
         assert len(client.get(url).json()) == 2
         assert client.get(url + "/" + version.version_id).json()["version_id"] == version.version_id
         assert client.post(url, json={"source": NORMAL}).status_code == 405
-        c = client.get("/api/v1/m2/jobs/catalogue").json()
+        c = client.get("/api/v1/tasks/daily/jobs/catalogue").json()
         assert c["contract_version"] == "m2-jobs.v6"
         assert c["python_strategies"]["registration_status"] == "registered_not_executed"
         assert c["python_strategies"]["hostile_code_sandbox"] is False
-        assert client.get("/api/v1/m2/jobs").json() == {"items": []}
+        assert client.get("/api/v1/tasks/daily/jobs").json() == {"items": []}
     assert "OWNED_MODULE_LOADED" not in capsys.readouterr().out
 
 
@@ -83,7 +83,7 @@ def test_cli_registration_does_not_load_module(tmp_path):
     base = [sys.executable, "-m", "ashare_quant.cli", "--db", str(tmp_path / "control.sqlite3")]
     result = subprocess.run(
         base
-        + ["job-strategy-register-python", "--file", str(file), "--descriptor", str(descriptor)],
+        + ["task-strategy-register-python", "--file", str(file), "--descriptor", str(descriptor)],
         capture_output=True,
         text=True,
     )
@@ -91,7 +91,7 @@ def test_cli_registration_does_not_load_module(tmp_path):
     version = json.loads(result.stdout)["version_id"]
     assert "OWNED_MODULE_LOADED" not in result.stdout + result.stderr
     assert (
-        subprocess.run(base + ["job-python-strategy-get", version], capture_output=True).returncode
+        subprocess.run(base + ["task-python-strategy-get", version], capture_output=True).returncode
         == 0
     )
 

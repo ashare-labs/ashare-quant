@@ -18,12 +18,12 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import atomic, digest, sha
 from ashare_quant.paper import calendar_successor as successor
 from ashare_quant.paper import intraday, online
 from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.service import engine_pin
+from ashare_quant.storage.artifacts import atomic, digest, sha
 
 
 def files(root):

@@ -6,9 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from ashare_data import phase_observation as phase
-from ashare_data.daily_observation import atomic, sha
-from ashare_data.storage import immutable_write
+import ashare_data.observations.phases as phase
+from ashare_data.observations.daily import atomic, sha
+from ashare_data.storage.immutable import immutable_write
 
 
 def main():

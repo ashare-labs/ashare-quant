@@ -17,9 +17,7 @@ from importlib import metadata
 from pathlib import Path
 
 from ashare_quant.contracts import SHANGHAI
-from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
-
-from .online_contracts import (
+from ashare_quant.paper.online_contracts import (
     CONDITIONAL_MODEL,
     INTRADAY_MODELS,
     CalendarReplan,
@@ -28,10 +26,11 @@ from .online_contracts import (
     OnlineSession,
     OpeningInput,
 )
-from .online_gates import closing_gate, opening_gate
-from .risk import decision_gate, require
-from .runtime_migration import authorization_event, selected_continuation
-from .service import completed_proof, engine_pin, read_checkpoint
+from ashare_quant.paper.online_gates import closing_gate, opening_gate
+from ashare_quant.paper.risk import decision_gate, require
+from ashare_quant.paper.runtime_migration import authorization_event, selected_continuation
+from ashare_quant.paper.service import completed_proof, engine_pin, read_checkpoint
+from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, sha
 
 
 def now():
@@ -96,7 +95,7 @@ class OnlineService:
             "PAPER_SESSION_CHANGED",
         )
         if verify and selected_continuation(state) is not None:
-            from .intraday_continuation import verify_state
+            from ashare_quant.paper.intraday_continuation import verify_state
 
             verify_state(self.root, state, config, engine_pin())
         elif verify:
@@ -207,7 +206,7 @@ class OnlineService:
         if config.data_mode == "calendar_observed":
             at = now().astimezone(SHANGHAI)
             if config.model in INTRADAY_MODELS and start.hour == 9:
-                from .intraday_contracts import continuous, plan_for
+                from ashare_quant.paper.intraday_contracts import continuous, plan_for
 
                 plan = plan_for(config, decision)
                 cutoff = plan.intent_deadline if start.minute == 0 else plan.execution_deadline
@@ -236,7 +235,7 @@ class OnlineService:
         return self._prepare(OnlineDecision.model_validate(value))
 
     def prepare_observed(self, reader, capture, admission):
-        from .online_adapter import decision_from_owner
+        from ashare_quant.paper.online_adapter import decision_from_owner
 
         state, config = self._load()
         require(config.data_mode == "calendar_observed", "PAPER_EVIDENCE_MODE_MISMATCH")
@@ -335,8 +334,8 @@ class OnlineService:
         return self._deliver(phase, value)
 
     def deliver_observed(self, reader, day, phase, capture):
-        from .calendar_successor import bound_reader_config
-        from .online_adapter import execution_from_owner
+        from ashare_quant.paper.calendar_successor import bound_reader_config
+        from ashare_quant.paper.online_adapter import execution_from_owner
 
         state, config = self._load()
         require(config.data_mode == "calendar_observed", "PAPER_EVIDENCE_MODE_MISMATCH")

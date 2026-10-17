@@ -6,8 +6,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.paper.contracts import Decision, SessionConfig
 from ashare_quant.paper.risk import decision_gate
 from ashare_quant.paper.service import PaperService
-
-from .fixtures import close, config, decision, queue
+from tests.paper.fixtures import close, config, decision, queue
 
 
 def test_non_adjacent_record_date_is_not_silently_reinterpreted(tmp_path):

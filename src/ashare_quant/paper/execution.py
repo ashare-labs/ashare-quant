@@ -4,16 +4,14 @@ import json
 import os
 import subprocess
 import sys
-import zipfile
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
-
-from .contracts import RiskPolicy, SessionConfig
-from .risk import require
+from ashare_quant.paper.contracts import RiskPolicy, SessionConfig
+from ashare_quant.paper.risk import require
+from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, sha
 
 
 def copy_package(binding, expected, target):
@@ -40,15 +38,13 @@ def copy_package(binding, expected, target):
 
 
 def reader(root, spec, operation, day=None, orders=None):
-    # AD's new reader is isolated from the existing pinned AQ/RQ dependency set.
-    # Every executable wheel file is checked before this offline child starts.
-    for relative, expected in spec["runtime_inventory"].items():
-        require(sha(regular(root / "runtime" / relative)) == expected, "PAPER_AD_RUNTIME_CHANGED")
-    paths = [
-        str(root / "runtime"),
-        str(Path(__file__).resolve().parents[2]),
-        str(metadata.distribution("rqalpha").locate_file("")),
-    ]
+    from ashare_quant.providers.runtime import verify
+    current = verify()
+    require(spec["runtime_inventory"] == current["files"], "PAPER_AD_RUNTIME_CHANGED")
+    require(sha(regular(root / "owner.whl")) == spec["wheel_sha256"] == current["wheel_sha256"],
+            "PAPER_AD_RUNTIME_CHANGED")
+    paths = [str(Path(__file__).resolve().parents[2]),
+             str(metadata.distribution("rqalpha").locate_file(""))]
     boot = "import json,sys;sys.path[:0]=json.loads(sys.argv[1]);from ashare_quant.paper.execution_owner import main;main()"
     try:
         run = subprocess.run(
@@ -171,7 +167,7 @@ def bind(
     consumer_contract=None,
     consumer_contract_sha=None,
 ):
-    from .replay import strategy_version
+    from ashare_quant.paper.replay import strategy_version
 
     require(
         cash_credit_policy == "pay_date_before_open",
@@ -219,22 +215,11 @@ def bind(
             dest.parent.mkdir(parents=True, exist_ok=True)
             atomic(dest, meta["exact_gap_scope"])
         atomic(source / "owner.whl", wheel_raw)
-        inventory = {}
-        with zipfile.ZipFile(source / "owner.whl") as archive:
-            for name in archive.namelist():
-                rel = Path(name)
-                require(not rel.is_absolute() and ".." not in rel.parts, "PAPER_AD_SOURCE_PATH")
-                if name.endswith("/"):
-                    continue
-                data = archive.read(name)
-                dest = source / "runtime" / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                if dest.exists():
-                    require(regular(dest) == data, "PAPER_AD_RUNTIME_CHANGED")
-                else:
-                    atomic(dest, data)
-                inventory[name] = sha(data)
-        spec["runtime_inventory"] = inventory
+        from ashare_quant.providers.runtime import verify
+        paired = verify()
+        require(wheel_sha == paired["wheel_sha256"] and ad_commit == paired["commit"],
+                "PAPER_AD_RUNTIME_CHANGED", "Use the same installed data-owner candidate")
+        spec["runtime_inventory"] = paired["files"]
         description = reader(source, spec, "describe")
         require(set(description["securities"]) == set(manifest["securities"]), "PAPER_TARGET_SET")
         registry = {"spec": spec, "description": description}
@@ -437,7 +422,7 @@ class ExecutionInputs:
 
 
 def fork(service, sid, account, risk):
-    from .replay import load
+    from ashare_quant.paper.replay import load
 
     _, config = service.session(sid)
     binding, inputs = load(service, sid, config)
@@ -467,7 +452,7 @@ def fork(service, sid, account, risk):
 
 
 def ingest(service, sid, day, expected_parent, *, fault=None):
-    from .replay import load
+    from ashare_quant.paper.replay import load
 
     _, config = service.session(sid)
     binding, inputs = load(service, sid, config)

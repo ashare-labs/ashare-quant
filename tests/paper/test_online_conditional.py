@@ -7,12 +7,11 @@ from decimal import Decimal
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.online_contracts import CONDITIONAL_MODEL, OnlineSession
-
-from .fixtures import decision
-from .test_online import MODE, closing, opening, setup
+from ashare_quant.storage.artifacts import digest
+from tests.paper.fixtures import decision
+from tests.paper.test_online import MODE, closing, opening, setup
 
 
 def conditional(tmp_path):
@@ -174,9 +173,8 @@ def test_legacy_model_still_refuses_unknown_state_and_new_execution_proof(tmp_pa
 
 
 def test_model_change_requires_explicit_empty_plan_and_preserves_old_bytes(tmp_path):
-    from ashare_quant.m2_jobs.files import sha
-
-    from .test_calendar_replan import plan_for
+    from ashare_quant.storage.artifacts import sha
+    from tests.paper.test_calendar_replan import plan_for
 
     service, config = setup(tmp_path)
     raw = service.path.read_bytes()
@@ -240,9 +238,9 @@ def test_owner_opening_adapter_requires_v5_and_carries_refreshed_proof(tmp_path)
 def test_owner_preparation_uses_explicit_v5_readiness_without_inventing_normal_state(tmp_path):
     from pathlib import Path
 
-    from ashare_quant.daily_portfolio import signals
-    from ashare_quant.m2_jobs.files import sha
+    import ashare_quant.portfolio.signals as signals
     from ashare_quant.paper.online_adapter import UNIVERSE, decision_from_owner
+    from ashare_quant.storage.artifacts import sha
 
     _, base = conditional(tmp_path)
     config = base.model_copy(

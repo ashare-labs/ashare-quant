@@ -2,7 +2,7 @@
 
 import pytest
 
-from ashare_quant.minute.lifecycle import handle_clocks
+from ashare_quant.backtests.minute.lifecycle import handle_clocks
 
 
 def test_complete_callback_order_lunch_and_terminal_without_fabricated_bars(run_minute):

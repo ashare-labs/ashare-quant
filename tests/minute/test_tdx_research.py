@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from ashare_quant.minute import MinuteInputs, run_backtest
-from ashare_quant.minute.research import check_price, envelope
-from ashare_quant.minute.runner import MinuteRunError
+from ashare_quant.backtests.minute import MinuteInputs, run_backtest
+from ashare_quant.backtests.minute.bounded import check_price, envelope
+from ashare_quant.backtests.minute.runner import MinuteRunError
 
 INPUT_SHA = "8e9320af8ac8b5c51dc5ca67112199c8969fe3a34a71d1a20497d24a9d2c52b2"
-EXAMPLES = Path(__file__).resolve().parents[2] / "examples/tdx_minute_research"
+EXAMPLES = Path(__file__).resolve().parents[2] / "examples/minute_research"
 ACCEPT = dict(accept_assumed=True, accept_state_replay=True, accept_research=True)
 
 

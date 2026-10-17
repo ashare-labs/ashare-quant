@@ -12,10 +12,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
-
-from .risk import require
+import ashare_quant.portfolio.signals as signals
+from ashare_quant.paper.risk import require
+from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, sha
 
 
 def now():
@@ -23,7 +22,9 @@ def now():
 
 
 def read_ad(python, source, root, capture_id):
-    """Use AD's current source in an isolated process; don't upgrade native AD."""
+    """Read from the same installed candidate in an isolated process."""
+    from ashare_quant.providers.runtime import installed_paths
+    installed_paths(python, source)
     source = Path(source).resolve()
     inventory = {
         str(p.relative_to(source)): sha(regular(p))
@@ -32,7 +33,7 @@ def read_ad(python, source, root, capture_id):
     require(inventory, "PAPER_OBSERVATION_AD_MISSING")
     boot = (
         "import json,sys;sys.path.insert(0,sys.argv[1]);"
-        "from ashare_data.daily_observation import read;"
+        "from ashare_data.observations.daily import read;"
         "print(json.dumps(read(sys.argv[2],sys.argv[3]),ensure_ascii=False))"
     )
     run = subprocess.run(

@@ -7,11 +7,11 @@ from decimal import Decimal
 
 import pytest
 
+from ashare_quant.backtests.synthetic import FixtureReplayAdapter, fixture_bytes, specifications
 from ashare_quant.contracts import DomainError, RunCreate, StrategyCreate
-from ashare_quant.engine import FixtureReplayAdapter, fixture_bytes, specifications
-from ashare_quant.service import Service
-from ashare_quant.store import Store
-from ashare_quant.worker import work_one
+from ashare_quant.storage.store import Store
+from ashare_quant.tasks.synthetic.service import Service
+from ashare_quant.tasks.synthetic.worker import work_one
 
 
 def engine(scenario):
@@ -154,8 +154,8 @@ def test_actual_process_exit_and_new_process_recovery(store, queued):
     run = queued("restart")
     script = '''
 import os,sys
-from ashare_quant.store import Store
-from ashare_quant.engine import FixtureReplayAdapter
+from ashare_quant.storage.store import Store
+from ashare_quant.backtests.synthetic import FixtureReplayAdapter
 s=Store(sys.argv[1]); rid=sys.argv[2]
 _, token, cp=s.claim(rid)
 m=s.manifest(rid); e=FixtureReplayAdapter('restart',m.fixture_sha256)
@@ -188,7 +188,7 @@ def test_backup_restores_complete_projection(store, queued, tmp_path):
 
 def test_pin_change_blocks_but_correct_environment_can_resume(store, queued, monkeypatch):
     run = queued()
-    monkeypatch.setattr("ashare_quant.worker.source_sha256", lambda: "changed")
+    monkeypatch.setattr("ashare_quant.tasks.synthetic.worker.source_sha256", lambda: "changed")
     with pytest.raises(DomainError) as err:
         work_one(store, run.run_id)
     assert err.value.code == "BACKEND_CHANGED"

@@ -7,14 +7,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+import ashare_quant.strategies.python.supervision as supervision
+from ashare_quant.backtests.daily.contracts import Signal, StrategyDefinition
+from ashare_quant.backtests.daily.parameter_policy import BandParameters, RegisteredPythonParameters
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2.contracts import Signal, StrategyDefinition
-from ashare_quant.m2.parameter_policy import BandParameters, RegisteredPythonParameters
-from ashare_quant.m2.rules import DecisionRule, RuleCondition
-from ashare_quant.m2_jobs.executor import Configuration
-from ashare_quant.m2_jobs.policy import ServicePolicy
-from ashare_quant.m2_jobs.service import Jobs
-from ashare_quant.python_strategies import supervision
+from ashare_quant.strategies.daily.rules import DecisionRule, RuleCondition
+from ashare_quant.tasks.daily.executor import Configuration
+from ashare_quant.tasks.daily.service import Jobs
+from ashare_quant.tasks.policy import ServicePolicy
 
 
 @pytest.mark.parametrize("quantity", [300, 1000, 100000])
@@ -78,7 +78,7 @@ def test_resource_budgets_remain_positive_finite(kwargs):
 
 @pytest.mark.parametrize("invalid_lease", [False, True])
 def test_runner_watchdog_uses_configured_budget_and_preserves_lease_fence(tmp_path, monkeypatch, invalid_lease):
-    runner = runpy.run_path(str(Path(__file__).parents[1] / "src/ashare_quant/m2_jobs/runner.py"))
+    runner = runpy.run_path(str(Path(__file__).parents[1] / "src/ashare_quant/tasks/daily/runner.py"))
     calls = []
     class Connection:
         def __enter__(self):

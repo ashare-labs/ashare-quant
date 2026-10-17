@@ -10,25 +10,15 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .api import create_app
-from .contracts import DomainError, RunCreate, StrategyCreate
-from .d1 import (
-    D1CheckRequest,
-    PreviewRequest,
-    describe_plan,
-    preflight,
-    preview,
-    refuse_execution,
-)
-from .d1_br1 import BR1Request, br1_preflight, describe_br1_profile, refuse_br1_execution
-from .d1_codec import BR1BindRequest, FrozenBR1Reader
-from .data import capabilities
-from .engine import specifications
-from .research import ResearchCoverageQuery, ResearchQuery, ResearchReader
-from .service import Service
-from .storage_errors import storage_error
-from .store import Store
-from .worker import work_one
+from ashare_quant.api import create_app
+from ashare_quant.backtests.synthetic import specifications
+from ashare_quant.contracts import DomainError, RunCreate, StrategyCreate
+from ashare_quant.data import capabilities
+from ashare_quant.market.reader import ResearchCoverageQuery, ResearchQuery, ResearchReader
+from ashare_quant.storage.errors import storage_error
+from ashare_quant.storage.store import Store
+from ashare_quant.tasks.synthetic.service import Service
+from ashare_quant.tasks.synthetic.worker import work_one
 
 
 def emit(value):
@@ -45,23 +35,19 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "capabilities", "scenarios", "strategies", "runs", "openapi"):
         sub.add_parser(name)
-    sub.add_parser("d1-plan")
-    sub.add_parser("d1-br1-profile")
-    sub.add_parser("backtest-capabilities")
-    sub.add_parser("backtest-strategies")
     sub.add_parser("source-diagnostics-capabilities")
     sub.add_parser("source-diagnostics").add_argument("--request", required=True)
-    for name in ("job-catalogue", "jobs", "job-strategies", "job-python-strategies"):
+    for name in ("task-catalogue", "tasks", "task-strategies", "task-python-strategies"):
         sub.add_parser(name)
-    sub.add_parser("job-data-bind").add_argument("--dataset", required=True)
-    sub.add_parser("job-data-import").add_argument("--input", required=True)
-    sub.add_parser("job-strategy-register").add_argument("--request", required=True)
-    sub.add_parser("job-strategy-get").add_argument("version_id")
-    py_register = sub.add_parser("job-strategy-register-python")
+    sub.add_parser("task-data-bind").add_argument("--dataset", required=True)
+    sub.add_parser("task-data-import").add_argument("--input", required=True)
+    sub.add_parser("task-strategy-register").add_argument("--request", required=True)
+    sub.add_parser("task-strategy-get").add_argument("version_id")
+    py_register = sub.add_parser("task-strategy-register-python")
     py_register.add_argument("--file", required=True)
     py_register.add_argument("--descriptor", required=True)
-    sub.add_parser("job-python-strategy-get").add_argument("version_id")
-    sub.add_parser("job-create").add_argument("--request", required=True)
+    sub.add_parser("task-python-strategy-get").add_argument("version_id")
+    sub.add_parser("task-create").add_argument("--request", required=True)
     for name in ("portfolio-catalogue", "portfolio-jobs", "portfolio-strategies"):
         sub.add_parser(name)
     portfolio_import = sub.add_parser("portfolio-data-import")
@@ -71,24 +57,13 @@ def main(argv=None) -> int:
         sub.add_parser(name).add_argument("--request", required=True)
     for name in ("portfolio-status", "portfolio-manifest", "portfolio-logs", "portfolio-cancel", "portfolio-resume", "portfolio-result"):
         sub.add_parser(name).add_argument("job_id")
-    for name in ("job-status", "job-manifest", "job-logs", "job-cancel", "job-resume", "job-result"):
+    for name in ("task-status", "task-manifest", "task-logs", "task-cancel", "task-resume", "task-result"):
         sub.add_parser(name).add_argument("job_id")
-    sub.add_parser("job-service")
+    sub.add_parser("task-service")
     sub.add_parser("database-upgrade").add_argument("--destination", required=True)
-    task_worker = sub.add_parser("job-worker")
-    task_worker.add_argument("--job-id")
+    task_worker = sub.add_parser("task-worker")
+    task_worker.add_argument("--task-id", dest="job_id")
     task_worker.add_argument("--once", action="store_true")
-    sub.add_parser("backtest-strategy-register").add_argument("--definition", required=True)
-    for command in ("backtest-preflight", "backtest-submit"):
-        sub.add_parser(command).add_argument("--request", required=True)
-    binding = sub.add_parser("d1-br1-bind")
-    binding.add_argument("--store", required=True)
-    binding.add_argument("--dataset", required=True)
-    binding.add_argument("--request", required=True, help="Explicit conditional mode and backend profile hash")
-    for name in ("d1-br1-preflight", "d1-br1-run"):
-        sub.add_parser(name).add_argument("--request", required=True, help="Conditional BR1 contract; execution blocked")
-    for name in ("d1-preflight", "d1-intent-preview", "d1-run"):
-        sub.add_parser(name).add_argument("--request", required=True, help="Typed JSON; D1 execution stays blocked")
     strategy = sub.add_parser("strategy-create")
     strategy.add_argument("--name", required=True)
     strategy.add_argument("--scenario", required=True, choices=list(specifications()))
@@ -110,23 +85,23 @@ def main(argv=None) -> int:
     demo.add_argument("--engine", choices=["fixture-replay-v1", "rqalpha"], default="fixture-replay-v1")
     backup = sub.add_parser("backup")
     backup.add_argument("destination")
-    for command in ("research-describe", "research-read", "research-coverage"):
+    for command in ("market-describe", "market-read", "market-coverage"):
         research = sub.add_parser(command)
         research.add_argument("--store", required=True)
         research.add_argument("--dataset", required=True)
-        if command != "research-describe":
+        if command != "market-describe":
             research.add_argument("--request", required=True, help="Path to a typed JSON query; no collection")
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
     try:
         if args.command == "database-upgrade":
-            from .database_upgrade import upgrade_copy
+            from ashare_quant.storage.upgrade import upgrade_copy
             emit(upgrade_copy(args.db, args.destination))
             return 0
         if args.command in ("source-diagnostics-capabilities", "source-diagnostics"):
-            from .diagnostics.contracts import DiagnosticQuery
-            from .diagnostics.service import Diagnostics
+            from ashare_quant.diagnostics.contracts import DiagnosticQuery
+            from ashare_quant.diagnostics.service import Diagnostics
             diagnostics = Diagnostics()
             if args.command == "source-diagnostics-capabilities":
                 emit(diagnostics.capabilities())
@@ -135,12 +110,12 @@ def main(argv=None) -> int:
                 emit(diagnostics.diagnose(query))
             return 0  # A diagnostic report, including missing capabilities, never grants execution.
         if args.command.startswith("portfolio-"):
-            from .portfolio_jobs.contracts import (
+            from ashare_quant.tasks.portfolio.contracts import (
                 PortfolioCreate,
                 PortfolioSelection,
                 PortfolioStrategyDefinition,
             )
-            from .portfolio_jobs.service import PortfolioJobs
+            from ashare_quant.tasks.portfolio.service import PortfolioJobs
             jobs = PortfolioJobs(Store(args.db))
             if args.command == "portfolio-data-import":
                 emit(jobs.import_data(Path(args.input), args.name))
@@ -159,40 +134,40 @@ def main(argv=None) -> int:
                              "portfolio-resume": "resume", "portfolio-result": "result"}[args.command]
                 emit(getattr(jobs, operation)(args.job_id))
             return 0
-        if args.command == "jobs" or args.command.startswith("job-"):
-            from .m2_jobs.contracts import JobCreate
-            from .m2_jobs.service import Jobs
-            from .m2_jobs.worker import work_one as work_job
+        if args.command == "tasks" or args.command.startswith("task-"):
+            from ashare_quant.tasks.daily.contracts import JobCreate
+            from ashare_quant.tasks.daily.service import Jobs
+            from ashare_quant.tasks.worker import work_one as work_job
             jobs = Jobs(Store(args.db))
-            if args.command == "jobs":
+            if args.command == "tasks":
                 emit(jobs.list())
-            elif args.command == "job-service":
+            elif args.command == "task-service":
                 emit(jobs.service_status())
-            elif args.command == "job-strategy-register-python":
-                from .python_strategies.spec import PythonDescriptor
+            elif args.command == "task-strategy-register-python":
+                from ashare_quant.strategies.python.spec import PythonDescriptor
                 emit(jobs.register_python(args.file, PythonDescriptor.model_validate_json(Path(args.descriptor).read_text())))
-            elif args.command == "job-python-strategies":
+            elif args.command == "task-python-strategies":
                 emit(jobs.python_strategies())
-            elif args.command == "job-python-strategy-get":
+            elif args.command == "task-python-strategy-get":
                 emit(jobs.python_strategy(args.version_id))
-            elif args.command == "job-strategy-register":
-                from .m2.rules import RuleStrategyDefinition
+            elif args.command == "task-strategy-register":
+                from ashare_quant.strategies.daily.rules import RuleStrategyDefinition
                 emit(jobs.register_strategy(RuleStrategyDefinition.model_validate_json(Path(args.request).read_text())))
-            elif args.command == "job-strategies":
+            elif args.command == "task-strategies":
                 emit(jobs.list_strategies())
-            elif args.command == "job-strategy-get":
+            elif args.command == "task-strategy-get":
                 emit(jobs.get_strategy(args.version_id))
-            elif args.command == "job-catalogue":
+            elif args.command == "task-catalogue":
                 emit(jobs.catalogue())
-            elif args.command == "job-data-bind":
+            elif args.command == "task-data-bind":
                 emit(jobs.bind(args.dataset))
-            elif args.command == "job-data-import":
+            elif args.command == "task-data-import":
                 emit(jobs.import_data(Path(args.input)))
-            elif args.command == "job-create":
+            elif args.command == "task-create":
                 emit(jobs.create(JobCreate.model_validate_json(Path(args.request).read_text())))
-            elif args.command == "job-manifest":
+            elif args.command == "task-manifest":
                 emit(jobs.check(jobs.repo.row(args.job_id)))
-            elif args.command == "job-worker":
+            elif args.command == "task-worker":
                 if args.job_id or args.once:
                     processed = work_job(jobs, args.job_id)
                     if processed:
@@ -206,70 +181,21 @@ def main(argv=None) -> int:
                 except KeyboardInterrupt:
                     return 0
             else:
-                operation = {"job-status": "get", "job-logs": "logs", "job-cancel": "cancel",
-                             "job-resume": "resume", "job-result": "result"}[args.command]
+                operation = {"task-status": "get", "task-logs": "logs", "task-cancel": "cancel",
+                             "task-resume": "resume", "task-result": "result"}[args.command]
                 emit(getattr(jobs, operation)(args.job_id))
             return 0
-        if args.command.startswith("backtest-"):
-            from .m2.api import Capabilities
-            from .m2.catalogue import production_catalogue
-            from .m2.contracts import BacktestRequest, StrategyDefinition
-            from .m2.preflight import preflight as m2_preflight
-            from .m2.preflight import refuse_submission
-            from .m2.registry import StrategyRegistry
-            if args.command == "backtest-capabilities":
-                emit(Capabilities())
-                return 0
-            if args.command == "backtest-submit":
-                BacktestRequest.model_validate_json(Path(args.request).read_text())
-                refuse_submission()
-            registry = StrategyRegistry(Store(args.db))
-            if args.command == "backtest-strategy-register":
-                emit(registry.register(StrategyDefinition.model_validate_json(Path(args.definition).read_text())))
-                return 0
-            if args.command == "backtest-strategies":
-                emit(registry.list())
-                return 0
-            emit(m2_preflight(BacktestRequest.model_validate_json(Path(args.request).read_text()), registry, production_catalogue()))
-            return 2  # Preparation report never grants execution.
-        if args.command == "d1-br1-bind":
-            request = BR1BindRequest.model_validate_json(Path(args.request).read_text())
-            emit(FrozenBR1Reader(args.store, dataset_id=args.dataset, mode=request.mode,
-                                 backend_profile_sha256=request.backend_profile_sha256).snapshot().report)
-            return 0  # Successful read only; report.execution_permission is always false.
-        if args.command == "d1-br1-profile":
-            emit(describe_br1_profile())
-            return 0
-        if args.command.startswith("d1-br1-"):
-            result = br1_preflight(BR1Request.model_validate_json(Path(args.request).read_text()))
-            if args.command == "d1-br1-run":
-                refuse_br1_execution()
-            emit(result)
-            return 2
-        if args.command == "d1-plan":
-            emit(describe_plan())
-            return 0
-        if args.command.startswith("d1-"):
-            raw = Path(args.request).read_text()
-            if args.command == "d1-intent-preview":
-                emit(preview(PreviewRequest.model_validate_json(raw)))
-                return 0
-            result = preflight(D1CheckRequest.model_validate_json(raw))
-            if args.command == "d1-run":
-                refuse_execution()
-            emit(result)
-            return 2  # A diagnostic response is never execution admission.
         if args.command == "capabilities":
             emit(capabilities())
             return 0
         if args.command == "scenarios":
             emit(specifications())
             return 0
-        if args.command.startswith("research-"):
+        if args.command.startswith("market-"):
             reader = ResearchReader(args.store)
-            if args.command == "research-describe":
+            if args.command == "market-describe":
                 emit(reader.describe(args.dataset))
-            elif args.command == "research-read":
+            elif args.command == "market-read":
                 emit(reader.read(args.dataset, ResearchQuery.model_validate_json(Path(args.request).read_text())))
             else:
                 emit(reader.coverage(args.dataset, ResearchCoverageQuery.model_validate_json(Path(args.request).read_text())))
@@ -285,7 +211,7 @@ def main(argv=None) -> int:
         service = Service(store)
         match args.command:
             case "init":
-                emit({"database": str(store.path), "schema_version": 3})
+                emit({"database": str(store.path), "schema_version": 4})
             case "strategy-create":
                 emit(service.register_strategy(StrategyCreate(name=args.name, scenario=args.scenario, engine_id=args.engine)))
             case "strategies":

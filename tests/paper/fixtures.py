@@ -2,8 +2,8 @@
 
 from decimal import Decimal
 
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper.contracts import SessionConfig
+from ashare_quant.storage.artifacts import digest
 
 SECURITIES = ("000001.XSHE", "600000.XSHG")
 DATES = ("2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09")

@@ -15,15 +15,17 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest, sha
 from ashare_quant.paper import intraday, online
 from ashare_quant.paper import intraday_continuation as ext
 from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.service import engine_pin
+from ashare_quant.storage.artifacts import digest, sha
 
 
 def parent(tmp_path, fault=None):
+    if not os.getenv("ASHARE_CONTINUATION_ORIGIN"):
+        pytest.skip("Explicit isolated continuation origin required; not executed")
     origin = Path(os.environ["ASHARE_CONTINUATION_ORIGIN"])
     args = [
         sys.executable,
@@ -63,7 +65,7 @@ def parent(tmp_path, fault=None):
         def intraday(self, config, capture):
             # Read with the real immutable owner parser at an explicit fixture clock.
             assert self.pin() == config.admission_reader_sha256
-            boot = "import sys,json;from datetime import datetime;sys.path.insert(0,sys.argv[1]);from ashare_data import intraday_observation as o;o.now=lambda:datetime.fromisoformat('2026-10-15T10:03:31+08:00');print(json.dumps(o.read(sys.argv[2],sys.argv[3])))"
+            boot = "import sys,json;from datetime import datetime;sys.path.insert(0,sys.argv[1]);import ashare_data.observations.intraday as o;o.now=lambda:datetime.fromisoformat('2026-10-15T10:03:31+08:00');print(json.dumps(o.read(sys.argv[2],sys.argv[3])))"
             r = subprocess.run(
                 [
                     self.python,
@@ -97,7 +99,7 @@ import sys,json
 from pathlib import Path
 sys.path[:0]=[sys.argv[1],str(Path(sys.argv[1]).parent/'tests')]
 import pytest
-from ashare_data import intraday_observation as obs
+import ashare_data.observations.intraday as obs
 from test_intraday_observation import sources
 out={}
 for kind,at,after in [('admission','10:00:30','10:00:00'),('execution','10:03:30','10:00:31')]:

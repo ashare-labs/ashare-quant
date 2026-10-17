@@ -8,11 +8,11 @@ from decimal import Decimal as D
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper import intraday, online
 from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL, UNIVERSE, IntradayPlan
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.risk import order_admission
+from ashare_quant.storage.artifacts import digest
 
 DAY = "2026-10-19"
 PRICES = dict(zip(UNIVERSE, ("10", "20", "30"), strict=True))

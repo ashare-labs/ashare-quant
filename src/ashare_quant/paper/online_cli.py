@@ -6,13 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.m2_jobs.files import atomic, digest, regular, sha
-
-from .online import OnlineService
-from .online_adapter import UNIVERSE, OwnerReader
-from .online_contracts import CalendarReplan, OnlineSession
-from .risk import profiles, require
+import ashare_quant.portfolio.signals as signals
+from ashare_quant.paper.online import OnlineService
+from ashare_quant.paper.online_adapter import UNIVERSE, OwnerReader
+from ashare_quant.paper.online_contracts import CalendarReplan, OnlineSession
+from ashare_quant.paper.risk import profiles, require
+from ashare_quant.storage.artifacts import atomic, digest, regular, sha
 
 
 def main():

@@ -8,13 +8,12 @@ new day and the previous native checkpoint, never a rerun from an empty account.
 import json
 from pathlib import Path
 
+import ashare_quant.portfolio.signals as signals
 from ashare_quant.contracts import DomainError
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.daily_portfolio.inputs import Inputs
-from ashare_quant.m2_jobs.files import atomic, canonical, digest, lock, regular, sha
-
-from .contracts import CloseInput, Decision, RiskPolicy, SessionConfig
-from .risk import require
+from ashare_quant.paper.contracts import CloseInput, Decision, RiskPolicy, SessionConfig
+from ashare_quant.paper.risk import require
+from ashare_quant.portfolio.inputs import Inputs
+from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, sha
 
 
 def strategy_version(manifest, strategy):
@@ -130,7 +129,7 @@ def load(service, sid, config):
     binding = json.loads(regular(root / "binding.json"))
     require(digest(binding) == config.replay_binding_sha256, "PAPER_REPLAY_BINDING_CHANGED")
     if binding["schema"] == "paper-execution-binding.v1":
-        from .execution import ExecutionInputs
+        from ashare_quant.paper.execution import ExecutionInputs
 
         manifest_raw = regular(root / "manifest.json")
         require(

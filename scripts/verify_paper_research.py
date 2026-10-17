@@ -7,9 +7,9 @@ from decimal import Decimal
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import atomic
 from ashare_quant.paper.replay import advance, bind
 from ashare_quant.paper.service import PaperService
+from ashare_quant.storage.artifacts import atomic
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -34,7 +34,7 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     risk = json.loads((REPO / "examples/daily-paper-research-risk.json").read_text())
     atomic(out / "risk.json", risk)
-    manifest = REPO / "examples/daily_portfolio/manifest.json"
+    manifest = REPO / "examples/portfolio/manifest.json"
     scopes = json.loads(manifest.read_text())["windows"]
     results = []
 

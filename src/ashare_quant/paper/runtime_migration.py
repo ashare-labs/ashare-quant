@@ -15,10 +15,9 @@ from typing import Literal
 from pydantic import AwareDatetime, Field
 
 from ashare_quant.contracts import Contract
-from ashare_quant.m2_jobs.files import atomic, digest, lock, regular, sha
-
-from .contracts import Sha
-from .risk import require
+from ashare_quant.paper.contracts import Sha
+from ashare_quant.paper.risk import require
+from ashare_quant.storage.artifacts import atomic, digest, lock, regular, sha
 
 
 def now():
@@ -97,7 +96,7 @@ def authorization_event(state):
 
 
 def verify_authorized_state(root, state, config, m, current_pin):
-    from .intraday_continuation import verify_state
+    from ashare_quant.paper.intraday_continuation import verify_state
 
     a = authorization_gate(
         state["runtime_authorization"],
@@ -141,8 +140,8 @@ def migrate(
     stage=None,
 ):
     """Check or atomically authorize one unstarted, already bound continuation."""
-    from .intraday_continuation import manifest_gate, verify_state
-    from .service import engine_pin
+    from ashare_quant.paper.intraday_continuation import manifest_gate, verify_state
+    from ashare_quant.paper.service import engine_pin
 
     current = engine_pin()
     require(digest(current) == to_sha, "PAPER_FROZEN_RUNTIME_CHANGED")

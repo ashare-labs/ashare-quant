@@ -7,8 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ashare_quant.contracts import DomainError
-
-from .contracts import (
+from ashare_quant.paper.contracts import (
     AdvanceAction,
     CloseInput,
     ControlAction,
@@ -16,9 +15,9 @@ from .contracts import (
     ForkSimulation,
     SessionConfig,
 )
-from .errors import error_value
-from .risk import require
-from .service import PaperService
+from ashare_quant.paper.errors import error_value
+from ashare_quant.paper.risk import require
+from ashare_quant.paper.service import PaperService
 
 
 def create_app(root):
@@ -93,19 +92,19 @@ def create_app(root):
 
     @app.get("/api/v1/paper/risk-profiles")
     def risk_profiles():
-        from .risk import profiles
+        from ashare_quant.paper.risk import profiles
 
         return profiles()
 
     @app.post("/api/v1/paper/sessions/{sid}/fork", status_code=201)
     def fork(sid: str, body: ForkSimulation):
-        from .replay import bind, load
+        from ashare_quant.paper.replay import bind, load
 
         _, config = service.session(sid)
         binding, _ = load(service, sid, config)
         directory = service.root / sid / "replay"
         if binding["schema"] == "paper-execution-binding.v1":
-            from .execution import fork as execution_fork
+            from ashare_quant.paper.execution import fork as execution_fork
 
             return execution_fork(service, sid, body.account_id, body.risk.model_dump(mode="json"))
         return bind(
@@ -122,7 +121,7 @@ def create_app(root):
 
     @app.post("/api/v1/paper/sessions/{sid}/ingest")
     def ingest(sid: str, body: AdvanceAction):
-        from .execution import ingest as append
+        from ashare_quant.paper.execution import ingest as append
 
         try:
             return append(service, sid, body.day.isoformat(), body.expected_parent)
@@ -149,7 +148,7 @@ def create_app(root):
 
     @app.post("/api/v1/paper/sessions/{sid}/advance")
     def advance(sid: str, body: AdvanceAction):
-        from .replay import advance as replay_advance
+        from ashare_quant.paper.replay import advance as replay_advance
 
         return replay_advance(service, sid, body.day.isoformat(), body.expected_parent)
 

@@ -9,11 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.daily_portfolio.signals import decide
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper.api import create_app
 from ashare_quant.paper.replay import advance, bind, build, close_for
 from ashare_quant.paper.service import PaperService
+from ashare_quant.portfolio.signals import decide
+from ashare_quant.storage.artifacts import digest
 
 ROOT = Path(__file__).resolve().parents[2]
 RISK = {"max_gross": "1", "cash_buffer": "0"}
@@ -22,9 +22,9 @@ RISK = {"max_gross": "1", "cash_buffer": "0"}
 def source(tmp_path, change=None):
     root = tmp_path / "source"
     root.mkdir(exist_ok=True)
-    manifest = json.loads((ROOT / "examples/daily_portfolio/manifest.json").read_text())
+    manifest = json.loads((ROOT / "examples/portfolio/manifest.json").read_text())
     manifest["execution"]["initial_cash"] = "10000"
-    generate = runpy.run_path(str(ROOT / "scripts/verify_daily_portfolio.py"))["generate"]
+    generate = runpy.run_path(str(ROOT / "scripts/verify_portfolio.py"))["generate"]
     doc = generate(manifest, constant=True)
     for row in doc["daily"]:
         row["suspended"] = False
@@ -265,7 +265,7 @@ def test_real_mode_requires_owner_role_and_explicit_acceptance(tmp_path):
 )
 def test_data_failures_return_readable_api_actions_without_writes(tmp_path, scenario, code, text):
     if scenario == "stale":
-        from .fixtures import config, decision
+        from tests.paper.fixtures import config, decision
 
         service = PaperService(tmp_path / "store")
         cfg = config(tmp_path.name)

@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from ashare_quant.api import create_app
+from ashare_quant.backtests.daily.parameter_policy import parse_parameters
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2.common import canonical
-from ashare_quant.m2.parameter_policy import parse_parameters
-from ashare_quant.m2.registry import StrategyRegistry
-from ashare_quant.m2.rules import RuleStrategyDefinition
-from ashare_quant.m2.strategy import evaluate
+from ashare_quant.storage.canonical import canonical
+from ashare_quant.strategies.daily.registry import StrategyRegistry
+from ashare_quant.strategies.daily.rules import RuleStrategyDefinition
+from ashare_quant.strategies.daily.strategy import evaluate
 
 
 def definition():
@@ -169,7 +169,7 @@ def test_registry_canonical_versions_are_immutable(store):
     tampered = a.model_copy(update={"definition": b.definition})
     with store.connection(transaction=True) as db:
         db.execute(
-            "UPDATE m2_strategies SET body=? WHERE version_id=?",
+            "UPDATE registered_strategies SET body=? WHERE version_id=?",
             (canonical(tampered), a.version_id),
         )
     with pytest.raises(DomainError) as error:
@@ -178,25 +178,25 @@ def test_registry_canonical_versions_are_immutable(store):
 
 
 def test_api_registration_needs_no_data_or_engine_and_does_not_create_jobs(store, monkeypatch):
-    monkeypatch.delenv("ASHARE_QUANT_M2_STORE", raising=False)
+    monkeypatch.delenv("ASHARE_QUANT_DAILY_STORE", raising=False)
     with TestClient(create_app(str(store.path))) as client:
-        posted = client.post("/api/v1/m2/strategies", json=definition())
+        posted = client.post("/api/v1/tasks/daily/strategies", json=definition())
         assert posted.status_code == 201, posted.text
         version = posted.json()
-        assert client.post("/api/v1/m2/strategies", json=definition()).json() == version
-        assert client.get("/api/v1/m2/strategies/" + version["version_id"]).json() == version
-        assert client.get("/api/v1/m2/strategies").json() == [version]
-        assert client.get("/api/v1/m2/jobs").json() == {"items": []}
-        assert client.get("/api/v1/m2/strategies/" + "0" * 64).status_code == 404
-        assert client.get("/api/v1/m2/strategies?code=1").status_code == 422
+        assert client.post("/api/v1/tasks/daily/strategies", json=definition()).json() == version
+        assert client.get("/api/v1/tasks/daily/strategies/" + version["version_id"]).json() == version
+        assert client.get("/api/v1/tasks/daily/strategies").json() == [version]
+        assert client.get("/api/v1/tasks/daily/jobs").json() == {"items": []}
+        assert client.get("/api/v1/tasks/daily/strategies/" + "0" * 64).status_code == 404
+        assert client.get("/api/v1/tasks/daily/strategies?code=1").status_code == 422
         for field in ("source", "path", "frequency", "securities"):
             assert (
-                client.post("/api/v1/m2/strategies", json=definition() | {field: "bad"}).status_code
+                client.post("/api/v1/tasks/daily/strategies", json=definition() | {field: "bad"}).status_code
                 == 422
             )
-        schema = client.get("/api/v1/m2/openapi.json").json()
-        assert "/api/v1/m2/strategies" in schema["paths"]
-        c = client.get("/api/v1/m2/jobs/catalogue").json()
+        schema = client.get("/api/v1/tasks/daily/openapi.json").json()
+        assert "/api/v1/tasks/daily/strategies" in schema["paths"]
+        c = client.get("/api/v1/tasks/daily/jobs/catalogue").json()
         assert c["contract_version"] == "m2-jobs.v6"
         assert c["rule_strategies"]["code_execution"] is False
 

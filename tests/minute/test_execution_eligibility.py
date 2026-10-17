@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from ashare_quant.minute import research
-from ashare_quant.minute.inputs import MinuteInputs
-from ashare_quant.minute.runner import MinuteRunError
-from examples.jq_minute_comparison.audit_execution import audit_run
-from examples.jq_minute_comparison.audit_gaps import TDX_SHA256
+import ashare_quant.backtests.minute.bounded as research
+from ashare_quant.backtests.minute.inputs import MinuteInputs
+from ashare_quant.backtests.minute.runner import MinuteRunError
+from tests.fixtures.minute_reference.audit_execution import audit_run
+from tests.fixtures.minute_reference.audit_gaps import TDX_SHA256
 
 SID = "600000.XSHG"
 JQ = dict(

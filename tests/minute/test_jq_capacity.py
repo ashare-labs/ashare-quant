@@ -2,7 +2,7 @@
 
 import pytest
 
-from examples.jq_minute_comparison.audit_execution import audit_run
+from tests.fixtures.minute_reference.audit_execution import audit_run
 
 JQ = dict(
     lifecycle="jq_minute",
@@ -66,7 +66,7 @@ def on_strategy_end(c): assert g.day==3
     result, events, root = run_minute(source, doc=minute_session_doc, config=JQ)
     assert [t["amount"] for t in result["trades"]] == [200, 200, 200, 200, 1, 200, 1, 1, 1, 1]
     assert (
-        result["native_classes"]["account"] == "ashare_quant.second_batch.reservation.BudgetAccount"
+        result["native_classes"]["account"] == "ashare_quant.execution.reservation.BudgetAccount"
     )
     assert result["execution_policy"]["retrospective_daily_denominator"]
     assert result["execution_policy"]["platform_exact_cancel_time_verified"] is False

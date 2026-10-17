@@ -1,0 +1,5202 @@
+{
+  "components": {
+    "schemas": {
+      "AD08Tuple": {
+        "additionalProperties": false,
+        "properties": {
+          "adjust_origin": {
+            "format": "date",
+            "title": "Adjust Origin",
+            "type": "string"
+          },
+          "adjustment_requested": {
+            "const": "pre",
+            "default": "pre",
+            "title": "Adjustment Requested",
+            "type": "string"
+          },
+          "count": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "field": {
+            "const": "close",
+            "default": "close",
+            "title": "Field",
+            "type": "string"
+          },
+          "frequency": {
+            "const": "1d",
+            "default": "1d",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "history_date": {
+            "format": "date",
+            "title": "History Date",
+            "type": "string"
+          },
+          "include_now": {
+            "default": false,
+            "title": "Include Now",
+            "type": "boolean"
+          },
+          "security": {
+            "const": "600000.XSHG",
+            "default": "600000.XSHG",
+            "title": "Security",
+            "type": "string"
+          },
+          "skip_suspended": {
+            "default": false,
+            "title": "Skip Suspended",
+            "type": "boolean"
+          },
+          "trading_date": {
+            "format": "date",
+            "title": "Trading Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trading_date",
+          "history_date",
+          "adjust_origin"
+        ],
+        "title": "AD08Tuple",
+        "type": "object"
+      },
+      "AccountInput": {
+        "additionalProperties": false,
+        "properties": {
+          "account_as_of": {
+            "format": "date-time",
+            "title": "Account As Of",
+            "type": "string"
+          },
+          "account_id": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "cash": {
+            "maxLength": 32,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "commit_sequence": {
+            "minimum": 0.0,
+            "title": "Commit Sequence",
+            "type": "integer"
+          },
+          "quantity": {
+            "minimum": 0.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "run_id": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "sellable": {
+            "minimum": 0.0,
+            "title": "Sellable",
+            "type": "integer"
+          },
+          "snapshot_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Snapshot Sha256",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "initial",
+              "previous_day_committed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "account_id",
+          "source_kind",
+          "commit_sequence",
+          "snapshot_sha256",
+          "account_as_of",
+          "cash",
+          "quantity",
+          "sellable"
+        ],
+        "title": "AccountInput",
+        "type": "object"
+      },
+      "ActionRequest": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "ActionRequest",
+        "type": "object"
+      },
+      "AllowedWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "assumption_ack_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Assumption Ack Sha256",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "$ref": "#/components/schemas/M2Assumption"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "data_identity": {
+            "$ref": "#/components/schemas/PortableDataIdentity"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/M2ResultScope"
+          }
+        },
+        "required": [
+          "scope",
+          "assumption_ack_sha256",
+          "assumptions",
+          "data_identity"
+        ],
+        "title": "AllowedWindow",
+        "type": "object"
+      },
+      "BandParameters": {
+        "additionalProperties": false,
+        "properties": {
+          "enter_below": {
+            "default": "12.5",
+            "maxLength": 12,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$",
+            "title": "Enter Below",
+            "type": "string"
+          },
+          "exit_above": {
+            "default": "12.55",
+            "maxLength": 12,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$",
+            "title": "Exit Above",
+            "type": "string"
+          },
+          "frequency": {
+            "const": "1d",
+            "default": "1d",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "initial_cash": {
+            "default": "10000",
+            "maxLength": 12,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$",
+            "title": "Initial Cash",
+            "type": "string"
+          },
+          "security": {
+            "const": "600000.XSHG",
+            "default": "600000.XSHG",
+            "title": "Security",
+            "type": "string"
+          },
+          "target_shares": {
+            "default": 100,
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Target Shares",
+            "type": "integer"
+          },
+          "template": {
+            "const": "previous_close_band.v1",
+            "default": "previous_close_band.v1",
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "title": "BandParameters",
+        "type": "object"
+      },
+      "DataBindRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dataset Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "DataBindRequest",
+        "type": "object"
+      },
+      "DecisionContext": {
+        "additionalProperties": false,
+        "properties": {
+          "epoch": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+            "title": "Epoch",
+            "type": "string"
+          },
+          "event_cursor": {
+            "minimum": 0.0,
+            "title": "Event Cursor",
+            "type": "integer"
+          },
+          "generation": {
+            "minimum": 0.0,
+            "title": "Generation",
+            "type": "integer"
+          },
+          "logical_at": {
+            "format": "date-time",
+            "title": "Logical At",
+            "type": "string"
+          },
+          "phase": {
+            "const": "DECIDE",
+            "default": "DECIDE",
+            "title": "Phase",
+            "type": "string"
+          },
+          "previous_open": {
+            "format": "date",
+            "title": "Previous Open",
+            "type": "string"
+          },
+          "request_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Request Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "trading_date": {
+            "format": "date",
+            "title": "Trading Date",
+            "type": "string"
+          },
+          "window_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Window Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "request_sha256",
+          "window_id",
+          "trading_date",
+          "previous_open",
+          "logical_at",
+          "event_cursor",
+          "epoch",
+          "generation"
+        ],
+        "title": "DecisionContext",
+        "type": "object"
+      },
+      "DecisionRule": {
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "target_shares": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Target Shares",
+            "type": "integer"
+          },
+          "when_all": {
+            "items": {
+              "$ref": "#/components/schemas/RuleCondition"
+            },
+            "maxItems": 8,
+            "title": "When All",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rule_id",
+          "when_all",
+          "target_shares"
+        ],
+        "title": "DecisionRule",
+        "type": "object"
+      },
+      "EndDateSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_dates_source": {
+            "const": "windows[].scope.trading_dates",
+            "default": "windows[].scope.trading_dates",
+            "title": "Allowed Dates Source",
+            "type": "string"
+          },
+          "creates_owner_data": {
+            "const": false,
+            "default": false,
+            "title": "Creates Owner Data",
+            "type": "boolean"
+          },
+          "inclusive": {
+            "const": true,
+            "default": true,
+            "title": "Inclusive",
+            "type": "boolean"
+          },
+          "omitted_end": {
+            "const": "owner_window_end",
+            "default": "owner_window_end",
+            "title": "Omitted End",
+            "type": "string"
+          },
+          "policy": {
+            "const": "admitted_window_prefix.v1",
+            "default": "admitted_window_prefix.v1",
+            "title": "Policy",
+            "type": "string"
+          },
+          "request_field": {
+            "const": "end_date",
+            "default": "end_date",
+            "title": "Request Field",
+            "type": "string"
+          },
+          "start_date_selectable": {
+            "const": false,
+            "default": false,
+            "title": "Start Date Selectable",
+            "type": "boolean"
+          }
+        },
+        "title": "EndDateSelection",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "api_version": {
+            "const": "v1",
+            "default": "v1",
+            "title": "Api Version",
+            "type": "string"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "ExecutionScope": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "owner_window_id": {
+            "enum": [
+              "two_day",
+              "w1",
+              "w2"
+            ],
+            "title": "Owner Window Id",
+            "type": "string"
+          },
+          "parent_window_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Parent Window Sha256",
+            "type": "string"
+          },
+          "requested_end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested End Date"
+          },
+          "schema_version": {
+            "const": "m2.execution-prefix.v1",
+            "default": "m2.execution-prefix.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "settlement_successor": {
+            "format": "date",
+            "title": "Settlement Successor",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "trading_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Trading Dates",
+            "type": "array"
+          },
+          "warmup_date": {
+            "format": "date",
+            "title": "Warmup Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_window_id",
+          "parent_window_sha256",
+          "requested_end_date",
+          "start_date",
+          "end_date",
+          "trading_dates",
+          "warmup_date",
+          "settlement_successor"
+        ],
+        "title": "ExecutionScope",
+        "type": "object"
+      },
+      "HistoricalEnginePriceRead": {
+        "additionalProperties": false,
+        "properties": {
+          "authorizes_new_read": {
+            "const": false,
+            "default": false,
+            "title": "Authorizes New Read",
+            "type": "boolean"
+          },
+          "context": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Context",
+            "type": "object"
+          },
+          "native_observation_index": {
+            "title": "Native Observation Index",
+            "type": "integer"
+          },
+          "operation": {
+            "enum": [
+              "execution_bar",
+              "valuation_bar"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "owner_document_sha256": {
+            "additionalProperties": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "title": "Owner Document Sha256",
+            "type": "object"
+          },
+          "owner_documents": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Owner Documents",
+            "type": "object"
+          },
+          "trading_date": {
+            "format": "date",
+            "title": "Trading Date",
+            "type": "string"
+          },
+          "verification": {
+            "const": "committed_historical_integrity_only",
+            "default": "committed_historical_integrity_only",
+            "title": "Verification",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "trading_date",
+          "context",
+          "owner_documents",
+          "owner_document_sha256",
+          "native_observation_index"
+        ],
+        "title": "HistoricalEnginePriceRead",
+        "type": "object"
+      },
+      "JobCatalogue": {
+        "additionalProperties": false,
+        "properties": {
+          "configuration_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration Error"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "contract_version": {
+            "const": "m2-jobs.v6",
+            "default": "m2-jobs.v6",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "data_binding_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Binding Sha256"
+          },
+          "end_date_selection": {
+            "$ref": "#/components/schemas/EndDateSelection",
+            "default": {
+              "allowed_dates_source": "windows[].scope.trading_dates",
+              "creates_owner_data": false,
+              "inclusive": true,
+              "omitted_end": "owner_window_end",
+              "policy": "admitted_window_prefix.v1",
+              "request_field": "end_date",
+              "start_date_selectable": false
+            }
+          },
+          "executor_review_scope": {
+            "const": "portable_revision_not_independently_reviewed",
+            "default": "portable_revision_not_independently_reviewed",
+            "title": "Executor Review Scope",
+            "type": "string"
+          },
+          "executor_source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Executor Source Sha256",
+            "type": "string"
+          },
+          "executor_version": {
+            "title": "Executor Version",
+            "type": "string"
+          },
+          "general_backtests_enabled": {
+            "const": false,
+            "default": false,
+            "title": "General Backtests Enabled",
+            "type": "boolean"
+          },
+          "historical_pit_verified": {
+            "const": false,
+            "default": false,
+            "title": "Historical Pit Verified",
+            "type": "boolean"
+          },
+          "native_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Error"
+          },
+          "native_ready": {
+            "title": "Native Ready",
+            "type": "boolean"
+          },
+          "paper_live_enabled": {
+            "const": false,
+            "default": false,
+            "title": "Paper Live Enabled",
+            "type": "boolean"
+          },
+          "parameter_limits": {
+            "$ref": "#/components/schemas/ParameterLimits",
+            "default": {
+              "entry_comparison": "previous_close <= enter_below",
+              "exit_comparison": "previous_close >= exit_above",
+              "initial_cash_max_text_length": 12,
+              "initial_cash_min": "0.01",
+              "initial_position": 0,
+              "maximum_decimal_places": 2,
+              "policy_version": "m2-band-parameters.v1",
+              "target_shares": [
+                100,
+                200
+              ],
+              "target_shares_are_examples": true,
+              "target_shares_max": 9007199254740991,
+              "target_shares_min": 100,
+              "target_shares_multiple_of": 100,
+              "threshold_rule": "0 < enter_below < exit_above"
+            }
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/BandParameters",
+            "default": {
+              "enter_below": "12.5",
+              "exit_above": "12.55",
+              "frequency": "1d",
+              "initial_cash": "10000",
+              "security": "600000.XSHG",
+              "target_shares": 100,
+              "template": "previous_close_band.v1"
+            }
+          },
+          "python_strategies": {
+            "$ref": "#/components/schemas/PythonCapabilities",
+            "default": {
+              "api_contract": "python-decision-api.v1",
+              "arbitrary_data_queries": false,
+              "attempt_seconds": 120,
+              "callback_seconds": 5,
+              "hard_memory_quota": false,
+              "hostile_code_sandbox": false,
+              "module_load_seconds": 5,
+              "output_bytes": 1048576,
+              "parameters_bytes": 8192,
+              "registration": "local_cli_only",
+              "registration_status": "registered_not_executed",
+              "source_bytes": 65536,
+              "state_model": "stateless_per_decision",
+              "trust_model": "owner_trusted_local"
+            }
+          },
+          "rule_strategies": {
+            "$ref": "#/components/schemas/RuleStrategyCapabilities",
+            "default": {
+              "account_input": "prior_committed_snapshot",
+              "code_execution": false,
+              "contract_version": "m2-decision-rules.v1",
+              "day_index": "zero_based_owner_window_index",
+              "inputs": [
+                "previous_close",
+                "prior_cash",
+                "prior_quantity",
+                "day_index"
+              ],
+              "max_conditions_per_rule": 8,
+              "max_rules": 16,
+              "mutable_strategy_state": false,
+              "operators": [
+                "lt",
+                "le",
+                "eq",
+                "ne",
+                "ge",
+                "gt"
+              ],
+              "ordering": "first_match_all_conditions",
+              "otherwise": "no_change",
+              "required_data": "owner_authorized_previous_close_each_day",
+              "target_shares": [
+                0,
+                100,
+                200
+              ],
+              "target_shares_are_examples": true,
+              "target_shares_max": 9007199254740991,
+              "target_shares_min": 0,
+              "target_shares_multiple_of": 100
+            }
+          },
+          "service_identity": {
+            "$ref": "#/components/schemas/JobServiceIdentity"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/AllowedWindow"
+            },
+            "title": "Windows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "configured",
+          "configuration_error",
+          "data_binding_sha256",
+          "native_ready",
+          "native_error",
+          "windows",
+          "service_identity",
+          "executor_version",
+          "executor_source_sha256"
+        ],
+        "title": "JobCatalogue",
+        "type": "object"
+      },
+      "JobCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "assumption_ack_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Assumption Ack Sha256",
+            "type": "string"
+          },
+          "data_binding_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Data Binding Sha256",
+            "type": "string"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "idempotency_key": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^\\S(?:[^\\r\\n]*\\S)?$",
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "default": {
+              "enter_below": "12.5",
+              "exit_above": "12.55",
+              "frequency": "1d",
+              "initial_cash": "10000",
+              "security": "600000.XSHG",
+              "target_shares": 100,
+              "template": "previous_close_band.v1"
+            },
+            "discriminator": {
+              "mapping": {
+                "previous_close_band.v1": "#/components/schemas/BandParameters",
+                "registered_python.v1": "#/components/schemas/RegisteredPythonParameters",
+                "registered_rules.v1": "#/components/schemas/RegisteredRuleParameters"
+              },
+              "propertyName": "template"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BandParameters"
+              },
+              {
+                "$ref": "#/components/schemas/RegisteredRuleParameters"
+              },
+              {
+                "$ref": "#/components/schemas/RegisteredPythonParameters"
+              }
+            ],
+            "title": "Parameters"
+          },
+          "window_id": {
+            "enum": [
+              "two_day",
+              "w1",
+              "w2"
+            ],
+            "title": "Window Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "window_id",
+          "name",
+          "idempotency_key",
+          "assumption_ack_sha256",
+          "data_binding_sha256"
+        ],
+        "title": "JobCreate",
+        "type": "object"
+      },
+      "JobList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "JobList",
+        "type": "object"
+      },
+      "JobLog": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "at",
+          "event",
+          "details"
+        ],
+        "title": "JobLog",
+        "type": "object"
+      },
+      "JobLogs": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobLog"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "items"
+        ],
+        "title": "JobLogs",
+        "type": "object"
+      },
+      "JobManifest": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_window": {
+            "$ref": "#/components/schemas/AllowedWindow"
+          },
+          "data_binding_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Data Binding Sha256",
+            "type": "string"
+          },
+          "execution_scope": {
+            "$ref": "#/components/schemas/ExecutionScope"
+          },
+          "executor_source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Executor Source Sha256",
+            "type": "string"
+          },
+          "job_directory": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Directory",
+            "type": "string"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "parameters_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Parameters Sha256",
+            "type": "string"
+          },
+          "prepared_proof": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Prepared Proof",
+            "type": "object"
+          },
+          "python_source_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python Source Sha256"
+          },
+          "request": {
+            "$ref": "#/components/schemas/JobCreate"
+          },
+          "runner_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Runner Sha256",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "m2-job-manifest.v6",
+            "default": "m2-job-manifest.v6",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "service_identity": {
+            "$ref": "#/components/schemas/JobServiceIdentity"
+          },
+          "session": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Session",
+            "type": "object"
+          },
+          "session_file_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session File Sha256",
+            "type": "string"
+          },
+          "session_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session Sha256",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/M2StrategyVersion"
+          }
+        },
+        "required": [
+          "execution_scope",
+          "job_id",
+          "request",
+          "service_identity",
+          "executor_source_sha256",
+          "runner_sha256",
+          "parameters_sha256",
+          "data_binding_sha256",
+          "job_directory",
+          "session_sha256",
+          "session_file_sha256",
+          "session",
+          "strategy",
+          "approved_window",
+          "prepared_proof"
+        ],
+        "title": "JobManifest",
+        "type": "object"
+      },
+      "JobResult": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/M2AccountProjection"
+          },
+          "assumption_bundle_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Assumption Bundle Sha256",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "$ref": "#/components/schemas/M2Assumption"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "contract_version": {
+            "const": "m2-job-result.v6",
+            "default": "m2-job-result.v6",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "data_identity": {
+            "$ref": "#/components/schemas/PortableDataIdentity"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterDayProjection"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "engine_price_reads": {
+            "items": {
+              "$ref": "#/components/schemas/HistoricalEnginePriceRead"
+            },
+            "title": "Engine Price Reads",
+            "type": "array"
+          },
+          "evidence": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Evidence",
+            "type": "object"
+          },
+          "execution_identity": {
+            "$ref": "#/components/schemas/PortableExecutionIdentity"
+          },
+          "execution_scope": {
+            "$ref": "#/components/schemas/ExecutionScope"
+          },
+          "executor_review_scope": {
+            "const": "portable_revision_not_independently_reviewed",
+            "default": "portable_revision_not_independently_reviewed",
+            "title": "Executor Review Scope",
+            "type": "string"
+          },
+          "general_execution_permission": {
+            "const": false,
+            "default": false,
+            "title": "General Execution Permission",
+            "type": "boolean"
+          },
+          "historical_pit_verified": {
+            "const": false,
+            "default": false,
+            "title": "Historical Pit Verified",
+            "type": "boolean"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "paper_admitted": {
+            "const": false,
+            "default": false,
+            "title": "Paper Admitted",
+            "type": "boolean"
+          },
+          "recovery": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Recovery",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/JobCreate"
+          },
+          "result_status": {
+            "const": "completed_not_independently_reviewed",
+            "default": "completed_not_independently_reviewed",
+            "title": "Result Status",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/M2ResultScope"
+          },
+          "service_identity": {
+            "$ref": "#/components/schemas/JobServiceIdentity"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/M2StrategyVersion"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/M2ResultSummary"
+          },
+          "valuation_bar_query_observed": {
+            "title": "Valuation Bar Query Observed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "execution_scope",
+          "strategy",
+          "job_id",
+          "request",
+          "scope",
+          "summary",
+          "account",
+          "days",
+          "execution_identity",
+          "service_identity",
+          "data_identity",
+          "assumptions",
+          "assumption_bundle_sha256",
+          "recovery",
+          "evidence",
+          "manifest_sha256",
+          "valuation_bar_query_observed",
+          "engine_price_reads",
+          "limitations"
+        ],
+        "title": "JobResult",
+        "type": "object"
+      },
+      "JobServiceIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "backend_version": {
+            "title": "Backend Version",
+            "type": "string"
+          },
+          "contract_version": {
+            "const": "m2-jobs.v6",
+            "default": "m2-jobs.v6",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "independent_review_status": {
+            "const": "not_reviewed",
+            "default": "not_reviewed",
+            "title": "Independent Review Status",
+            "type": "string"
+          },
+          "source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend_version",
+          "source_sha256"
+        ],
+        "title": "JobServiceIdentity",
+        "type": "object"
+      },
+      "JobView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "can_resume": {
+            "title": "Can Resume",
+            "type": "boolean"
+          },
+          "cancellation_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Requested At"
+          },
+          "checkpoint_complete": {
+            "title": "Checkpoint Complete",
+            "type": "boolean"
+          },
+          "committed_cursor": {
+            "title": "Committed Cursor",
+            "type": "integer"
+          },
+          "contract_version": {
+            "const": "m2-jobs.v6",
+            "default": "m2-jobs.v6",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "recovery_required": {
+            "title": "Recovery Required",
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/JobCreate"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResultReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session Sha256",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "cancelling",
+              "cancelled",
+              "failed",
+              "succeeded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_cursors": {
+            "title": "Total Cursors",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "request",
+          "status",
+          "account_id",
+          "manifest_sha256",
+          "session_sha256",
+          "created_at",
+          "updated_at",
+          "attempt_count",
+          "committed_cursor",
+          "total_cursors",
+          "checkpoint_complete",
+          "cancellation_requested_at",
+          "recovery_required",
+          "can_resume",
+          "result",
+          "error"
+        ],
+        "title": "JobView",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "M2AD08Projection": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_native_observed": {
+            "const": true,
+            "default": true,
+            "title": "Actual Native Observed",
+            "type": "boolean"
+          },
+          "argument_types": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Argument Types",
+            "type": "object"
+          },
+          "cache_hit": {
+            "const": true,
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "codec_native_call_observed": {
+            "const": false,
+            "default": false,
+            "title": "Codec Native Call Observed",
+            "type": "boolean"
+          },
+          "consumption_authorization_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Consumption Authorization Sha256",
+            "type": "string"
+          },
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "first_call": {
+            "$ref": "#/components/schemas/NativeCallFact"
+          },
+          "history_call": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "History Call",
+            "type": "object"
+          },
+          "native_array_dtype": {
+            "const": "float64",
+            "title": "Native Array Dtype",
+            "type": "string"
+          },
+          "native_array_shape": {
+            "maxItems": 1,
+            "minItems": 1,
+            "prefixItems": [
+              {
+                "const": 1,
+                "type": "integer"
+              }
+            ],
+            "title": "Native Array Shape",
+            "type": "array"
+          },
+          "native_call_id": {
+            "title": "Native Call Id",
+            "type": "string"
+          },
+          "native_history_caller": {
+            "const": "_get_prev_close",
+            "title": "Native History Caller",
+            "type": "string"
+          },
+          "observed_returns": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Observed Returns",
+            "type": "array"
+          },
+          "owner_document_sha256": {
+            "additionalProperties": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "title": "Owner Document Sha256",
+            "type": "object"
+          },
+          "owner_documents": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Owner Documents",
+            "type": "object"
+          },
+          "previous_close": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Previous Close",
+            "type": "string"
+          }
+        },
+        "required": [
+          "native_call_id",
+          "native_history_caller",
+          "native_array_dtype",
+          "native_array_shape",
+          "history_call",
+          "argument_types",
+          "previous_close",
+          "cache_hit",
+          "consumption_authorization_sha256",
+          "owner_document_sha256",
+          "owner_documents",
+          "first_call",
+          "observed_returns",
+          "evidence_id"
+        ],
+        "title": "M2AD08Projection",
+        "type": "object"
+      },
+      "M2AccountProjection": {
+        "additionalProperties": false,
+        "properties": {
+          "average_price": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Average Price",
+            "type": "string"
+          },
+          "cash": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "dividend_receivable": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Dividend Receivable",
+            "type": "string"
+          },
+          "equity": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Equity",
+            "type": "string"
+          },
+          "native_daily_transaction_cost": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Native Daily Transaction Cost",
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 0.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "sellable": {
+            "minimum": 0.0,
+            "title": "Sellable",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cash",
+          "equity",
+          "quantity",
+          "sellable",
+          "average_price",
+          "dividend_receivable",
+          "native_daily_transaction_cost"
+        ],
+        "title": "M2AccountProjection",
+        "type": "object"
+      },
+      "M2Assumption": {
+        "additionalProperties": false,
+        "properties": {
+          "assumption_id": {
+            "title": "Assumption Id",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "owner": {
+            "enum": [
+              "ashare-data",
+              "ashare-quant"
+            ],
+            "title": "Owner",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assumption_id",
+          "owner",
+          "description",
+          "sha256",
+          "version"
+        ],
+        "title": "M2Assumption",
+        "type": "object"
+      },
+      "M2FillProjection": {
+        "additionalProperties": false,
+        "properties": {
+          "commission": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Commission",
+            "type": "string"
+          },
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "fee": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Fee",
+            "type": "string"
+          },
+          "fill_id": {
+            "title": "Fill Id",
+            "type": "string"
+          },
+          "filled_at": {
+            "format": "date-time",
+            "title": "Filled At",
+            "type": "string"
+          },
+          "order_id": {
+            "title": "Order Id",
+            "type": "string"
+          },
+          "price": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Price",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "tax": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Tax",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fill_id",
+          "order_id",
+          "side",
+          "quantity",
+          "price",
+          "commission",
+          "tax",
+          "fee",
+          "filled_at",
+          "evidence_id"
+        ],
+        "title": "M2FillProjection",
+        "type": "object"
+      },
+      "M2ResultScope": {
+        "additionalProperties": false,
+        "properties": {
+          "clock_basis": {
+            "const": "declared_daily_model_schedule_not_market_receipt",
+            "default": "declared_daily_model_schedule_not_market_receipt",
+            "title": "Clock Basis",
+            "type": "string"
+          },
+          "frequency": {
+            "const": "1d",
+            "default": "1d",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "grade": {
+            "const": "conditional_research",
+            "default": "conditional_research",
+            "title": "Grade",
+            "type": "string"
+          },
+          "initial_cash": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Initial Cash",
+            "type": "string"
+          },
+          "security": {
+            "const": "600000.XSHG",
+            "default": "600000.XSHG",
+            "title": "Security",
+            "type": "string"
+          },
+          "timezone": {
+            "const": "Asia/Shanghai",
+            "default": "Asia/Shanghai",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "trading_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Trading Dates",
+            "type": "array"
+          },
+          "window_id": {
+            "enum": [
+              "two_day",
+              "w1",
+              "w2"
+            ],
+            "title": "Window Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "window_id",
+          "trading_dates",
+          "initial_cash"
+        ],
+        "title": "M2ResultScope",
+        "type": "object"
+      },
+      "M2ResultSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_history_call_count": {
+            "minimum": 0.0,
+            "title": "Actual History Call Count",
+            "type": "integer"
+          },
+          "commission_total": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Commission Total",
+            "type": "string"
+          },
+          "committed_fill_count": {
+            "minimum": 0.0,
+            "title": "Committed Fill Count",
+            "type": "integer"
+          },
+          "committed_order_count": {
+            "minimum": 0.0,
+            "title": "Committed Order Count",
+            "type": "integer"
+          },
+          "fee_total": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Fee Total",
+            "type": "string"
+          },
+          "final_cash": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Final Cash",
+            "type": "string"
+          },
+          "final_equity": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Final Equity",
+            "type": "string"
+          },
+          "final_quantity": {
+            "minimum": 0.0,
+            "title": "Final Quantity",
+            "type": "integer"
+          },
+          "initial_cash": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Initial Cash",
+            "type": "string"
+          },
+          "native_cache_consumption_count": {
+            "minimum": 0.0,
+            "title": "Native Cache Consumption Count",
+            "type": "integer"
+          },
+          "net_change": {
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "title": "Net Change",
+            "type": "string"
+          },
+          "tax_total": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Tax Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "initial_cash",
+          "final_cash",
+          "final_equity",
+          "net_change",
+          "final_quantity",
+          "commission_total",
+          "tax_total",
+          "fee_total",
+          "committed_order_count",
+          "committed_fill_count",
+          "actual_history_call_count",
+          "native_cache_consumption_count"
+        ],
+        "title": "M2ResultSummary",
+        "type": "object"
+      },
+      "M2StrategyVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "definition": {
+            "discriminator": {
+              "mapping": {
+                "buy_hold.v1": "#/components/schemas/StrategyDefinition",
+                "decision_rules.v1": "#/components/schemas/RuleStrategyDefinition",
+                "previous_close_band.v1": "#/components/schemas/StrategyDefinition",
+                "trusted_python_decision.v1": "#/components/schemas/PythonDefinition"
+              },
+              "propertyName": "template"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StrategyDefinition"
+              },
+              {
+                "$ref": "#/components/schemas/RuleStrategyDefinition"
+              },
+              {
+                "$ref": "#/components/schemas/PythonDefinition"
+              }
+            ],
+            "title": "Definition"
+          },
+          "parameter_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Parameter Sha256",
+            "type": "string"
+          },
+          "source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "version_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "definition",
+          "source_sha256",
+          "parameter_sha256",
+          "created_at"
+        ],
+        "title": "M2StrategyVersion",
+        "type": "object"
+      },
+      "NativeCallFact": {
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "$ref": "#/components/schemas/AD08Tuple"
+          },
+          "codec_observation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec Observation"
+          },
+          "native_call_id": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+            "title": "Native Call Id",
+            "type": "string"
+          },
+          "native_return_repr": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Native Return Repr",
+            "type": "string"
+          },
+          "native_value": {
+            "maxLength": 32,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Native Value",
+            "type": "string"
+          },
+          "origin_context": {
+            "$ref": "#/components/schemas/DecisionContext"
+          },
+          "owner_documents": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnerDocuments"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_receipt": {
+            "$ref": "#/components/schemas/OwnerReadReceipt"
+          }
+        },
+        "required": [
+          "origin_context",
+          "call",
+          "owner_receipt",
+          "native_return_repr",
+          "native_value",
+          "native_call_id"
+        ],
+        "title": "NativeCallFact",
+        "type": "object"
+      },
+      "NativeOrderProjection": {
+        "additionalProperties": false,
+        "properties": {
+          "filled_quantity": {
+            "minimum": 0.0,
+            "title": "Filled Quantity",
+            "type": "integer"
+          },
+          "order_id": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "remaining_quantity": {
+            "minimum": 0.0,
+            "title": "Remaining Quantity",
+            "type": "integer"
+          },
+          "requested_quantity": {
+            "exclusiveMinimum": 0.0,
+            "title": "Requested Quantity",
+            "type": "integer"
+          },
+          "security": {
+            "const": "600000.XSHG",
+            "default": "600000.XSHG",
+            "title": "Security",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "filled",
+              "partially_filled",
+              "rejected",
+              "cancelled",
+              "active"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trade_ids": {
+            "items": {
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$",
+              "type": "string"
+            },
+            "title": "Trade Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "order_id",
+          "side",
+          "requested_quantity",
+          "filled_quantity",
+          "remaining_quantity",
+          "status",
+          "trade_ids"
+        ],
+        "title": "NativeOrderProjection",
+        "type": "object"
+      },
+      "NativeRejection": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "title": "Cursor",
+            "type": "integer"
+          },
+          "event": {
+            "const": "ORDER_CREATION_REJECT",
+            "default": "ORDER_CREATION_REJECT",
+            "title": "Event",
+            "type": "string"
+          },
+          "generation": {
+            "title": "Generation",
+            "type": "integer"
+          },
+          "native_observation_index": {
+            "title": "Native Observation Index",
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "phase": {
+            "const": "SUBMIT_MATCH",
+            "default": "SUBMIT_MATCH",
+            "title": "Phase",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "observed_at",
+          "native_observation_index",
+          "generation",
+          "cursor",
+          "order_id",
+          "reason"
+        ],
+        "title": "NativeRejection",
+        "type": "object"
+      },
+      "OwnerContractReview": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_permission": {
+            "const": false,
+            "default": false,
+            "title": "Execution Permission",
+            "type": "boolean"
+          },
+          "receipt_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Sha256"
+          },
+          "scope": {
+            "const": "data_production_contract_only",
+            "title": "Scope",
+            "type": "string"
+          },
+          "status": {
+            "const": "not_reviewed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "scope"
+        ],
+        "title": "OwnerContractReview",
+        "type": "object"
+      },
+      "OwnerDocuments": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization": {
+            "title": "Authorization",
+            "type": "string"
+          },
+          "evidence": {
+            "title": "Evidence",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "result": {
+            "title": "Result",
+            "type": "string"
+          },
+          "sources": {
+            "title": "Sources",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "result",
+          "sources",
+          "evidence",
+          "authorization"
+        ],
+        "title": "OwnerDocuments",
+        "type": "object"
+      },
+      "OwnerReadReceipt": {
+        "additionalProperties": false,
+        "description": "Flat synthetic transport with disjoint stable and authorization projections.\n\nFuture codecs must retain and verify the published owner's complete Evidence\nand Authorization; this local identity must never replace the owner digest.",
+        "properties": {
+          "assumption_ids": {
+            "items": {
+              "enum": [
+                "A-EQ",
+                "A-NORMAL",
+                "A-AD08",
+                "A-VIS",
+                "A-CLOSE",
+                "A-COST",
+                "A-POOL"
+              ],
+              "type": "string"
+            },
+            "title": "Assumption Ids",
+            "type": "array"
+          },
+          "authorization_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Authorization Sha256",
+            "type": "string"
+          },
+          "binding_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Binding Id",
+            "type": "string"
+          },
+          "call": {
+            "$ref": "#/components/schemas/AD08Tuple"
+          },
+          "dataset_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "evidence_kind": {
+            "enum": [
+              "synthetic",
+              "observed"
+            ],
+            "title": "Evidence Kind",
+            "type": "string"
+          },
+          "generation": {
+            "minimum": 0.0,
+            "title": "Generation",
+            "type": "integer"
+          },
+          "query_contract_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Query Contract Sha256",
+            "type": "string"
+          },
+          "role": {
+            "const": "decision_previous_close",
+            "title": "Role",
+            "type": "string"
+          },
+          "source_row_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Row Sha256",
+            "type": "string"
+          },
+          "use_profile_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Use Profile Sha256",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 32,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Value",
+            "type": "string"
+          },
+          "window_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Window Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding_id",
+          "dataset_id",
+          "use_profile_sha256",
+          "query_contract_sha256",
+          "window_id",
+          "role",
+          "call",
+          "value",
+          "source_row_sha256",
+          "evidence_kind",
+          "assumption_ids",
+          "authorization_sha256",
+          "generation"
+        ],
+        "title": "OwnerReadReceipt",
+        "type": "object"
+      },
+      "ParameterDayProjection": {
+        "additionalProperties": false,
+        "properties": {
+          "account_at_day_close": {
+            "$ref": "#/components/schemas/M2AccountProjection"
+          },
+          "account_at_execution": {
+            "$ref": "#/components/schemas/M2AccountProjection"
+          },
+          "ad08": {
+            "$ref": "#/components/schemas/M2AD08Projection"
+          },
+          "cumulative_fee": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Cumulative Fee",
+            "type": "string"
+          },
+          "day_close_at": {
+            "format": "date-time",
+            "title": "Day Close At",
+            "type": "string"
+          },
+          "day_close_commit_sequence": {
+            "title": "Day Close Commit Sequence",
+            "type": "integer"
+          },
+          "day_close_cursor": {
+            "title": "Day Close Cursor",
+            "type": "integer"
+          },
+          "day_fee": {
+            "maxLength": 40,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Day Fee",
+            "type": "string"
+          },
+          "decision_at": {
+            "format": "date-time",
+            "title": "Decision At",
+            "type": "string"
+          },
+          "decision_commit_sequence": {
+            "title": "Decision Commit Sequence",
+            "type": "integer"
+          },
+          "decision_cursor": {
+            "title": "Decision Cursor",
+            "type": "integer"
+          },
+          "decision_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "decision_verification": {
+            "default": "pure_rule_replay",
+            "enum": [
+              "pure_rule_replay",
+              "trusted_python_record.v1"
+            ],
+            "title": "Decision Verification",
+            "type": "string"
+          },
+          "economic_input_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Economic Input Sha256",
+            "type": "string"
+          },
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "execution_at": {
+            "format": "date-time",
+            "title": "Execution At",
+            "type": "string"
+          },
+          "execution_close": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Close"
+          },
+          "execution_commit_sequence": {
+            "title": "Execution Commit Sequence",
+            "type": "integer"
+          },
+          "execution_cursor": {
+            "title": "Execution Cursor",
+            "type": "integer"
+          },
+          "execution_price_read_status": {
+            "enum": [
+              "owner_execution_bar_observed",
+              "not_read_no_order"
+            ],
+            "title": "Execution Price Read Status",
+            "type": "string"
+          },
+          "fills": {
+            "items": {
+              "$ref": "#/components/schemas/M2FillProjection"
+            },
+            "title": "Fills",
+            "type": "array"
+          },
+          "native_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Reason"
+          },
+          "native_receipt_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Native Receipt Sha256",
+            "type": "string"
+          },
+          "native_rejections": {
+            "items": {
+              "$ref": "#/components/schemas/NativeRejection"
+            },
+            "title": "Native Rejections",
+            "type": "array"
+          },
+          "no_order_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Order Reason"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/NativeOrderProjection"
+            },
+            "title": "Orders",
+            "type": "array"
+          },
+          "previous_open": {
+            "format": "date",
+            "title": "Previous Open",
+            "type": "string"
+          },
+          "prior_committed_account": {
+            "$ref": "#/components/schemas/AccountInput"
+          },
+          "python_decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PythonDecisionReceipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signal": {
+            "$ref": "#/components/schemas/Signal"
+          },
+          "trading_date": {
+            "format": "date",
+            "title": "Trading Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trading_date",
+          "previous_open",
+          "decision_at",
+          "decision_id",
+          "economic_input_sha256",
+          "signal",
+          "prior_committed_account",
+          "ad08",
+          "execution_at",
+          "execution_close",
+          "execution_price_read_status",
+          "execution_commit_sequence",
+          "decision_commit_sequence",
+          "day_close_commit_sequence",
+          "decision_cursor",
+          "execution_cursor",
+          "day_close_cursor",
+          "no_order_reason",
+          "orders",
+          "fills",
+          "account_at_execution",
+          "account_at_day_close",
+          "day_close_at",
+          "day_fee",
+          "cumulative_fee",
+          "native_receipt_sha256",
+          "evidence_id",
+          "native_reason",
+          "native_rejections"
+        ],
+        "title": "ParameterDayProjection",
+        "type": "object"
+      },
+      "ParameterLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_comparison": {
+            "const": "previous_close <= enter_below",
+            "default": "previous_close <= enter_below",
+            "title": "Entry Comparison",
+            "type": "string"
+          },
+          "exit_comparison": {
+            "const": "previous_close >= exit_above",
+            "default": "previous_close >= exit_above",
+            "title": "Exit Comparison",
+            "type": "string"
+          },
+          "initial_cash_max": {
+            "title": "Initial Cash Max",
+            "type": "null"
+          },
+          "initial_cash_max_text_length": {
+            "const": 12,
+            "default": 12,
+            "title": "Initial Cash Max Text Length",
+            "type": "integer"
+          },
+          "initial_cash_min": {
+            "const": "0.01",
+            "default": "0.01",
+            "title": "Initial Cash Min",
+            "type": "string"
+          },
+          "initial_position": {
+            "const": 0,
+            "default": 0,
+            "title": "Initial Position",
+            "type": "integer"
+          },
+          "maximum_decimal_places": {
+            "const": 2,
+            "default": 2,
+            "title": "Maximum Decimal Places",
+            "type": "integer"
+          },
+          "policy_version": {
+            "const": "m2-band-parameters.v1",
+            "default": "m2-band-parameters.v1",
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "target_shares": {
+            "default": [
+              100,
+              200
+            ],
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "const": 100,
+                "type": "integer"
+              },
+              {
+                "const": 200,
+                "type": "integer"
+              }
+            ],
+            "title": "Target Shares",
+            "type": "array"
+          },
+          "target_shares_are_examples": {
+            "const": true,
+            "default": true,
+            "title": "Target Shares Are Examples",
+            "type": "boolean"
+          },
+          "target_shares_max": {
+            "default": 9007199254740991,
+            "title": "Target Shares Max",
+            "type": "integer"
+          },
+          "target_shares_min": {
+            "const": 100,
+            "default": 100,
+            "title": "Target Shares Min",
+            "type": "integer"
+          },
+          "target_shares_multiple_of": {
+            "const": 100,
+            "default": 100,
+            "title": "Target Shares Multiple Of",
+            "type": "integer"
+          },
+          "threshold_rule": {
+            "const": "0 < enter_below < exit_above",
+            "default": "0 < enter_below < exit_above",
+            "title": "Threshold Rule",
+            "type": "string"
+          }
+        },
+        "title": "ParameterLimits",
+        "type": "object"
+      },
+      "PortableDataIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "data_binding_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Data Binding Sha256",
+            "type": "string"
+          },
+          "dataset_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "external_owner_review_status": {
+            "const": "local_contract_verified_not_independently_reviewed",
+            "default": "local_contract_verified_not_independently_reviewed",
+            "title": "External Owner Review Status",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "original_owner_envelope_review": {
+            "const": "PENDING",
+            "default": "PENDING",
+            "title": "Original Owner Envelope Review",
+            "type": "string"
+          },
+          "original_owner_execution_authorized": {
+            "const": false,
+            "default": false,
+            "title": "Original Owner Execution Authorized",
+            "type": "boolean"
+          },
+          "original_quality": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Original Quality",
+            "type": "object"
+          },
+          "owner_commit": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Commit"
+          },
+          "owner_contract_review": {
+            "$ref": "#/components/schemas/OwnerContractReview"
+          },
+          "owner_descriptor": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Owner Descriptor",
+            "type": "object"
+          },
+          "owner_runtime_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Owner Runtime Sha256",
+            "type": "string"
+          },
+          "owner_version": {
+            "title": "Owner Version",
+            "type": "string"
+          },
+          "profile_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Profile Sha256",
+            "type": "string"
+          },
+          "query_contract_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Query Contract Sha256",
+            "type": "string"
+          },
+          "source_evidence_kind": {
+            "const": "source_claim_unverified",
+            "default": "source_claim_unverified",
+            "title": "Source Evidence Kind",
+            "type": "string"
+          },
+          "source_references": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Source References",
+            "type": "array"
+          }
+        },
+        "required": [
+          "owner_version",
+          "owner_commit",
+          "owner_runtime_sha256",
+          "dataset_id",
+          "manifest_sha256",
+          "profile_sha256",
+          "query_contract_sha256",
+          "data_binding_sha256",
+          "original_quality",
+          "owner_contract_review",
+          "owner_descriptor",
+          "source_references"
+        ],
+        "title": "PortableDataIdentity",
+        "type": "object"
+      },
+      "PortableExecutionIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "backend_version": {
+            "title": "Backend Version",
+            "type": "string"
+          },
+          "engine": {
+            "const": "RQAlpha",
+            "default": "RQAlpha",
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_commit": {
+            "const": "0d98adefa87956e26f3e7ca5b26b5f3fc7ca834f",
+            "default": "0d98adefa87956e26f3e7ca5b26b5f3fc7ca834f",
+            "title": "Engine Commit",
+            "type": "string"
+          },
+          "engine_version": {
+            "const": "6.4.1",
+            "default": "6.4.1",
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "identity_basis": {
+            "const": "installed_source_and_fixed_runtime",
+            "default": "installed_source_and_fixed_runtime",
+            "title": "Identity Basis",
+            "type": "string"
+          },
+          "native_run_identity": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Native Run Identity",
+            "type": "string"
+          },
+          "runtime_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Runtime Sha256",
+            "type": "string"
+          },
+          "session_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session Sha256",
+            "type": "string"
+          },
+          "source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend_version",
+          "source_sha256",
+          "runtime_sha256",
+          "native_run_identity",
+          "session_sha256"
+        ],
+        "title": "PortableExecutionIdentity",
+        "type": "object"
+      },
+      "PythonCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "api_contract": {
+            "const": "python-decision-api.v1",
+            "default": "python-decision-api.v1",
+            "title": "Api Contract",
+            "type": "string"
+          },
+          "arbitrary_data_queries": {
+            "const": false,
+            "default": false,
+            "title": "Arbitrary Data Queries",
+            "type": "boolean"
+          },
+          "attempt_seconds": {
+            "default": 120,
+            "title": "Attempt Seconds",
+            "type": "integer"
+          },
+          "callback_seconds": {
+            "default": 5,
+            "title": "Callback Seconds",
+            "type": "integer"
+          },
+          "hard_memory_quota": {
+            "const": false,
+            "default": false,
+            "title": "Hard Memory Quota",
+            "type": "boolean"
+          },
+          "hostile_code_sandbox": {
+            "const": false,
+            "default": false,
+            "title": "Hostile Code Sandbox",
+            "type": "boolean"
+          },
+          "module_load_seconds": {
+            "default": 5,
+            "title": "Module Load Seconds",
+            "type": "integer"
+          },
+          "output_bytes": {
+            "default": 1048576,
+            "title": "Output Bytes",
+            "type": "integer"
+          },
+          "parameters_bytes": {
+            "const": 8192,
+            "default": 8192,
+            "title": "Parameters Bytes",
+            "type": "integer"
+          },
+          "registration": {
+            "const": "local_cli_only",
+            "default": "local_cli_only",
+            "title": "Registration",
+            "type": "string"
+          },
+          "registration_status": {
+            "const": "registered_not_executed",
+            "default": "registered_not_executed",
+            "title": "Registration Status",
+            "type": "string"
+          },
+          "source_bytes": {
+            "const": 65536,
+            "default": 65536,
+            "title": "Source Bytes",
+            "type": "integer"
+          },
+          "state_model": {
+            "const": "stateless_per_decision",
+            "default": "stateless_per_decision",
+            "title": "State Model",
+            "type": "string"
+          },
+          "trust_model": {
+            "const": "owner_trusted_local",
+            "default": "owner_trusted_local",
+            "title": "Trust Model",
+            "type": "string"
+          }
+        },
+        "title": "PythonCapabilities",
+        "type": "object"
+      },
+      "PythonDecisionReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "additionalProperties": true,
+            "title": "Input",
+            "type": "object"
+          },
+          "input_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Input Sha256",
+            "type": "string"
+          },
+          "output_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Output Sha256",
+            "type": "string"
+          },
+          "parameters_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Parameters Sha256",
+            "type": "string"
+          },
+          "sdk_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Sdk Sha256",
+            "type": "string"
+          },
+          "signal": {
+            "$ref": "#/components/schemas/Signal"
+          },
+          "source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "strategy_reason": {
+            "maxLength": 256,
+            "title": "Strategy Reason",
+            "type": "string"
+          },
+          "strategy_version_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Strategy Version Id",
+            "type": "string"
+          },
+          "verification_kind": {
+            "const": "trusted_python_record.v1",
+            "default": "trusted_python_record.v1",
+            "title": "Verification Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_version_id",
+          "source_sha256",
+          "sdk_sha256",
+          "parameters_sha256",
+          "input",
+          "input_sha256",
+          "signal",
+          "strategy_reason",
+          "output_sha256"
+        ],
+        "title": "PythonDecisionReceipt",
+        "type": "object"
+      },
+      "PythonDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "api_contract": {
+            "const": "python-decision-api.v1",
+            "default": "python-decision-api.v1",
+            "title": "Api Contract",
+            "type": "string"
+          },
+          "data_profile": {
+            "const": "m2.previous_close.v1",
+            "default": "m2.previous_close.v1",
+            "title": "Data Profile",
+            "type": "string"
+          },
+          "dependencies": {
+            "default": [
+              "decimal",
+              "math"
+            ],
+            "items": {
+              "enum": [
+                "decimal",
+                "math"
+              ],
+              "type": "string"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "entrypoint": {
+            "const": "on_decision",
+            "default": "on_decision",
+            "title": "Entrypoint",
+            "type": "string"
+          },
+          "resource_profile": {
+            "const": "python-local-bounded.v1",
+            "default": "python-local-bounded.v1",
+            "title": "Resource Profile",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "trusted-python-descriptor.v1",
+            "default": "trusted-python-descriptor.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sdk_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Sdk Sha256",
+            "type": "string"
+          },
+          "source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "state_model": {
+            "const": "stateless_per_decision",
+            "default": "stateless_per_decision",
+            "title": "State Model",
+            "type": "string"
+          },
+          "template": {
+            "const": "trusted_python_decision.v1",
+            "default": "trusted_python_decision.v1",
+            "title": "Template",
+            "type": "string"
+          },
+          "trust_model": {
+            "const": "owner_trusted_local",
+            "default": "owner_trusted_local",
+            "title": "Trust Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_sha256",
+          "sdk_sha256"
+        ],
+        "title": "PythonDefinition",
+        "type": "object"
+      },
+      "RegisteredPythonParameters": {
+        "additionalProperties": false,
+        "properties": {
+          "frequency": {
+            "const": "1d",
+            "default": "1d",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "initial_cash": {
+            "default": "10000",
+            "maxLength": 12,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$",
+            "title": "Initial Cash",
+            "type": "string"
+          },
+          "security": {
+            "const": "600000.XSHG",
+            "default": "600000.XSHG",
+            "title": "Security",
+            "type": "string"
+          },
+          "strategy_parameters": {
+            "additionalProperties": true,
+            "title": "Strategy Parameters",
+            "type": "object"
+          },
+          "strategy_version_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Strategy Version Id",
+            "type": "string"
+          },
+          "template": {
+            "const": "registered_python.v1",
+            "default": "registered_python.v1",
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_version_id"
+        ],
+        "title": "RegisteredPythonParameters",
+        "type": "object"
+      },
+      "RegisteredRuleParameters": {
+        "additionalProperties": false,
+        "properties": {
+          "frequency": {
+            "const": "1d",
+            "default": "1d",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "initial_cash": {
+            "default": "10000",
+            "maxLength": 12,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$",
+            "title": "Initial Cash",
+            "type": "string"
+          },
+          "security": {
+            "const": "600000.XSHG",
+            "default": "600000.XSHG",
+            "title": "Security",
+            "type": "string"
+          },
+          "strategy_version_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Strategy Version Id",
+            "type": "string"
+          },
+          "template": {
+            "const": "registered_rules.v1",
+            "default": "registered_rules.v1",
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_version_id"
+        ],
+        "title": "RegisteredRuleParameters",
+        "type": "object"
+      },
+      "ResultReference": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Evidence Manifest Sha256",
+            "type": "string"
+          },
+          "href": {
+            "title": "Href",
+            "type": "string"
+          },
+          "publication": {
+            "pattern": "^publication-[1-9][0-9]*$",
+            "title": "Publication",
+            "type": "string"
+          },
+          "result_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Result Id",
+            "type": "string"
+          },
+          "snapshot_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Snapshot Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id",
+          "href",
+          "snapshot_sha256",
+          "evidence_manifest_sha256",
+          "publication"
+        ],
+        "title": "ResultReference",
+        "type": "object"
+      },
+      "RuleCondition": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "enum": [
+              "previous_close",
+              "prior_cash",
+              "prior_quantity",
+              "day_index"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "operator": {
+            "enum": [
+              "lt",
+              "le",
+              "eq",
+              "ne",
+              "ge",
+              "gt"
+            ],
+            "title": "Operator",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 24,
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "operator",
+          "value"
+        ],
+        "title": "RuleCondition",
+        "type": "object"
+      },
+      "RuleStrategyCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "account_input": {
+            "const": "prior_committed_snapshot",
+            "default": "prior_committed_snapshot",
+            "title": "Account Input",
+            "type": "string"
+          },
+          "code_execution": {
+            "const": false,
+            "default": false,
+            "title": "Code Execution",
+            "type": "boolean"
+          },
+          "contract_version": {
+            "const": "m2-decision-rules.v1",
+            "default": "m2-decision-rules.v1",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "day_index": {
+            "const": "zero_based_owner_window_index",
+            "default": "zero_based_owner_window_index",
+            "title": "Day Index",
+            "type": "string"
+          },
+          "inputs": {
+            "default": [
+              "previous_close",
+              "prior_cash",
+              "prior_quantity",
+              "day_index"
+            ],
+            "items": {
+              "enum": [
+                "previous_close",
+                "prior_cash",
+                "prior_quantity",
+                "day_index"
+              ],
+              "type": "string"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "max_conditions_per_rule": {
+            "const": 8,
+            "default": 8,
+            "title": "Max Conditions Per Rule",
+            "type": "integer"
+          },
+          "max_rules": {
+            "const": 16,
+            "default": 16,
+            "title": "Max Rules",
+            "type": "integer"
+          },
+          "mutable_strategy_state": {
+            "const": false,
+            "default": false,
+            "title": "Mutable Strategy State",
+            "type": "boolean"
+          },
+          "operators": {
+            "default": [
+              "lt",
+              "le",
+              "eq",
+              "ne",
+              "ge",
+              "gt"
+            ],
+            "items": {
+              "enum": [
+                "lt",
+                "le",
+                "eq",
+                "ne",
+                "ge",
+                "gt"
+              ],
+              "type": "string"
+            },
+            "title": "Operators",
+            "type": "array"
+          },
+          "ordering": {
+            "const": "first_match_all_conditions",
+            "default": "first_match_all_conditions",
+            "title": "Ordering",
+            "type": "string"
+          },
+          "otherwise": {
+            "const": "no_change",
+            "default": "no_change",
+            "title": "Otherwise",
+            "type": "string"
+          },
+          "required_data": {
+            "const": "owner_authorized_previous_close_each_day",
+            "default": "owner_authorized_previous_close_each_day",
+            "title": "Required Data",
+            "type": "string"
+          },
+          "target_shares": {
+            "default": [
+              0,
+              100,
+              200
+            ],
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "const": 0,
+                "type": "integer"
+              },
+              {
+                "const": 100,
+                "type": "integer"
+              },
+              {
+                "const": 200,
+                "type": "integer"
+              }
+            ],
+            "title": "Target Shares",
+            "type": "array"
+          },
+          "target_shares_are_examples": {
+            "const": true,
+            "default": true,
+            "title": "Target Shares Are Examples",
+            "type": "boolean"
+          },
+          "target_shares_max": {
+            "default": 9007199254740991,
+            "title": "Target Shares Max",
+            "type": "integer"
+          },
+          "target_shares_min": {
+            "const": 0,
+            "default": 0,
+            "title": "Target Shares Min",
+            "type": "integer"
+          },
+          "target_shares_multiple_of": {
+            "const": 100,
+            "default": 100,
+            "title": "Target Shares Multiple Of",
+            "type": "integer"
+          }
+        },
+        "title": "RuleStrategyCapabilities",
+        "type": "object"
+      },
+      "RuleStrategyDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "otherwise": {
+            "const": "no_change",
+            "default": "no_change",
+            "title": "Otherwise",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "template": {
+            "const": "decision_rules.v1",
+            "default": "decision_rules.v1",
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rules"
+        ],
+        "title": "RuleStrategyDefinition",
+        "type": "object"
+      },
+      "ServicePolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "admission_wait_seconds": {
+            "default": 2,
+            "exclusiveMinimum": 0.0,
+            "title": "Admission Wait Seconds",
+            "type": "number"
+          },
+          "callback_seconds": {
+            "default": 5,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Callback Seconds",
+            "type": "integer"
+          },
+          "cpu_seconds": {
+            "default": 120,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Cpu Seconds",
+            "type": "integer"
+          },
+          "execution_seconds": {
+            "default": 120,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Execution Seconds",
+            "type": "integer"
+          },
+          "file_bytes": {
+            "default": 67108864,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1048576.0,
+            "title": "File Bytes",
+            "type": "integer"
+          },
+          "max_attempts": {
+            "default": 8,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "max_pending": {
+            "default": 32,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Max Pending",
+            "type": "integer"
+          },
+          "max_workers": {
+            "default": 1,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Max Workers",
+            "type": "integer"
+          },
+          "module_load_seconds": {
+            "default": 5,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Module Load Seconds",
+            "type": "integer"
+          },
+          "open_files": {
+            "default": 256,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 64.0,
+            "title": "Open Files",
+            "type": "integer"
+          },
+          "output_bytes": {
+            "default": 1048576,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1024.0,
+            "title": "Output Bytes",
+            "type": "integer"
+          },
+          "preparation_seconds": {
+            "default": 60,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Preparation Seconds",
+            "type": "integer"
+          },
+          "rss_bytes": {
+            "default": 1073741824,
+            "maximum": 9.223372036854776e+18,
+            "minimum": 16777216.0,
+            "title": "Rss Bytes",
+            "type": "integer"
+          },
+          "schema_version": {
+            "const": "m2-job-service-policy.v1",
+            "default": "m2-job-service-policy.v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "title": "ServicePolicy",
+        "type": "object"
+      },
+      "ServiceStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "available_pending": {
+            "title": "Available Pending",
+            "type": "integer"
+          },
+          "contract_version": {
+            "const": "m2-job-service.v1",
+            "default": "m2-job-service.v1",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "job_contract_version": {
+            "const": "m2-jobs.v6",
+            "default": "m2-jobs.v6",
+            "title": "Job Contract Version",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ServicePolicy"
+          },
+          "policy_sha256": {
+            "title": "Policy Sha256",
+            "type": "string"
+          },
+          "queue_order": {
+            "const": "created_at_then_rowid",
+            "default": "created_at_then_rowid",
+            "title": "Queue Order",
+            "type": "string"
+          },
+          "recovery_required": {
+            "title": "Recovery Required",
+            "type": "integer"
+          },
+          "resource_scope": {
+            "const": "per_database_local_trusted_processes",
+            "default": "per_database_local_trusted_processes",
+            "title": "Resource Scope",
+            "type": "string"
+          },
+          "unaccepted_task_directories": {
+            "default": 0,
+            "title": "Unaccepted Task Directories",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy",
+          "policy_sha256",
+          "counts",
+          "recovery_required",
+          "available_pending"
+        ],
+        "title": "ServiceStatus",
+        "type": "object"
+      },
+      "Signal": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "no_change",
+              "target_shares"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "hold_template",
+              "enter_threshold",
+              "exit_threshold",
+              "inside_band",
+              "rule_matched",
+              "rules_no_match",
+              "python_target",
+              "python_no_change"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "rule_index": {
+            "anyOf": [
+              {
+                "maximum": 15.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Index"
+          },
+          "target_shares": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Shares"
+          }
+        },
+        "required": [
+          "action",
+          "reason"
+        ],
+        "title": "Signal",
+        "type": "object"
+      },
+      "StrategyDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "enter_below": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enter Below"
+          },
+          "exit_above": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Above"
+          },
+          "target_shares": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Target Shares",
+            "type": "integer"
+          },
+          "template": {
+            "enum": [
+              "buy_hold.v1",
+              "previous_close_band.v1"
+            ],
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template",
+          "target_shares"
+        ],
+        "title": "StrategyDefinition",
+        "type": "object"
+      },
+      "ValidationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ValidationResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "A宽 daily tasks",
+    "version": "0.12.0.dev1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/tasks/daily/data/bind": {
+      "post": {
+        "operationId": "bind_api_v1_tasks_daily_data_bind_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataBindRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCatalogue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Bind Api V1 Tasks Daily Data Bind Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Bind"
+      }
+    },
+    "/api/v1/tasks/daily/jobs": {
+      "get": {
+        "operationId": "listing_api_v1_tasks_daily_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Listing Api V1 Tasks Daily Jobs Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Listing"
+      },
+      "post": {
+        "operationId": "create_api_v1_tasks_daily_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Create Api V1 Tasks Daily Jobs Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/catalogue": {
+      "get": {
+        "operationId": "catalogue_api_v1_tasks_daily_jobs_catalogue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCatalogue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Catalogue Api V1 Tasks Daily Jobs Catalogue Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Catalogue"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/service": {
+      "get": {
+        "operationId": "service_status_api_v1_tasks_daily_jobs_service_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Service Status Api V1 Tasks Daily Jobs Service Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Service Status"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_api_v1_tasks_daily_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Get Api V1 Tasks Daily Jobs  Job Id  Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_api_v1_tasks_daily_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Cancel Api V1 Tasks Daily Jobs  Job Id  Cancel Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Cancel"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/{job_id}/logs": {
+      "get": {
+        "operationId": "logs_api_v1_tasks_daily_jobs__job_id__logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobLogs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Logs Api V1 Tasks Daily Jobs  Job Id  Logs Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Logs"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/{job_id}/manifest": {
+      "get": {
+        "operationId": "manifest_api_v1_tasks_daily_jobs__job_id__manifest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Manifest Api V1 Tasks Daily Jobs  Job Id  Manifest Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Manifest"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/{job_id}/result": {
+      "get": {
+        "operationId": "result_api_v1_tasks_daily_jobs__job_id__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Result Api V1 Tasks Daily Jobs  Job Id  Result Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Result"
+      }
+    },
+    "/api/v1/tasks/daily/jobs/{job_id}/resume": {
+      "post": {
+        "operationId": "resume_api_v1_tasks_daily_jobs__job_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Resume Api V1 Tasks Daily Jobs  Job Id  Resume Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Resume"
+      }
+    },
+    "/api/v1/tasks/daily/python-strategies": {
+      "get": {
+        "operationId": "python_strategies_api_v1_tasks_daily_python_strategies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/M2StrategyVersion"
+                  },
+                  "title": "Response Python Strategies Api V1 Tasks Daily Python Strategies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Python Strategies Api V1 Tasks Daily Python Strategies Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Python Strategies"
+      }
+    },
+    "/api/v1/tasks/daily/python-strategies/{version_id}": {
+      "get": {
+        "operationId": "python_strategy_api_v1_tasks_daily_python_strategies__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/M2StrategyVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Python Strategy Api V1 Tasks Daily Python Strategies  Version Id  Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Python Strategy"
+      }
+    },
+    "/api/v1/tasks/daily/strategies": {
+      "get": {
+        "operationId": "list_strategies_api_v1_tasks_daily_strategies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/M2StrategyVersion"
+                  },
+                  "title": "Response List Strategies Api V1 Tasks Daily Strategies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 List Strategies Api V1 Tasks Daily Strategies Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Strategies"
+      },
+      "post": {
+        "operationId": "register_strategy_api_v1_tasks_daily_strategies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleStrategyDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/M2StrategyVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Register Strategy Api V1 Tasks Daily Strategies Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Register Strategy"
+      }
+    },
+    "/api/v1/tasks/daily/strategies/{version_id}": {
+      "get": {
+        "operationId": "get_strategy_api_v1_tasks_daily_strategies__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/M2StrategyVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Get Strategy Api V1 Tasks Daily Strategies  Version Id  Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Strategy"
+      }
+    }
+  }
+}

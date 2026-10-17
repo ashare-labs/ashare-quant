@@ -2,7 +2,7 @@
   "annotated-doc": "0.0.5",
   "annotated-types": "0.8.0",
   "anyio": "4.15.1",
-  "ashare-data": "0.8.0.dev2",
+  "ashare-data": "0.10.0.dev1",
   "click": "8.5.0",
   "duckdb": "1.4.3",
   "fastapi": "0.141.1",

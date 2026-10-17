@@ -4,9 +4,8 @@ from datetime import time
 from decimal import Decimal
 
 from ashare_quant.contracts import SHANGHAI
-
-from .online_contracts import CONDITIONAL_MODEL, INTRADAY_MODELS
-from .risk import close_gate, evidence_gate, indexed, require
+from ashare_quant.paper.online_contracts import CONDITIONAL_MODEL, INTRADAY_MODELS
+from ashare_quant.paper.risk import close_gate, evidence_gate, indexed, require
 
 
 def opening_gate(config, decision, opening):
@@ -14,7 +13,7 @@ def opening_gate(config, decision, opening):
     at = opening.received_at.astimezone(SHANGHAI)
     intraday = config.model in INTRADAY_MODELS
     if intraday:
-        from .intraday_contracts import continuous, execution_gate
+        from ashare_quant.paper.intraday_contracts import continuous, execution_gate
 
         execution_gate(config, decision, opening)
     require(

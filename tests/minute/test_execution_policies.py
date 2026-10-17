@@ -5,9 +5,9 @@ from collections import defaultdict
 
 import pytest
 
-from ashare_quant.minute import run_backtest
-from ashare_quant.minute.runner import MinuteRunError
-from examples.jq_minute_comparison.audit_execution import audit_run
+from ashare_quant.backtests.minute import run_backtest
+from ashare_quant.backtests.minute.runner import MinuteRunError
+from tests.fixtures.minute_reference.audit_execution import audit_run
 
 ZERO = {"commission_rate": 0, "sell_tax": 0, "min_commission": 0}
 

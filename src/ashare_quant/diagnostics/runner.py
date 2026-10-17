@@ -40,7 +40,7 @@ def execute(payload):
     spec = importlib.util.find_spec("ashare_data")
     root = Path(spec.origin).parent
     inventory = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-                 for p in sorted(root.rglob("*")) if p.is_file() and p.suffix in {".py", ".json", ".sha256"}}
+                 for p in sorted(root.rglob("*")) if p.is_file() and p.suffix in {".py", ".json", ".js"}}
     if inventory != pin["files"] or digest(inventory) != pin["content_sha256"]:
         raise ValueError("Research owner package content differs from the fixed wheel")
     from ashare_data import DataError, Store
@@ -65,7 +65,7 @@ def execute(payload):
                          "trading_dates": query["trading_dates"]}
     preflight = call(lambda: Store(payload["store"]).preflight_research_request(
         preflight_request, require_complete=query["require_complete"]))
-    return {"protocol": "aq.owner-research-reader.v1", "query_sha256": digest(payload["query"]),
+    return {"protocol": "aq.owner-market-reader.v1", "query_sha256": digest(payload["query"]),
             "capture_id": payload["capture_id"], "content_sha256": pin["content_sha256"],
             "calendar": calendar, "calendar_links": links, "research_preflight": preflight, "network_used": False}
 

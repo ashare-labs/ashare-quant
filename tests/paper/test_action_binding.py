@@ -8,18 +8,17 @@ from pathlib import Path
 
 import pytest
 
+import ashare_quant.portfolio.signals as signals
 from ashare_quant.contracts import DomainError
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.m2_jobs.files import digest, sha
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.online_adapter import (
     UNIVERSE,
-    OwnerReader,
     decision_from_owner,
     scoped_action_effect,
 )
 from ashare_quant.paper.online_contracts import CalendarReplan, OnlineSession
 from ashare_quant.paper.risk import profiles
+from ashare_quant.storage.artifacts import digest, sha
 
 
 def bound_fact(day="2026-10-13"):
@@ -112,10 +111,10 @@ def test_owner_pin_includes_corpus_bytes_not_only_python(tmp_path):
     evidence.mkdir(parents=True)
     (package / "__init__.py").write_text("")
     (evidence / "source").write_bytes(b"original")
-    reader = OwnerReader("python", tmp_path / "src", tmp_path, tmp_path)
-    before = reader.pin()
+    from ashare_quant.paper.online_adapter import owner_content_identity
+    before = owner_content_identity(tmp_path / "src")
     (evidence / "source").write_bytes(b"changed")
-    assert reader.pin() != before
+    assert owner_content_identity(tmp_path / "src") != before
 
 
 def test_real_owner_corpus_drives_two_day_native_fixture(tmp_path):
@@ -132,7 +131,7 @@ from pathlib import Path
 from datetime import datetime
 sys.path[:0]=[sys.argv[1],str(Path(sys.argv[1]).parent/'tests')]
 import pytest
-from ashare_data import phase_observation as phase
+import ashare_data.observations.phases as phase
 from test_action_scope import issuer_sources
 out={}
 for day in ['2026-10-14','2026-10-15']:

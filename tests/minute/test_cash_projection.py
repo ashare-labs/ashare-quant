@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from examples.jq_minute_comparison.align import captures, compare_aligned
-from examples.jq_minute_comparison.audit_execution import audit_run
+from tests.fixtures.minute_reference.align import captures, compare_aligned
+from tests.fixtures.minute_reference.audit_execution import audit_run
 
 POLICIES = [(m, c) for m in ("next_open", "jq_current") for c in ("reject", "resize")]
 

@@ -22,7 +22,7 @@ def bound(tmp_path, window="w2020", assumptions=None, strategy="equal-weight"):
     service = PaperService(tmp_path)
     r = bind(
         service,
-        Path(__file__).resolve().parents[2] / "examples/daily_portfolio/manifest.json",
+        Path(__file__).resolve().parents[2] / "examples/portfolio/manifest.json",
         source / "research/binding.json",
         c["research_sha"],
         source / "execution/binding.json",

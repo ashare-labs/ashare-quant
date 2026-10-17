@@ -13,13 +13,14 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant import database_compat, database_lifecycle
+import ashare_quant.storage.compatibility as database_compat
+import ashare_quant.storage.lifecycle as database_lifecycle
 from ashare_quant.api import create_app
 from ashare_quant.cli import main
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.policy import ServicePolicy
-from ashare_quant.m2_jobs.repository import Repository
-from ashare_quant.store import Store
+from ashare_quant.storage.store import Store
+from ashare_quant.tasks.policy import ServicePolicy
+from ashare_quant.tasks.repository import Repository
 
 
 def inventory(root):
@@ -37,7 +38,7 @@ def refusal(path, code=None):
     return result.json()
 
 
-@pytest.mark.parametrize("table", ["m2_python_sources", "strategies", "runs", "events", "m2_job_logs"])
+@pytest.mark.parametrize("table", ["python_sources", "strategies", "runs", "events", "task_logs"])
 def test_corrupt_non_manifest_btree_refuses_without_touching_original(tmp_path, table):
     path = tmp_path / "db.sqlite3"
     create_app(str(path))
@@ -53,7 +54,7 @@ def test_corrupt_non_manifest_btree_refuses_without_touching_original(tmp_path, 
     assert inventory(tmp_path) == before
 
 
-@pytest.mark.parametrize("name", ["m2_jobs", "m2_job_logs", "m2_job_service", "m2_python_sources", "runs", "strategies"])
+@pytest.mark.parametrize("name", ["tasks", "task_logs", "task_service", "python_sources", "runs", "strategies"])
 def test_reserved_views_cannot_bypass_preflight(tmp_path, name):
     path = tmp_path / "legacy.sqlite3"
     with sqlite3.connect(path) as db:
@@ -69,9 +70,9 @@ def test_reserved_views_cannot_bypass_preflight(tmp_path, name):
 
 @pytest.mark.parametrize("change", [
     "DROP INDEX engine_fill_once",
-    "DROP INDEX m2_jobs_queue; CREATE INDEX m2_jobs_queue ON m2_jobs(account_id)",
-    "DROP TABLE m2_job_service",
-    "ALTER TABLE m2_jobs ADD COLUMN unchecked TEXT",
+    "DROP INDEX tasks_queue; CREATE INDEX tasks_queue ON tasks(account_id)",
+    "DROP TABLE task_service",
+    "ALTER TABLE tasks ADD COLUMN unchecked TEXT",
     "PRAGMA user_version=1", "PRAGMA user_version=2",
 ])
 def test_unsupported_schema_is_not_silently_repaired(tmp_path, change):
@@ -110,12 +111,12 @@ def test_reopen_with_fixed_policy_never_opens_original_sqlite(tmp_path, monkeypa
 
 
 def test_policy_refusal_does_not_write_database_or_sidecars(tmp_path):
-    from ashare_quant.m2_jobs.executor import Configuration
+    from ashare_quant.tasks.daily.executor import Configuration
 
     path = tmp_path / "control.sqlite3"
     create_app(str(path))
     before = inventory(tmp_path)
-    app = create_app(str(path), m2_jobs_configuration=Configuration(None, ServicePolicy(max_workers=2)))
+    app = create_app(str(path), daily_tasks_configuration=Configuration(None, ServicePolicy(max_workers=2)))
     with TestClient(app) as client:
         assert client.get("/api/v1/health").json()["error"]["code"] == "M2_JOB_POLICY_CHANGED"
     assert inventory(tmp_path) == before
@@ -153,7 +154,7 @@ def test_competing_unsupported_file_is_never_overwritten_or_initialized(tmp_path
     def publish(staged, target):
         assert target == path
         with sqlite3.connect(path) as db:
-            db.execute("CREATE VIEW m2_jobs AS SELECT 'kept' AS job_id")
+            db.execute("CREATE VIEW tasks AS SELECT 'kept' AS job_id")
         db.close()
         winner.update(inventory(tmp_path))
         return link(staged, target)
@@ -226,9 +227,9 @@ def test_concurrent_processes_admit_one_immutable_policy(tmp_path):
 import json,sys,time
 from pathlib import Path
 from ashare_quant.contracts import DomainError
-from ashare_quant.store import Store
-from ashare_quant.m2_jobs.repository import Repository
-from ashare_quant.m2_jobs.policy import ServicePolicy
+from ashare_quant.storage.store import Store
+from ashare_quant.tasks.repository import Repository
+from ashare_quant.tasks.policy import ServicePolicy
 while not Path(sys.argv[3]).exists(): time.sleep(.01)
 try:
     repo=Repository(Store(sys.argv[1]),ServicePolicy(max_workers=int(sys.argv[2])))
@@ -278,7 +279,7 @@ def test_read_only_initialization_directory_returns_http_and_cli_code(tmp_path, 
             response = client.get("/api/v1/health")
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "STORAGE_PERMISSION_DENIED"
-        assert main(["--db", str(path), "jobs"]) == 2
+        assert main(["--db", str(path), "tasks"]) == 2
         assert json.loads(capsys.readouterr().out)["error"]["code"] == "STORAGE_PERMISSION_DENIED"
     finally:
         tmp_path.chmod(0o700)

@@ -6,9 +6,8 @@ from typing import Literal
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import Contract, Money
-
-from .contracts import CloseInput, Decision, Security, SessionConfig, Sha
-from .intraday_contracts import REBALANCE_MODEL, IntradayProof
+from ashare_quant.paper.contracts import CloseInput, Decision, Security, SessionConfig, Sha
+from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL, IntradayProof
 
 CONDITIONAL_MODEL = "prior-close-conditional-intent-observed-open.v2"
 INTRADAY_MODEL = "prior-close-intent-next-complete-minute.v1"

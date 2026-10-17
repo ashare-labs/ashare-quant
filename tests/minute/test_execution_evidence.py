@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from examples.jq_minute_comparison.align import NAMES, captures, compare_aligned
-from examples.jq_minute_comparison.audit_execution import audit_run
+from tests.fixtures.minute_reference.align import NAMES, captures, compare_aligned
+from tests.fixtures.minute_reference.audit_execution import audit_run
 
 
 @pytest.fixture

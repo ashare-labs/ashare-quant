@@ -8,11 +8,15 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.m2_jobs.files import digest, regular, sha
-
-from .online_contracts import CONDITIONAL_MODEL, OnlineClose, OnlineDecision, OpeningInput
-from .risk import require
+import ashare_quant.portfolio.signals as signals
+from ashare_quant.paper.online_contracts import (
+    CONDITIONAL_MODEL,
+    OnlineClose,
+    OnlineDecision,
+    OpeningInput,
+)
+from ashare_quant.paper.risk import require
+from ashare_quant.storage.artifacts import digest, regular, sha
 
 UNIVERSE = ("600000.XSHG", "600036.XSHG", "601318.XSHG")
 
@@ -33,6 +37,19 @@ def owner_environment():
     return env
 
 
+def owner_content_identity(source):
+    package = source / "ashare_data"
+    evidence = package / "pilot_evidence"
+    inventory = {
+        str(p.relative_to(source)): sha(regular(p))
+        for p in sorted(
+        set(package.rglob("*.py")) | {p for p in evidence.rglob("*") if p.is_file()}
+        )
+    }
+    require(inventory, "PAPER_OWNER_READER_MISSING")
+    return digest(inventory)
+
+
 @dataclass(frozen=True)
 class OwnerReader:
     python: str
@@ -41,20 +58,13 @@ class OwnerReader:
     phase_store: Path
 
     def pin(self):
-        package = self.source / "ashare_data"
-        evidence = package / "pilot_evidence"
-        inventory = {
-            str(p.relative_to(self.source)): sha(regular(p))
-            for p in sorted(
-                set(package.rglob("*.py")) | {p for p in evidence.rglob("*") if p.is_file()}
-            )
-        }
-        require(inventory, "PAPER_OWNER_READER_MISSING")
-        return digest(inventory)
+        from ashare_quant.providers.runtime import installed_paths
+        installed_paths(self.python, self.source)
+        return owner_content_identity(self.source)
 
     def read(self, config, kind, capture):
         require(self.pin() == config.admission_reader_sha256, "PAPER_OWNER_READER_CHANGED")
-        module = "daily_observation" if kind == "daily" else "phase_observation"
+        module = "observations.daily" if kind == "daily" else "observations.phases"
         root = self.daily_store if kind == "daily" else self.phase_store
         boot = (
             "import sys,json;sys.path.insert(0,sys.argv[1]);"
@@ -86,8 +96,8 @@ class OwnerReader:
         before = self.pin()
         boot = (
             "import sys,json;sys.path.insert(0,sys.argv[1]);"
-            "from ashare_data.action_scope import load_baseline,REPLAN_SHA256;"
-            "import ashare_data.action_scope as scope;"
+            "from ashare_data.observations.action_baseline import load_baseline,REPLAN_SHA256;"
+            "import ashare_data.observations.action_baseline as scope;"
             "m,_=load_baseline(replan=True);"
             "h=scope.baseline_identity(replan=True) if hasattr(scope,'baseline_identity') else REPLAN_SHA256;"
             "print(json.dumps(dict(first_window=[m['from_day'],m['through_day']],"
@@ -385,7 +395,7 @@ def execution_from_owner(config, row, reader, phase, capture):
         packet["signal_day"] == row["day"] and packet["signal_ready"] and not packet["revisions"],
         "PAPER_OBSERVATION_REVISION",
     )
-    from .intraday_contracts import REBALANCE_MODEL
+    from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL
 
     if config.model == REBALANCE_MODEL:
         proof = packet.get("close_confirmation", {})

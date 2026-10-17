@@ -1,5 +1,9 @@
-from .contracts import DiagnosticCapabilities, DiagnosticQuery, DiagnosticResult
-from .service import Diagnostics
+from ashare_quant.diagnostics.contracts import (
+    DiagnosticCapabilities,
+    DiagnosticQuery,
+    DiagnosticResult,
+)
+from ashare_quant.diagnostics.service import Diagnostics
 
 
 def mount(app, configuration=None):

@@ -4,13 +4,12 @@ import argparse
 import json
 from pathlib import Path
 
-from ashare_quant.m2_jobs.files import digest, regular
-
-from .intraday import IntradayReader, config_for, deliver, now, prepare
-from .intraday_contracts import REBALANCE_MODEL, IntradayPlan
-from .online import OnlineService
-from .risk import require
-from .service import engine_pin
+from ashare_quant.paper.intraday import IntradayReader, config_for, deliver, now, prepare
+from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL, IntradayPlan
+from ashare_quant.paper.online import OnlineService
+from ashare_quant.paper.risk import require
+from ashare_quant.paper.service import engine_pin
+from ashare_quant.storage.artifacts import digest, regular
 
 
 def main():

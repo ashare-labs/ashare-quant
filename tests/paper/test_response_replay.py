@@ -19,7 +19,7 @@ ENTRY = Path(__file__).resolve().parents[2] / "scripts/replay_sealed_responses.p
 def inputs():
     corpus = os.environ.get("ASHARE_RESPONSE_CORPUS")
     owner = os.environ.get("ASHARE_CALENDAR_AD_SOURCE")
-    if not corpus or not owner:
+    if not corpus or not owner or not os.getenv("ASHARE_RESPONSE_RECIPE"):
         pytest.skip("Explicit sealed response corpus and candidate owner source required")
     return Path(corpus), Path(owner)
 
@@ -30,6 +30,8 @@ def invoke(corpus, owner, output):
             sys.executable,
             "-B",
             str(ENTRY),
+            "--recipe",
+            os.environ["ASHARE_RESPONSE_RECIPE"],
             "--corpus",
             str(corpus),
             "--ad-source",

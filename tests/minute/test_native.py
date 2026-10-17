@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from ashare_quant.minute import run_backtest
-from ashare_quant.minute.runner import MinuteRunError
+from ashare_quant.backtests.minute import run_backtest
+from ashare_quant.backtests.minute.runner import MinuteRunError
 
-EXAMPLES = Path(__file__).resolve().parents[2] / "examples/python_minute"
+EXAMPLES = Path(__file__).resolve().parents[2] / "examples/minute"
 ZERO_COST = {"commission_rate": 0, "sell_tax": 0, "min_commission": 0}
 
 

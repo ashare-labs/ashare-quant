@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper import intraday
 from ashare_quant.paper.online import OnlineService
+from ashare_quant.storage.artifacts import digest
 
 
 def build(root, original_test, fault=None):

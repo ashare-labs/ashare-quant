@@ -11,11 +11,10 @@ from datetime import datetime, timedelta, timezone
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import Contract
-from ashare_quant.m2_jobs.files import atomic, digest, lock, regular, sha
-
-from .contracts import Sha
-from .intraday_contracts import IntradayPlan
-from .risk import require
+from ashare_quant.paper.contracts import Sha
+from ashare_quant.paper.intraday_contracts import IntradayPlan
+from ashare_quant.paper.risk import require
+from ashare_quant.storage.artifacts import atomic, digest, lock, regular, sha
 
 
 def now():
@@ -62,7 +61,7 @@ def manifest_gate(value, config, decision=None):
         isinstance(value, dict)
         and value.get("schema_version") == "paper-calendar-hold-successor.v2"
     ):
-        from .calendar_successor import manifest_gate as successor_gate
+        from ashare_quant.paper.calendar_successor import manifest_gate as successor_gate
 
         return successor_gate(value, config, decision)
     m = Continuation.model_validate(value)
@@ -103,10 +102,10 @@ def verify_binding(m, event):
 
 def verify_state(root, state, config, current_pin):
     if "calendar_successor" in state:
-        from .calendar_successor import verify_state as verify_successor
+        from ashare_quant.paper.calendar_successor import verify_state as verify_successor
 
         return verify_successor(root, state, config, current_pin)
-    from .runtime_migration import selected_continuation, verify_authorized_state
+    from ashare_quant.paper.runtime_migration import selected_continuation, verify_authorized_state
 
     m = manifest_gate(selected_continuation(state), config)
     if "runtime_authorization" in state:
@@ -152,13 +151,13 @@ def verify_state(root, state, config, current_pin):
 
 def verify_request(request, config, decision, current_pin):
     if request["continuation"].get("schema_version") == "paper-calendar-hold-successor.v2":
-        from .calendar_successor import verify_request as verify_successor_request
+        from ashare_quant.paper.calendar_successor import verify_request as verify_successor_request
 
         return verify_successor_request(request, config, decision, current_pin)
     m = manifest_gate(request["continuation"], config, decision)
     verify_binding(m, request.get("continuation_binding"))
     if "runtime_authorization" in request:
-        from .runtime_migration import authorization_gate
+        from ashare_quant.paper.runtime_migration import authorization_gate
 
         authorization_gate(
             request["runtime_authorization"],
@@ -184,7 +183,7 @@ def bind(
     service, reader, plan, expected_state_sha, expected_runtime_sha, expected_origin_runtime_sha
 ):
     """Bind a reviewed successor only after the original runtime settled today."""
-    from .service import engine_pin
+    from ashare_quant.paper.service import engine_pin
 
     plan = IntradayPlan.model_validate(plan)
     current = engine_pin()

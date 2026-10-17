@@ -11,11 +11,10 @@ from decimal import Decimal
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.online_contracts import OnlineSession
-
-from .fixtures import close, config, decision
+from ashare_quant.storage.artifacts import digest
+from tests.paper.fixtures import close, config, decision
 
 MODE = {"evidence_kind": "calendar_fixture", "clock_basis": "fixture_clock"}
 
@@ -310,9 +309,9 @@ def test_historical_controller_rejects_online_model_instance_before_insertion(tm
 def test_owner_builder_uses_native_equity_and_holds_actual_fills_fixture(tmp_path):
     from pathlib import Path
 
-    from ashare_quant.daily_portfolio import signals
-    from ashare_quant.m2_jobs.files import sha
+    import ashare_quant.portfolio.signals as signals
     from ashare_quant.paper.online_adapter import UNIVERSE, decision_from_owner
+    from ashare_quant.storage.artifacts import sha
 
     _, session = setup(tmp_path)
     session = session.model_copy(

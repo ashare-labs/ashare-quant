@@ -7,8 +7,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.paper.api import create_app
 from ashare_quant.paper.contracts import SessionConfig
 from ashare_quant.paper.service import PaperService
-
-from .fixtures import DATES, close, config, decision, queue
+from tests.paper.fixtures import DATES, close, config, decision, queue
 
 
 @pytest.mark.parametrize(

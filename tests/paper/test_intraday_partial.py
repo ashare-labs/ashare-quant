@@ -8,8 +8,7 @@ import pytest
 from ashare_quant.contracts import DomainError
 from ashare_quant.paper import intraday
 from ashare_quant.paper.online import OnlineService
-
-from .test_intraday import setup
+from tests.paper.test_intraday import setup
 
 
 @pytest.mark.parametrize(

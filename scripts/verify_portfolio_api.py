@@ -166,7 +166,7 @@ def main():
                 job = http("/jobs", request, 201)
                 assert http("/jobs", request, 201) == job
                 save(case_root / "accepted.json", job)
-                command(["job-worker", "--job-id", job["job_id"]], "worker-" + window)
+                command(["task-worker", "--task-id", job["job_id"]], "worker-" + window)
                 view = http("/jobs/" + job["job_id"])
                 assert view["status"] == "succeeded", view
                 result = http("/jobs/" + job["job_id"] + "/result")
@@ -185,14 +185,14 @@ def main():
                 manifest = http("/jobs/" + job["job_id"] + "/manifest")
                 save(case_root / "manifest.json", manifest)
                 assert http("/jobs", request, 201) == view
-                second = command(["job-worker", "--job-id", job["job_id"]], "no-repeat-" + window)
+                second = command(["task-worker", "--task-id", job["job_id"]], "no-repeat-" + window)
                 assert second["processed_job_id"] is None
-                frozen = Path(str(database) + ".m2-jobs") / job["job_id"]
+                frozen = Path(str(database) + ".tasks") / job["job_id"]
                 direct = [
                     sys.executable,
                     "-B",
                     "-m",
-                    "ashare_quant.daily_portfolio",
+                    "ashare_quant.portfolio",
                     "--manifest",
                     str(frozen / "execution.json"),
                     "--input",

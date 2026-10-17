@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper import intraday, online
 from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online import OnlineService
+from ashare_quant.storage.artifacts import digest
 
 
 def setup(tmp_path, monkeypatch, *, partial=False, volumes=None):
@@ -26,7 +26,7 @@ import sys,json
 from pathlib import Path
 sys.path[:0]=[sys.argv[1],str(Path(sys.argv[1]).parent/'tests')]
 import pytest
-from ashare_data import intraday_observation as obs
+import ashare_data.observations.intraday as obs
 from test_intraday_observation import sources
 root=Path(sys.argv[2]);out={}
 for kind,at,after in [('admission','10:00:30','10:00:00'),('execution','10:03:30','10:00:31')]:

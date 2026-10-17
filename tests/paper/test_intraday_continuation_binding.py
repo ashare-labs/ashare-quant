@@ -7,14 +7,13 @@ from datetime import datetime
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest, sha
 from ashare_quant.paper import intraday, online
 from ashare_quant.paper import intraday_continuation as ext
 from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online_contracts import OnlineDecision
 from ashare_quant.paper.service import engine_pin
-
-from .test_intraday_continuation import bind, future_packets, parent
+from ashare_quant.storage.artifacts import digest, sha
+from tests.paper.test_intraday_continuation import bind, future_packets, parent
 
 
 @pytest.mark.parametrize(

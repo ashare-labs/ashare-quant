@@ -5,14 +5,13 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ashare_quant.m2_jobs.files import atomic, digest, regular, sha
-
-from .intraday import IntradayReader
-from .intraday_continuation import bind
-from .intraday_contracts import IntradayPlan
-from .online import OnlineService
-from .risk import require
-from .service import engine_pin
+from ashare_quant.paper.intraday import IntradayReader
+from ashare_quant.paper.intraday_continuation import bind
+from ashare_quant.paper.intraday_contracts import IntradayPlan
+from ashare_quant.paper.online import OnlineService
+from ashare_quant.paper.risk import require
+from ashare_quant.paper.service import engine_pin
+from ashare_quant.storage.artifacts import atomic, digest, regular, sha
 
 
 def main():

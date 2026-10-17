@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from ashare_quant.m2_jobs.contracts import JobCreate
+from ashare_quant.tasks.daily.contracts import JobCreate
 
 BASE = dict(
     window_id="w1",

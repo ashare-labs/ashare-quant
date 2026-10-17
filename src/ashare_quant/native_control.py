@@ -4,7 +4,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from .contracts import DomainError, Manifest
+from ashare_quant.contracts import DomainError, Manifest
 
 _control = None
 

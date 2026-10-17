@@ -4,7 +4,7 @@ import argparse
 import json
 from contextlib import nullcontext
 
-from .service import PaperService
+from ashare_quant.paper.service import PaperService
 
 
 def main():
@@ -71,13 +71,13 @@ def main():
     if args.command == "serve":
         import uvicorn
 
-        from .api import create_app
+        from ashare_quant.paper.api import create_app
 
         uvicorn.run(create_app(args.root), host="127.0.0.1", port=args.port)
         return
     service = PaperService(args.root)
     if args.command == "bind-execution":
-        from .execution import bind
+        from ashare_quant.paper.execution import bind
 
         with open(args.risk) as stream:
             risk = json.load(stream)
@@ -102,11 +102,11 @@ def main():
             consumer_contract_sha=args.consumer_contract_sha,
         )
     elif args.command == "ingest":
-        from .execution import ingest
+        from ashare_quant.paper.execution import ingest
 
         result = ingest(service, args.session, args.day, args.expected_parent)
     elif args.command == "bind-replay":
-        from .replay import bind
+        from ashare_quant.paper.replay import bind
 
         with open(args.risk) if args.risk else nullcontext() as stream:
             risk = json.load(stream) if stream else None
@@ -122,7 +122,7 @@ def main():
             cash_dividend_policy=args.cash_dividend_policy,
         )
     elif args.command == "advance":
-        from .replay import advance
+        from ashare_quant.paper.replay import advance
 
         result = advance(service, args.session, args.day, args.expected_parent)
     elif args.command == "create":

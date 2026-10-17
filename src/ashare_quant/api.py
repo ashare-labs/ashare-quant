@@ -5,12 +5,13 @@ import os
 import sqlite3
 from typing import Annotated
 
-from fastapi import FastAPI, Path, Query, Request, Response
+from fastapi import FastAPI, Path, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
-from . import __version__
-from .contracts import (
+from ashare_quant import __version__
+from ashare_quant.backtests.synthetic import specifications
+from ashare_quant.contracts import (
     Account,
     Capabilities,
     DataBatch,
@@ -30,31 +31,9 @@ from .contracts import (
     StrategyVersion,
     ValidationResponse,
 )
-from .d1 import (
-    D1Check,
-    D1CheckRequest,
-    IntentPreview,
-    PlanView,
-    PreviewRequest,
-    describe_plan,
-    preflight,
-    preview,
-    refuse_execution,
-)
-from .d1_br1 import (
-    BR1Check,
-    BR1ProfileView,
-    BR1Request,
-    br1_preflight,
-    describe_br1_profile,
-    refuse_br1_execution,
-)
-from .d1_codec import BR1BindRequest, FrozenBindingReport, FrozenBR1Reader
-from .d1_result_contracts import BR1ResultDetail, BR1ResultList
-from .d1_results import canonical, digest, list_results, result_detail
-from .data import PinnedAshareData, capabilities
-from .engine import specifications
-from .research import (
+from ashare_quant.data import PinnedAshareData, capabilities
+from ashare_quant.execution.synthetic.specs import rq_specifications
+from ashare_quant.market.reader import (
     ResearchCoverage,
     ResearchCoverageQuery,
     ResearchDescription,
@@ -62,13 +41,12 @@ from .research import (
     ResearchRead,
     ResearchReader,
 )
-from .rq_specs import rq_specifications
-from .service import Service
-from .storage_errors import storage_error
-from .store import Store
+from ashare_quant.storage.errors import storage_error
+from ashare_quant.storage.store import Store
+from ashare_quant.tasks.synthetic.service import Service
 
 
-def create_app(db_path: str | None = None, research_stores: dict[str, str] | None = None, m2_jobs_configuration=None, diagnostics_configuration=None) -> FastAPI:
+def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None) -> FastAPI:
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
                   responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse},
@@ -78,9 +56,9 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     try:
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
-        from .m2_jobs.service import Jobs
+        from ashare_quant.tasks.daily.service import Jobs
 
-        jobs = Jobs(store, m2_jobs_configuration)
+        jobs = Jobs(store, daily_tasks_configuration)
     except (DomainError, OSError, sqlite3.Error) as exc:
         error = exc if isinstance(exc, DomainError) else storage_error(exc)
         app.state.database_error = error.body()
@@ -96,19 +74,15 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
         return app
     service = Service(store)
     app.state.store = store
-    from .m2.api import mount as mount_m2
-    mount_m2(app, store)
-    from .m2_results.api import mount as mount_m2_results
-    mount_m2_results(app)
-    from .m2_jobs.api import mount as mount_m2_jobs
-    mount_m2_jobs(app, store, m2_jobs_configuration, jobs=jobs)
-    from .portfolio_jobs.api import mount as mount_portfolio_jobs
-    mount_portfolio_jobs(app, store, m2_jobs_configuration)
-    from .diagnostics.api import mount as mount_diagnostics
+    from ashare_quant.tasks.daily.api import mount as mount_tasks
+    mount_tasks(app, store, daily_tasks_configuration, jobs=jobs)
+    from ashare_quant.tasks.portfolio.api import mount as mount_portfolio_jobs
+    mount_portfolio_jobs(app, store, daily_tasks_configuration)
+    from ashare_quant.diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
-    roots = dict(research_stores) if research_stores is not None else json.loads(os.getenv("ASHARE_QUANT_RESEARCH_STORES", "{}"))
+    roots = dict(market_stores) if market_stores is not None else json.loads(os.getenv("ASHARE_QUANT_MARKET_STORES", "{}"))
     if not isinstance(roots, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in roots.items()):
-        raise ValueError("ASHARE_QUANT_RESEARCH_STORES must map explicit aliases to store paths")
+        raise ValueError("ASHARE_QUANT_MARKET_STORES must map explicit aliases to store paths")
 
     def research_reader(alias):
         if alias not in roots:
@@ -135,65 +109,6 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     @app.get("/api/v1/capabilities")
     def get_capabilities() -> Capabilities:
         return capabilities()
-
-    @app.get("/api/v1/d1/plan")
-    def d1_plan() -> PlanView:
-        return describe_plan()
-
-    @app.post("/api/v1/d1/preflight")
-    def d1_preflight(request: D1CheckRequest) -> D1Check:
-        return preflight(request)
-
-    @app.post("/api/v1/d1/intent-preview")
-    def d1_preview(request: PreviewRequest) -> IntentPreview:
-        return preview(request)
-
-    @app.post("/api/v1/d1/runs")
-    def d1_run(request: D1CheckRequest) -> ErrorResponse:
-        preflight(request)
-        refuse_execution()
-
-    def result_request(request: Request):
-        if request.query_params:
-            raise DomainError("BR1_RESULT_QUERY_NOT_SUPPORTED", "Result reads accept only the sealed result ID", 422)
-
-    def result_headers(response: Response, value):
-        response.headers["ETag"] = '"' + digest(canonical(value.model_dump(mode="json"))) + '"'
-        response.headers["Cache-Control"] = "no-cache"
-
-    @app.get("/api/v1/d1-br1/results", responses={503: {"model": ErrorResponse}})
-    def br1_results(request: Request, response: Response) -> BR1ResultList:
-        result_request(request)
-        value = list_results()
-        result_headers(response, value)
-        return value
-
-    @app.get("/api/v1/d1-br1/results/{result_id}", responses={503: {"model": ErrorResponse}})
-    def br1_result(result_id: str, request: Request, response: Response) -> BR1ResultDetail:
-        result_request(request)
-        value = result_detail(result_id)
-        result_headers(response, value)
-        return value
-
-    @app.get("/api/v1/d1-br1/profile")
-    def br1_profile() -> BR1ProfileView:
-        return describe_br1_profile()
-
-    @app.post("/api/v1/d1-br1/preflight")
-    def br1_check(request: BR1Request) -> BR1Check:
-        return br1_preflight(request)
-
-    @app.post("/api/v1/d1-br1/runs")
-    def br1_run(request: BR1Request) -> ErrorResponse:
-        br1_preflight(request)
-        refuse_br1_execution()
-
-    @app.post("/api/v1/d1-br1/bind/{store_alias}/{dataset_id}")
-    def br1_bind(store_alias: str, dataset_id: str, request: BR1BindRequest) -> FrozenBindingReport:
-        if store_alias not in roots:
-            raise DomainError("RESEARCH_STORE_NOT_CONFIGURED", "Configure an explicit local owner store alias", 422)
-        return FrozenBR1Reader(roots[store_alias], dataset_id=dataset_id, mode=request.mode,
-                               backend_profile_sha256=request.backend_profile_sha256).snapshot().report
 
     @app.get("/api/v1/scenarios")
     def scenarios() -> dict:
@@ -271,19 +186,19 @@ def create_app(db_path: str | None = None, research_stores: dict[str, str] | Non
     def admission(query: DataQuery) -> DataBatch:
         return PinnedAshareData().read(query)
 
-    @app.get("/api/v1/research/stores")
+    @app.get("/api/v1/market/stores")
     def research_aliases() -> list[str]:
         return sorted(roots)
 
-    @app.get("/api/v1/research/{store_alias}/{dataset_id}")
+    @app.get("/api/v1/market/{store_alias}/{dataset_id}")
     def research_describe(store_alias: str, dataset_id: Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")]) -> ResearchDescription:
         return research_reader(store_alias).describe(dataset_id)
 
-    @app.post("/api/v1/research/{store_alias}/{dataset_id}/prices")
+    @app.post("/api/v1/market/{store_alias}/{dataset_id}/prices")
     def research_prices(store_alias: str, dataset_id: Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")], request: ResearchQuery) -> ResearchRead:
         return research_reader(store_alias).read(dataset_id, request)
 
-    @app.post("/api/v1/research/{store_alias}/{dataset_id}/coverage")
+    @app.post("/api/v1/market/{store_alias}/{dataset_id}/coverage")
     def research_coverage(store_alias: str, dataset_id: Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")], request: ResearchCoverageQuery) -> ResearchCoverage:
         return research_reader(store_alias).coverage(dataset_id, request)
 

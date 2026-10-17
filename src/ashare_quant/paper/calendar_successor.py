@@ -14,13 +14,12 @@ from typing import Literal
 
 from pydantic import AwareDatetime, Field, model_validator
 
+import ashare_quant.portfolio.signals as signals
 from ashare_quant.contracts import Contract
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.m2_jobs.files import atomic, digest, lock, regular, sha
-
-from .contracts import Sha
-from .intraday_contracts import IntradayPlan
-from .risk import require
+from ashare_quant.paper.contracts import Sha
+from ashare_quant.paper.intraday_contracts import IntradayPlan
+from ashare_quant.paper.risk import require
+from ashare_quant.storage.artifacts import atomic, digest, lock, regular, sha
 
 SCHEMA = "paper-calendar-hold-successor.v2"
 RETIRED = {"continuation", "archived_continuation", "runtime_authorization", "calendar_successor"}
@@ -115,7 +114,7 @@ def manifest_gate(value, config, decision=None):
 
 
 def current_authority(state):
-    from .runtime_migration import selected_continuation
+    from ashare_quant.paper.runtime_migration import selected_continuation
 
     m = selected_continuation(state)
     if "runtime_authorization" in state:
@@ -124,8 +123,8 @@ def current_authority(state):
 
 
 def verify_previous(root, state, config):
-    from .intraday_continuation import verify_state as verify
-    from .runtime_migration import selected_continuation
+    from ashare_quant.paper.intraday_continuation import verify_state as verify
+    from ashare_quant.paper.runtime_migration import selected_continuation
 
     pin = current_authority(state)
     if selected_continuation(state) is not None:
@@ -147,8 +146,8 @@ def frozen_files(root):
 
 
 def verify_state(root, state, config, current_pin):
-    from .intraday_continuation import verify_binding
-    from .online import OnlineService
+    from ashare_quant.paper.intraday_continuation import verify_binding
+    from ashare_quant.paper.online import OnlineService
 
     m = manifest_gate(state["calendar_successor"], config)
     require(current_pin == m.runtime_pin, "PAPER_SUCCESSOR_RUNTIME_CHANGED")
@@ -213,7 +212,7 @@ def verify_state(root, state, config, current_pin):
 
 
 def verify_request(request, config, decision, current_pin):
-    from .intraday_continuation import verify_binding
+    from ashare_quant.paper.intraday_continuation import verify_binding
 
     m = manifest_gate(request["continuation"], config, decision)
     verify_binding(m, request.get("continuation_binding"))
@@ -272,7 +271,7 @@ def build_plan(service, reader, start_at):
 def bind(
     service, reader, plan, *, state_sha, from_runtime_sha, runtime_sha, review_sha, stage=None
 ):
-    from .service import engine_pin
+    from ashare_quant.paper.service import engine_pin
 
     current = engine_pin()
     require(digest(current) == runtime_sha, "PAPER_FROZEN_RUNTIME_CHANGED")

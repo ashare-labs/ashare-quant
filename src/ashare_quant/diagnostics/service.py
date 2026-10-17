@@ -10,9 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from ashare_quant import __version__
 from ashare_quant.contracts import Contract, DomainError
-from ashare_quant.identity import source_sha256
-
-from .contracts import (
+from ashare_quant.diagnostics.contracts import (
     Alias,
     DiagnosticCapabilities,
     DiagnosticQuery,
@@ -21,6 +19,7 @@ from .contracts import (
     OwnerRead,
     Sha,
 )
+from ashare_quant.identity import source_sha256
 
 
 class SourceConfiguration(Contract):
@@ -30,7 +29,10 @@ class SourceConfiguration(Contract):
 
 
 def pin():
-    return json.loads(files("ashare_quant.diagnostics").joinpath("calendar-owner-pin.json").read_text())
+    from ashare_quant.providers.runtime import pin as owner_pin
+    from ashare_quant.runtime import runtime_fingerprint
+    p = owner_pin()
+    return {**p, "content_sha256": digest(p["files"]), "runtime": runtime_fingerprint()}
 
 
 def identity():
@@ -56,7 +58,9 @@ class Diagnostics:
         cfg = self.sources[request.source_alias]
         python, store = Path(cfg.python).expanduser().absolute(), Path(cfg.store).expanduser().resolve()
         if not python.is_file() or not os.access(python, os.X_OK) or not store.is_dir():
-            raise DomainError("DIAGNOSTIC_RUNTIME_UNAVAILABLE", "Use an existing isolated owner Python and existing Store", 503)
+            raise DomainError("DIAGNOSTIC_RUNTIME_UNAVAILABLE", "Use this environment Python and an existing Store", 503)
+        from ashare_quant.providers.runtime import installed_paths
+        installed_paths(python, Path(str(files("ashare_data"))).parent)
         query = request.model_dump(mode="json")
         payload = {"pin": pin(), "query": query, "store": str(store), "capture_id": cfg.calendar_capture_id}
         runner = str(files("ashare_quant.diagnostics").joinpath("runner.py"))
@@ -74,7 +78,7 @@ class Diagnostics:
                 raise DomainError("DIAGNOSTIC_RUNTIME_MISMATCH", "Fixed read-only owner reader refused this environment", 503,
                                   details=reply.get("error"))
             if (reply["protocol"], reply["query_sha256"], reply["capture_id"], reply["content_sha256"], reply["network_used"]) != (
-                "aq.owner-research-reader.v1", digest(query), cfg.calendar_capture_id, pin()["content_sha256"], False
+                "aq.owner-market-reader.v1", digest(query), cfg.calendar_capture_id, pin()["content_sha256"], False
             ):
                 raise ValueError("Reader identity/request differs")
             calendar, links = OwnerRead.model_validate(reply["calendar"]), OwnerRead.model_validate(reply["calendar_links"])

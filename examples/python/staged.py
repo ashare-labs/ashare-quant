@@ -1,6 +1,6 @@
 """Three ordinary target decisions from the fixed logical day index."""
 
-from ashare_quant.strategy_api import NoChange, TargetShares
+from ashare_quant.strategies.api import NoChange, TargetShares
 
 
 def on_decision(context, data, parameters):

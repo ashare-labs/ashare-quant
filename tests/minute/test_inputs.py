@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from ashare_quant.minute.inputs import MinuteInputs
+from ashare_quant.backtests.minute.inputs import MinuteInputs
 
 
 @pytest.mark.parametrize(

@@ -2,8 +2,8 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, StrictBool, model_validator
 
+from ashare_quant.backtests.daily.execution_dates import ISODate
 from ashare_quant.contracts import Contract
-from ashare_quant.m2.execution_dates import ISODate
 
 Alias = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
 Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
@@ -56,8 +56,8 @@ class OwnerRead(Contract):
 
 class OwnerIdentity(Contract):
     name: Literal["ashare-data"] = "ashare-data"
-    version: Literal["0.8.7.dev2"] = "0.8.7.dev2"
-    commit: Annotated[str, Field(pattern=r"^[a-f0-9]{40}$")]
+    version: str
+    commit: Annotated[str, Field(pattern=r"^[a-f0-9]{40}$")] | None
     wheel_sha256: Sha
     content_sha256: Sha
     projection_policy: Literal["source-calendar-1"] = "source-calendar-1"

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from examples.jq_minute_comparison.audit_gaps import audit_old_gaps, audit_trace, load_capture
+from tests.fixtures.minute_reference.audit_gaps import audit_old_gaps, audit_trace, load_capture
 
 
 @pytest.fixture

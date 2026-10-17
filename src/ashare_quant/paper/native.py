@@ -15,7 +15,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from rqprobe.guards import install_network_guard
+from ashare_quant.execution.rqalpha.guards import install_network_guard
 
 install_network_guard()
 
@@ -42,13 +42,11 @@ from rqalpha.model.order import Order
 from rqalpha.model.trade import Trade
 
 from ashare_quant.contracts import SHANGHAI
-from ashare_quant.m2_jobs.files import atomic, digest
-from rqprobe.checkpoint import AtomicFile, Counter, StrictHelper
-from rqprobe.guards import block_rqdata_apis
-
-from .account import install
-from .contracts import CloseInput, Decision, SessionConfig
-from .risk import (
+from ashare_quant.execution.rqalpha.checkpoint import AtomicFile, Counter, StrictHelper
+from ashare_quant.execution.rqalpha.guards import block_rqdata_apis
+from ashare_quant.paper.account import install
+from ashare_quant.paper.contracts import CloseInput, Decision, SessionConfig
+from ashare_quant.paper.risk import (
     close_gate,
     decision_gate,
     indexed,
@@ -58,6 +56,7 @@ from .risk import (
     reconcile_opening,
     require,
 )
+from ashare_quant.storage.artifacts import atomic, digest
 
 runtime = {}
 __config__ = {"priority": 1000}
@@ -226,7 +225,7 @@ class DaySource(AbstractDataSource):
         }
 
     def get_open_auction_bar(self, instrument, dt):
-        from .intraday_contracts import continuous
+        from ashare_quant.paper.intraday_contracts import continuous
 
         require(
             dt.date() == self.decision.trading_date
@@ -627,7 +626,7 @@ class PaperMod(AbstractMod):
         for sid, delta in sorted(deltas, key=lambda x: (x[1] >= 0, x[0])):
             if not delta:
                 continue
-            from .risk import order_permission
+            from ashare_quant.paper.risk import order_permission
 
             order_permission(self.session, self.decision, sid, "BUY" if delta > 0 else "SELL")
             self.submitting = (sid, abs(delta), "BUY" if delta > 0 else "SELL")
@@ -764,7 +763,7 @@ def main():
     parser.add_argument("request")
     args = parser.parse_args()
     request = json.loads(Path(args.request).read_text())
-    from .service import engine_pin
+    from ashare_quant.paper.service import engine_pin
 
     current_pin = engine_pin()
     if "continuation" not in request:
@@ -786,13 +785,18 @@ def main():
     online = request.get("online", False)
     opening = None
     if online:
-        from .online_contracts import OnlineClose, OnlineDecision, OnlineSession, OpeningInput
-        from .online_gates import closing_gate, opening_gate
+        from ashare_quant.paper.online_contracts import (
+            OnlineClose,
+            OnlineDecision,
+            OnlineSession,
+            OpeningInput,
+        )
+        from ashare_quant.paper.online_gates import closing_gate, opening_gate
 
         session = OnlineSession.model_validate(request["session"])
         decision = OnlineDecision.model_validate(request["decision"])
         if "continuation" in request:
-            from .intraday_continuation import verify_request
+            from ashare_quant.paper.intraday_continuation import verify_request
 
             verify_request(request, session, decision, current_pin)
         opening = OpeningInput.model_validate(request["opening"])
@@ -816,8 +820,8 @@ def main():
         )
     decision_gate(session, decision)
     require(request["input_id"] == expected, "PAPER_INPUT_CHANGED")
-    from .intraday_contracts import REBALANCE_MODEL, plan_for
-    from .online_contracts import INTRADAY_MODELS
+    from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL, plan_for
+    from ashare_quant.paper.online_contracts import INTRADAY_MODELS
 
     declared = (
         plan_for(session, decision).initial_inventory if session.model == REBALANCE_MODEL else None

@@ -1,0 +1,100 @@
+{
+  "schema": "aq-real-strategies.v1",
+  "purpose": "Runnable portfolio example; source provenance and admission remain explicit",
+  "securities": [
+    "000001.XSHE",
+    "000651.XSHE",
+    "600000.XSHG",
+    "600519.XSHG"
+  ],
+  "windows": [
+    {
+      "id": "participation",
+      "start": "2020-02-03",
+      "end": "2020-02-21",
+      "role": "research_window"
+    }
+  ],
+  "data_requirements": {
+    "owner": "ashare-data independent task; AQ consumes an immutable owner export, no collection or secondary store",
+    "frequency": "1d",
+    "timezone": "Asia/Shanghai",
+    "warmup_open_sessions_before_start": 120,
+    "calendar": "authoritative exchange open sessions, including >=120 before start and the next open session after end; no weekday-generated calendar",
+    "securities": "canonical security identifiers with listing/delisting evidence or explicitly qualified scoped listing model",
+    "daily": [
+      "date",
+      "security",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "daily_basis": "unadjusted; prices CNY/share, volume shares; source precision retained",
+    "state": [
+      "date",
+      "security",
+      "suspended",
+      "upper_limit",
+      "lower_limit"
+    ],
+    "state_policy": "AD must distinguish observed, derived, modeled and unavailable fields; unknown suspension/limits cannot silently become false or inferred +/-10%",
+    "corporate_actions": "cash dividend record/ex/pay dates, cash amount, share changes/tradability within each execution window; explicit source-qualified coverage/absence required; gaps block economic acceptance",
+    "source_evidence": [
+      "producer identity/version",
+      "source refs",
+      "retrieval time",
+      "content digests",
+      "calendar provenance",
+      "field provenance",
+      "limitations"
+    ],
+    "signal_basis": "raw closing prices on the exchange calendar, including AD-provided suspension close values; never silently drop/forward-fill missing rows",
+    "pit": "historical research only; no strict PIT claim",
+    "missing_policy": "fail visibly by security/date/field; preserve all frozen questions/windows; no silent sample removal"
+  },
+  "execution": {
+    "initial_cash": "1000000.00",
+    "decision_time": "09:00",
+    "information_cutoff": "previous exchange session 15:00",
+    "submit_match_time": "09:30",
+    "matching": "same-session observed raw open under a daily opening-price research model, no intraday queue or liquidity claim",
+    "valuation_time": "15:30",
+    "valuation": "same-session observed raw close",
+    "target_formula": "floor((previous committed equity * weight) / previous raw close / 100) * 100",
+    "gross_target_weight": "0.98",
+    "lot_size": 100,
+    "settlement": "stock T+1",
+    "order_sequence": "all negative target deltas first, then all positive deltas; within each side lexicographic security order; one shared native cash account",
+    "unfilled": "cancel at session end; retry only on next scheduled rebalance, recompute from actual holdings",
+    "cash": "native pre-trade cash and fee checks; never allow negative cash to imitate JQ anomalies",
+    "fees": {
+      "buy_commission_rate": "0.0003",
+      "sell_commission_rate": "0.0003",
+      "minimum_commission": "5.00",
+      "sell_tax_rate": "0.001",
+      "transfer_fee": "0",
+      "slippage": "0",
+      "scope": "fixed acceptance cost model for all windows, not a statement of historical statutory rates"
+    },
+    "corporate_action_policy": {
+      "dividend": "gross cash credited on source pay_date; receivable from ex_date; withholding rate fixed zero for this acceptance model",
+      "shares": "source credit and tradable dates must equal ex_date; fractional shares round half up",
+      "unsupported": "rights issues, mergers, differing credit/tradability dates, and non-adjacent record/ex exchange dates fail visibly"
+    },
+    "volume_ratio": "0.0001"
+  },
+  "strategies": [
+    {
+      "id": "daily-equal-weight",
+      "title": "日度等权与低成交参与率",
+      "formula": "each security weight=0.98/4; rebalance daily; native daily volume participation ratio 0.0001; end-of-day cancellation, next session recompute from actual holdings"
+    }
+  ],
+  "case_metadata": {
+    "id": "participation",
+    "title": "日度等权与低成交参与率",
+    "formula": "each security weight=0.98/4; rebalance daily; native daily volume participation ratio 0.0001; end-of-day cancellation, next session recompute from actual holdings"
+  }
+}

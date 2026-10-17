@@ -8,22 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from ashare_quant.minute.inputs import MinuteInputs, stamp
-from examples.jq_minute_comparison.align import captures
-from examples.jq_minute_comparison.audit_execution import audit_run
-from examples.jq_minute_comparison.audit_gaps import load_capture
-from examples.jq_minute_comparison.session_compare import (
+from ashare_quant.backtests.minute.inputs import MinuteInputs, stamp
+from tests.fixtures.minute_reference.align import captures
+from tests.fixtures.minute_reference.audit_execution import audit_run
+from tests.fixtures.minute_reference.audit_gaps import load_capture
+from tests.fixtures.minute_reference.session_compare import (
     CASES,
     compare_case,
     compare_rows,
     observations,
     verify_source_observations,
 )
-from examples.jq_minute_comparison.session_input import (
-    INHERITED,
-    project,
-    verify_delivery,
-)
+from tests.fixtures.minute_reference.session_input import INHERITED, project, verify_delivery
 
 
 def evidence(name):

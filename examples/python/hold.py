@@ -1,6 +1,6 @@
 """Project-owned minimal normal callback; no file/network access."""
 
-from ashare_quant.strategy_api import TargetShares
+from ashare_quant.strategies.api import TargetShares
 
 
 def on_decision(context, data, parameters):

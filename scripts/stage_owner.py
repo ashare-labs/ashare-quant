@@ -9,8 +9,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = json.loads((ROOT / "src/ashare_quant/m2/owner-code-pin.json").read_text())
-WHEEL_SHA = "f721ecb98eebe1bd02639b3f6a8a7064ed04e740f51518adc44bee2285a683b0"
+PIN = json.loads((ROOT / "src/ashare_quant/providers/data-runtime.json").read_text())
+WHEEL_SHA = PIN["wheel_sha256"]
 
 
 def main():
@@ -19,9 +19,11 @@ def main():
         "--source", type=Path, required=True, help="Owner Git checkout containing the pinned commit"
     )
     args = parser.parse_args()
+    if PIN["commit"] is None:
+        raise SystemExit("Data candidate is not finalized; generate its exact source commit and pin first")
     target = ROOT / "local-dependencies"
     target.mkdir(exist_ok=True)
-    wheel = target / "ashare_data-0.8.0.dev2-py3-none-any.whl"
+    wheel = target / f"ashare_data-{PIN['version']}-py3-none-any.whl"
     if wheel.exists():
         if hashlib.sha256(wheel.read_bytes()).hexdigest() != WHEEL_SHA:
             raise SystemExit(
@@ -41,7 +43,7 @@ def main():
         with tarfile.open(archive) as stream:
             stream.extractall(source, filter="data")
         subprocess.run(
-            ["uv", "build", "--wheel", "--project", str(source), "--out-dir", str(root / "dist")],
+            ["uv", "build", "--wheel", "--no-sources", "--project", str(source), "--out-dir", str(root / "dist")],
             check=True,
         )
         raw = (root / "dist" / wheel.name).read_bytes()

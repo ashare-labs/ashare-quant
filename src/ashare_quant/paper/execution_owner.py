@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from rqprobe.guards import install_network_guard
+from ashare_quant.execution.rqalpha.guards import install_network_guard
 
 install_network_guard()
 
@@ -24,7 +24,7 @@ def receipt(operation, security, value):
 
 def read(request):
     from ashare_data import DailyExecutionView, DailyResearchView
-    from ashare_data.daily_research import ROLE
+    from ashare_data.research.daily import ROLE
 
     root = Path(request["root"])
     spec = request["spec"]

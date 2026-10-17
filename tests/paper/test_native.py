@@ -4,8 +4,7 @@ import pytest
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.paper.service import PaperService
-
-from .fixtures import close, config, decision, queue
+from tests.paper.fixtures import close, config, decision, queue
 
 
 def test_three_separate_days_continue_native_book(tmp_path):

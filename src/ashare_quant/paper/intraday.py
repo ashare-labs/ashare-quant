@@ -6,13 +6,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from ashare_quant.daily_portfolio import signals
-from ashare_quant.m2_jobs.files import digest, sha
-
-from .intraday_contracts import REBALANCE_MODEL, IntradayPlan, continuous
-from .online_adapter import OwnerReader, owner_environment, scoped_action_effect
-from .online_contracts import OnlineDecision, OnlineSession, OpeningInput
-from .risk import profiles, require
+import ashare_quant.portfolio.signals as signals
+from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL, IntradayPlan, continuous
+from ashare_quant.paper.online_adapter import OwnerReader, owner_environment, scoped_action_effect
+from ashare_quant.paper.online_contracts import OnlineDecision, OnlineSession, OpeningInput
+from ashare_quant.paper.risk import profiles, require
+from ashare_quant.storage.artifacts import digest, sha
 
 
 def now():
@@ -22,7 +21,7 @@ def now():
 class IntradayReader(OwnerReader):
     def intraday(self, config, capture):
         require(self.pin() == config.admission_reader_sha256, "PAPER_OWNER_READER_CHANGED")
-        boot = "import sys,json;sys.path.insert(0,sys.argv[1]);from ashare_data.intraday_observation import read;print(json.dumps(read(sys.argv[2],sys.argv[3])))"
+        boot = "import sys,json;sys.path.insert(0,sys.argv[1]);from ashare_data.observations.intraday import read;print(json.dumps(read(sys.argv[2],sys.argv[3])))"
         r = subprocess.run(
             [
                 self.python,
@@ -73,18 +72,18 @@ def observation_labels(config, packet):
 def prepare(service, reader, plan, admission):
     plan = IntradayPlan.model_validate(plan)
     state, config = service._load()
-    from .runtime_migration import selected_continuation
+    from ashare_quant.paper.runtime_migration import selected_continuation
 
     continuation = selected_continuation(state)
     successor = continuation is not None and str(plan.day) == continuation["plan"]["day"]
     if successor:
-        from .intraday_continuation import manifest_gate
+        from ashare_quant.paper.intraday_continuation import manifest_gate
 
         extension = manifest_gate(continuation, config)
         require(plan == extension.plan, "PAPER_CONTINUATION_PLAN_CHANGED")
     else:
         require(config.scenario_manifest_sha256 == digest(plan), "PAPER_INTRADAY_PLAN_IDENTITY")
-    from .calendar_successor import bound_reader_config
+    from ashare_quant.paper.calendar_successor import bound_reader_config
 
     owner_config = bound_reader_config(state, config, plan.day)
     daily = reader.read(owner_config, "daily", plan.daily_capture)
@@ -240,7 +239,7 @@ def deliver(service, reader, plan, capture):
     plan = IntradayPlan.model_validate(plan)
     state, config = service._load()
     row = state["days"][str(plan.day)]
-    from .calendar_successor import bound_reader_config
+    from ashare_quant.paper.calendar_successor import bound_reader_config
 
     p = reader.intraday(bound_reader_config(state, config, plan.day), capture)
     labels = observation_labels(config, p)

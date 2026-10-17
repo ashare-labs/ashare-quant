@@ -4,7 +4,7 @@ from decimal import Context, localcontext
 
 from ashare_data import Store
 
-from ashare_quant.minute.inputs import export_ad_snapshot
+from ashare_quant.backtests.minute.inputs import export_ad_snapshot
 
 
 def test_public_ad_snapshot_is_consumed_without_another_data_source(minute_doc, tmp_path):

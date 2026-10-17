@@ -3,8 +3,8 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
+from ashare_quant.backtests.synthetic import fixture_bytes, specifications
 from ashare_quant.contracts import Account, CorporateActionFact, DataQuery, EngineStep, Position
-from ashare_quant.engine import fixture_bytes, specifications
 
 
 @pytest.mark.parametrize("cash", [100, 100.0, "NaN", "Infinity", "-1", "1e3", "01.00"])

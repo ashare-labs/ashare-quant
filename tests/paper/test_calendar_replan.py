@@ -7,10 +7,9 @@ import pytest
 from pydantic import ValidationError
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest, sha
 from ashare_quant.paper.online_contracts import CalendarReplan
-
-from .test_online import prepare, setup
+from ashare_quant.storage.artifacts import digest, sha
+from tests.paper.test_online import prepare, setup
 
 
 def plan_for(config, **changes):
@@ -104,7 +103,7 @@ def test_changed_saved_plan_or_owner_requires_explicit_migration(tmp_path):
 
 
 def test_cannot_first_open_on_second_day_or_outside_plan(tmp_path):
-    from .fixtures import decision
+    from tests.paper.fixtures import decision
 
     service, config = setup(tmp_path)
     p = plan_for(config)
@@ -186,8 +185,7 @@ def test_cli_replan_checks_actual_owner_scope_before_changing_state(tmp_path):
 @pytest.mark.parametrize("damage", ["missing", "wrong_baseline"])
 def test_observed_plan_requires_its_exact_action_baseline_before_any_native(tmp_path, damage):
     from ashare_quant.paper.online_contracts import OnlineDecision
-
-    from .fixtures import decision
+    from tests.paper.fixtures import decision
 
     service, config = setup(tmp_path)
     p = plan_for(config)

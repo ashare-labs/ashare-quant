@@ -12,19 +12,20 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import canonical, digest, sha
 from ashare_quant.paper import intraday, online
 from ashare_quant.paper import runtime_migration as migration
 from ashare_quant.paper.intraday_contracts import IntradayPlan
 from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.online_contracts import OnlineDecision
 from ashare_quant.paper.service import engine_pin
-
-from .test_intraday_continuation import future_packets
+from ashare_quant.storage.artifacts import canonical, digest, sha
+from tests.paper.test_intraday_continuation import future_packets
 
 
 @pytest.fixture(scope="module")
 def frozen_bound(tmp_path_factory):
+    if not os.getenv("ASHARE_MIGRATION_FROM"):
+        pytest.skip("Explicit historical source fixture required for cross-version migration checks")
     root = tmp_path_factory.mktemp("c5-bound")
     source = Path(os.environ["ASHARE_MIGRATION_FROM"])
     boot = """
@@ -33,7 +34,7 @@ from pathlib import Path
 import pytest
 sys.path.insert(0,sys.argv[1])
 from tests.paper.test_intraday_continuation import parent,bind
-from ashare_quant.m2_jobs.files import digest
+from ashare_quant.storage.artifacts import digest
 from ashare_quant.paper.service import engine_pin
 with pytest.MonkeyPatch.context() as mp:
  service,reader,plan,daily=parent(Path(sys.argv[2]))
@@ -80,7 +81,7 @@ def setup(tmp_path, monkeypatch, frozen_bound):
             return copy.deepcopy(daily)
 
         def intraday(self, config, capture):
-            boot = "import sys,json;from datetime import datetime;sys.path.insert(0,sys.argv[1]);from ashare_data import intraday_observation as o;o.now=lambda:datetime.fromisoformat('2026-10-15T10:03:31+08:00');print(json.dumps(o.read(sys.argv[2],sys.argv[3])))"
+            boot = "import sys,json;from datetime import datetime;sys.path.insert(0,sys.argv[1]);import ashare_data.observations.intraday as o;o.now=lambda:datetime.fromisoformat('2026-10-15T10:03:31+08:00');print(json.dumps(o.read(sys.argv[2],sys.argv[3])))"
             run = subprocess.run(
                 [
                     self.python,
@@ -267,7 +268,7 @@ def test_bad_migration_selection_never_writes(tmp_path, monkeypatch, frozen_boun
 
 
 def test_migration_respects_existing_writer_lock(tmp_path, monkeypatch, frozen_bound):
-    from ashare_quant.m2_jobs.files import lock
+    from ashare_quant.storage.artifacts import lock
 
     service, _, args, _, _, _, _ = setup(tmp_path, monkeypatch, frozen_bound)
     before = service.path.read_bytes()

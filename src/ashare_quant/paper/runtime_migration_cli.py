@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .online import OnlineService
-from .risk import require
-from .runtime_migration import migrate
+from ashare_quant.paper.online import OnlineService
+from ashare_quant.paper.risk import require
+from ashare_quant.paper.runtime_migration import migrate
 
 
 def main():

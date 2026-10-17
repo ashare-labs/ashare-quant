@@ -6,8 +6,7 @@ import pytest
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.paper.online_adapter import execution_from_owner
-
-from .test_late_close import opened_account
+from tests.paper.test_late_close import opened_account
 
 
 @pytest.mark.parametrize("committed", [False, True])

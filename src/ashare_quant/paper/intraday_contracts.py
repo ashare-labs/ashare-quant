@@ -7,9 +7,8 @@ from typing import Literal
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import SHANGHAI, Contract, Money
-
-from .contracts import Quantity, Security, Sha
-from .risk import require
+from ashare_quant.paper.contracts import Quantity, Security, Sha
+from ashare_quant.paper.risk import require
 
 UNIVERSE = ("600000.XSHG", "600036.XSHG", "601318.XSHG")
 REBALANCE_MODEL = "declared-inventory-target-minute-partial-cancel.v3"
@@ -140,12 +139,12 @@ class IntradayProof(Contract):
 
 
 def plan_for(config, decision):
-    from ashare_quant.m2_jobs.files import digest
+    from ashare_quant.storage.artifacts import digest
 
     p = IntradayPlan.model_validate((decision.strategy_receipt or {}).get("intraday_plan"))
     continuation = (decision.strategy_receipt or {}).get("continuation")
     if continuation is not None:
-        from .intraday_continuation import manifest_gate
+        from ashare_quant.paper.intraday_continuation import manifest_gate
 
         m = manifest_gate(continuation, config, decision)
         require(p == m.plan, "PAPER_CONTINUATION_PLAN_CHANGED")
@@ -164,7 +163,7 @@ def plan_for(config, decision):
 def decision_gate(config, decision):
     p = plan_for(config, decision)
     if p.model == REBALANCE_MODEL:
-        from ashare_quant.m2_jobs.files import digest
+        from ashare_quant.storage.artifacts import digest
 
         require(
             decision.targets == p.target_quantities
@@ -183,9 +182,8 @@ def decision_gate(config, decision):
 
 
 def execution_gate(config, decision, opening):
-    from ashare_quant.m2_jobs.files import digest
-
-    from .risk import indexed
+    from ashare_quant.paper.risk import indexed
+    from ashare_quant.storage.artifacts import digest
 
     p = plan_for(config, decision)
     proof = opening.intraday

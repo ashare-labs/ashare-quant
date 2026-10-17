@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.m2_jobs.files import digest
 from ashare_quant.paper import observation
+from ashare_quant.storage.artifacts import digest
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def freeze(root, packet):
 def test_packaged_universe_preserves_frozen_example_scope():
     bundled = json.loads(Path(observation.__file__).with_name("observation-universe.json").read_text())
     example = json.loads(
-        (Path(__file__).resolve().parents[2] / "examples/daily_portfolio/manifest.json").read_text()
+        (Path(__file__).resolve().parents[2] / "examples/portfolio/manifest.json").read_text()
     )
     assert bundled["securities"] == example["securities"]
 

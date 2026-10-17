@@ -7,20 +7,20 @@ from importlib.resources import files
 from importlib.util import find_spec
 from pathlib import Path
 
-from . import __version__
-from .contracts import DomainError
-from .engine import specifications
-from .identity import source_inventory, source_sha256
-from .rq_specs import RQ_IDENTITY, rq_specifications
-from .runtime import runtime_fingerprint
-from .store import digest
+from ashare_quant import __version__
+from ashare_quant.backtests.synthetic import specifications
+from ashare_quant.contracts import DomainError
+from ashare_quant.execution.synthetic.specs import RQ_IDENTITY, rq_specifications
+from ashare_quant.identity import source_inventory, source_sha256
+from ashare_quant.runtime import runtime_fingerprint
+from ashare_quant.storage.store import digest
 
 
 def native_runtime_identity():
     # Verify bytes without importing the engine in the API/supervisor process.
     try:
         root = Path(find_spec("rqalpha").origin).parent
-        expected = json.loads(files("rqprobe").joinpath("upstream-sha256.json").read_text())
+        expected = json.loads(files("ashare_quant.execution.rqalpha").joinpath("upstream-sha256.json").read_text())
         if any(hashlib.sha256((root / name).read_bytes()).hexdigest() != sha for name, sha in expected.items()):
             raise RuntimeError("UNSUPPORTED_RQALPHA_CONTENT")
         return {"upstream": expected, "dependencies": {name: metadata.version(name) for name in

@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def minute_doc():
-    return runpy.run_path(str(ROOT / "examples/python_minute/make_fixture.py"))["fixture"]()
+    return runpy.run_path(str(ROOT / "examples/minute/make_fixture.py"))["fixture"]()
 
 
 @pytest.fixture
@@ -94,7 +94,7 @@ def run_minute(tmp_path, minute_doc):
     pytest.importorskip(
         "rqalpha", reason="Native RQAlpha required; never replace with a test ledger"
     )
-    from ashare_quant.minute import run_backtest
+    from ashare_quant.backtests.minute import run_backtest
 
     def run(
         source,

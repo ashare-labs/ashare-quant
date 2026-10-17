@@ -5,14 +5,14 @@ import json
 from importlib.util import find_spec
 from pathlib import Path
 
-from .contracts import DomainError
+from ashare_quant.contracts import DomainError
 
 
 def source_inventory() -> dict[str, str]:
-    """Both shipped packages, including nested source, fixtures and identity inputs."""
+    """The installed runtime tree, including source, fixtures and identity inputs."""
     result = {}
     try:
-        for package in ("ashare_quant", "rqprobe"):
+        for package in ("ashare_quant",):
             root = Path(next(iter(find_spec(package).submodule_search_locations)))
             for path in sorted(root.rglob("*")):
                 if path.is_file() and path.suffix in {".py", ".json", ".sha256"}:
@@ -24,3 +24,8 @@ def source_inventory() -> dict[str, str]:
 
 def source_sha256() -> str:
     return hashlib.sha256(json.dumps(source_inventory(), sort_keys=True).encode()).hexdigest()
+
+
+def package_root() -> Path:
+    """Import root of this exact installed package (editable or wheel)."""
+    return Path(__file__).resolve().parent.parent

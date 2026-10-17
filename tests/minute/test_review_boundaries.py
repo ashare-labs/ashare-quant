@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from ashare_quant.minute.inputs import MinuteInputs, stamp
-from ashare_quant.minute.runner import MinuteRunError, run_backtest
+from ashare_quant.backtests.minute.inputs import MinuteInputs, stamp
+from ashare_quant.backtests.minute.runner import MinuteRunError, run_backtest
 
 ZERO = {"commission_rate": 0, "sell_tax": 0, "min_commission": 0}
 SID = "600000.XSHG"

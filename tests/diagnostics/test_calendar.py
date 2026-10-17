@@ -15,14 +15,14 @@ from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
 from ashare_quant.diagnostics.contracts import DiagnosticQuery
 from ashare_quant.diagnostics.service import Diagnostics
-from ashare_quant.m2.owner_wire import verify_runtime
+from ashare_quant.providers.daily.owner_wire import verify_runtime
 
 
 @pytest.fixture(scope="module")
 def configuration():
     path = os.getenv("ASHARE_QUANT_TEST_DIAGNOSTICS_CONFIG")
     if not path:
-        pytest.skip("Requires explicit fixed 0.8.7 runtime and copied real calendar capture")
+        pytest.skip("Requires the paired installed AD and a copied real calendar capture")
     return json.loads(Path(path).read_text())
 
 
@@ -54,7 +54,7 @@ def test_public_calendar_and_three_capabilities_do_not_admit_execution(configura
     assert not row["historical_pit"] and not row["execution_permission"]
     assert report.read_completed_at.tzinfo and not report.network_used
     assert inventory(store) == before
-    verify_runtime()  # This same process still contains the fixed 0.8.0.dev2 execution owner.
+    verify_runtime()  # Calendar and execution reads share the paired installed owner.
 
 
 @pytest.mark.parametrize("date,code,direction", [
@@ -100,11 +100,9 @@ def test_missing_capture_preserves_data_owner_error(configuration):
     assert report.calendar.public_result is None
 
 
-def test_execution_environment_cannot_be_used_as_calendar_owner(configuration):
+def test_paired_environment_is_used_as_calendar_owner(configuration):
     config = {"calendar-r1": {**configuration["calendar-r1"], "python": sys.executable}}
-    with pytest.raises(DomainError) as exc:
-        Diagnostics(config).diagnose(query())
-    assert exc.value.code == "DIAGNOSTIC_RUNTIME_MISMATCH"
+    assert Diagnostics(config).diagnose(query()).calendar.status == "readable"
     verify_runtime()
 
 
@@ -120,12 +118,12 @@ def test_http_report_preserves_public_owner_evidence_and_creates_no_jobs(configu
         caps = client.get("/api/v1/source-diagnostics/capabilities").json()
         assert caps["contract_version"] == "source-diagnostics.v1"
         assert caps["configured_sources"] == ["calendar-r1"]
-        before = client.get("/api/v1/m2/jobs").json()
+        before = client.get("/api/v1/tasks/daily/jobs").json()
         result = client.post("/api/v1/source-diagnostics", json=query().model_dump(mode="json"))
         assert result.status_code == 200, result.text
         assert result.json()["initialization"]["execution_permission"] is False
-        assert client.get("/api/v1/m2/jobs").json() == before
-        assert client.get("/api/v1/m2/jobs/catalogue").json()["contract_version"] == "m2-jobs.v6"
+        assert client.get("/api/v1/tasks/daily/jobs").json() == before
+        assert client.get("/api/v1/tasks/daily/jobs/catalogue").json()["contract_version"] == "m2-jobs.v6"
         bad = client.post("/api/v1/source-diagnostics", json=query().model_dump(mode="json") | {"store": "/tmp"})
         assert bad.status_code == 422
         assert "/api/v1/source-diagnostics" in client.get("/api/v1/openapi.json").json()["paths"]
