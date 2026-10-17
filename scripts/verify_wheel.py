@@ -83,7 +83,8 @@ def main():
                  "tests/minute/test_native.py", "tests/paper/test_native.py", "tests/paper/test_recovery.py",
                  "tests/portfolio/test_signals.py", "tests/execution/test_budget_account.py"]
         if args.daily_components:
-            tests += ["tests/daily_tasks/test_native.py::test_three_real_windows[two_day-2]",
+            tests += ["tests/daily_tasks/test_review_binding.py",
+                      "tests/daily_tasks/test_native.py::test_three_real_windows[two_day-2]",
                       "tests/daily_tasks/test_native.py::test_crash_and_resume_keeps_account[native_submit:2]",
                       "tests/daily_tasks/test_end_date_native.py::test_selected_prefix_matches_account_oracle_and_has_no_tail_events[w1-2020-01-03-hold-8735-9995-100-1-1]"]
         test_output = run("tests", [str(python), "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider",

@@ -9,3 +9,5 @@ source-diagnostics-capabilities 和 source-diagnostics 使用配置日历 captur
 PortableConsumerBinding、PortableReadContext、PortableRead、PortableDocument 在 ashare_data.research。Store.portable、portable_profiles、import_portable 和组件组合保持唯一数据所有者。
 
 pin 记录真实分发版本、源码清单与 wheel 摘要。新源码不得复制历史 PASS receipt。更新 pin 后验证导出消费、失败边界、原生执行及 wheel。
+
+分发版本和 portable owner 文档版本分别固定。当前 AD 分发为 `0.10.0.dev2`，portable owner 文档版本保持 `0.10.0.dev1`。pin 的 `version` 对应实际安装包，`portable_owner_version` 对应 AD 描述符；AQ DataBinding.owner_version 仍记录已安装分发版本。不能用包版本替换既有描述符中的版本、policy 或 parser 身份。

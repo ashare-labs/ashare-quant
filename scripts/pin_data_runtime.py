@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--tree", help="Actual source tree; omit for uncommitted development")
     args = parser.parse_args()
     from ashare_data.research.payloads import QUERY_CONTRACT_SHA256
+    from ashare_data.research.portable import VERSION as PORTABLE_OWNER_VERSION
     from ashare_data.research.portable_types import canonical_hash
 
     root = Path(str(files("ashare_data")))
@@ -28,6 +29,7 @@ def main():
     if inventory != wheel_files:
         raise SystemExit("Installed AD and supplied wheel differ; pin was not written")
     pin = dict(schema="aq.data-runtime.v1", version=metadata.version("ashare-data"),
+               portable_owner_version=PORTABLE_OWNER_VERSION,
                commit=args.commit, tree=args.tree,
                source_verification="committed_candidate_content" if args.commit else "uncommitted_candidate_content",
                runtime_code_sha256=canonical_hash(inventory), query_contract_sha256=QUERY_CONTRACT_SHA256,

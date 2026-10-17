@@ -1,5 +1,5 @@
 {
-  "commit": "2fe79d962cb912594e1fe78d1e6cb10ca5f4f344",
+  "commit": "d51c9c2d77fda96f1f85565073f5436a6170576a",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "fba58c23794ad37d752c9b9ad4ba1df95897bdf7660718bea110c42b4e8bf7e2",
+    "__init__.py": "07d839c8ac5bfd231d6e6ceabcbbc57abbddd61c4038b93aecb3674cc1182587",
     "cli/__init__.py": "bf38b34961b9889df64defc1a314efcea7b8607a01afb429b42313d5b0a3d899",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/corporate_actions.py": "f3c7e7db677a12897594383897c19072a327cfb2874bcb2bc9669652ed655603",
@@ -24,14 +24,15 @@
     "corporate_actions/history.py": "cfd699734262ffef7241d94608f119f610b8153e4354e236b1965f704eb075a2",
     "corporate_actions/identity.py": "2fd702c183e339d2c9ee8d5c98287487707e91b0f635bc03e610db9317edf68f",
     "corporate_actions/sources.py": "026703c654175b68d98e49fbb2df7538d8a070031da5e78c1a15d018a36a5882",
-    "factors/__init__.py": "b51cb7b1a2554aca1551178925961c19abe5e29920e14bfeb799e848fbdaa5d2",
+    "factors/__init__.py": "90cafff2f06ddca4c519f6a590f5ba567ba9fb0f72cdfa5e5ecd77372e0ff57f",
     "factors/alpha191/__init__.py": "c12a4e257834c80d8a8bc8df5449f2b0e272ef42668e5316fa721eba20ce9507",
     "factors/alpha191/_engine.py": "5812a599ee215a97046a9967ec39a756fa73e95875bd4aad3ebe876ffd4b68c1",
     "factors/alpha191/_formulas.py": "c426b9bb3efacefcee0d013ad70c87aa8747cb649ef4d2b3f6cb06c14fb8c09d",
     "factors/alpha191/sources.json": "47aa469109f4c36f61c7312d88e9a1a4afc5ead7e022dba30e5f061ff0ab9087",
     "factors/catalog.py": "a7688cf972c4426d1ad3ac1eecef8869dc75e0651c42af3f104cf6e7ddd27a50",
-    "factors/joinquant/__init__.py": "49d450743d7b5202adbd8d3aef59e266d3e518702a3177429674d7d71c0fd334",
+    "factors/joinquant/__init__.py": "f43c16a6ae7d99e69ca42527691b04d8cac29ac8372c50517ec3a759c7f5b47c",
     "factors/joinquant/amount.py": "9e0ca301a7f19a87d69735863c95f3ab5dcb74ab81741dc18d097f991aebaba6",
+    "factors/joinquant/amount_comparison.py": "12ea7d293cd64846b41804e58f7c65ef2e0e8c2ebc7b13112e7b6259f8d6662e",
     "factors/joinquant/amount_inputs.py": "a23bb1a9bfdb2e74d3f907fd20e610435c837a86dc941a4b33d0fd3553d08dc8",
     "factors/joinquant/panel.py": "330f63edf374c117615dca351921dbbbcaa71bd73b5f6011b909aa2e18d36d7d",
     "factors/joinquant/precision.py": "62241edbe505329df873d543147a732a69e744c6f36e1cbed2057e324f4da05b",
@@ -125,11 +126,12 @@
     "storage/immutable.py": "971a29106bd6ab2e1c019c2c0c801ef87820afb2283b53d4b2f681c848ecc1f4",
     "storage/local_daily.py": "869d0bef2a0f03aa49daf70be9b7851afa10d52aa188f54524a3c5bbf3dae339"
   },
+  "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "58750d9a660c7665cd7c00aec59721060950d4625a00c18332450c2ea8de13de",
+  "runtime_code_sha256": "753075b3a1d342976026871f1f88c43ec651c93bce91af543ed1a795fce13846",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "a684681a0265945ef64e6e7eb8fac87af9b8243f",
-  "version": "0.10.0.dev1",
-  "wheel_sha256": "cdb5051d851a7562012b071e5e8ee7f209a4d6fa5474ce33d31adc51b661bcea"
+  "tree": "20ff45060e38dff6c9e0f11e391633102b0dad08",
+  "version": "0.10.0.dev2",
+  "wheel_sha256": "87524be8c53aa5d3b52bd4c710157f5f13c45a5c1fccc0ebe5bc3a4e8a2109ce"
 }

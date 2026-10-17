@@ -11,11 +11,23 @@ from ashare_quant.providers.daily.portable import bind_dataset
 from ashare_quant.tasks.daily.catalogue import window
 
 
+def test_distribution_and_portable_owner_versions_are_both_preserved(owner_store):
+    path, dataset = owner_store
+    binding = bind_dataset(Store(path), dataset)
+    pin = source_pin()
+    for entry in binding.entries:
+        descriptor = json.loads(entry.owner_binding.descriptor)
+        assert descriptor["version"] == pin["portable_owner_version"]
+        assert entry.binding.owner_version == pin["version"]
+        assert descriptor["version"] != entry.binding.owner_version
+
+
 @pytest.mark.parametrize(
     "change",
     [
         {"independent_review_sha256": "0" * 64},
         {"owner_version": "0.8.0.dev1"},
+        {"owner_version": "0.10.0.dev1"},
         {"owner_commit": "e72f7136bb7c60cc90d170ed07e2753f29935b18"},
         {
             "owner_runtime_sha256": "90c86a19c1fdd6af7482322451c86972b8a628bc2b7ed8ea9a38f5e08b141111"

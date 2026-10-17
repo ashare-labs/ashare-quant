@@ -116,7 +116,7 @@ def validate_binding(entry):
     )
     require(
         validate_plan(plan) == bound.owner_window_id
-        and desc["version"] == pin["version"]
+        and desc["version"] == pin["portable_owner_version"]
         and desc["runtime_code_sha256"] == pin["runtime_code_sha256"]
         and desc["query_contract_sha256"] == pin["query_contract_sha256"]
         and plan["query_contract_sha256"] == desc["query_contract_sha256"]

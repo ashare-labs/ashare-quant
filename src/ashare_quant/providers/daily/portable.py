@@ -113,6 +113,7 @@ def bind_dataset(store, dataset_id):
                     owner_window_id=window_id,
                 )
                 binding = DataBinding(
+                    # AQ freezes the installed distribution; the descriptor keeps its protocol version.
                     owner_version=pin["version"],
                     owner_commit=pin["commit"],
                     owner_runtime_sha256=pin["runtime_code_sha256"],
