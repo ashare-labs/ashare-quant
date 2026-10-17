@@ -71,6 +71,9 @@ def main():
                                "--no-deps", str(wheel)])
         installed = json.loads(run("installed-identity", [str(python), "-I", "-c", IDENTITY], root))
         assert Path(installed["module"]).is_relative_to(root / "venv"), installed
+        for profile in ([], ["--native"]):
+            run("check-native-snapshot" if profile else "check-core-snapshot",
+                [str(python), "scripts/freeze_runtime.py", "--check", *profile])
         source = json.loads(run("source-identity", [str(python), "-I", "-c",
                             "import sys; sys.path.insert(0, sys.argv[1]);\n" + IDENTITY,
                             str(project / "src")], root))

@@ -83,7 +83,7 @@ packages = ["src/ashare_quant"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/.gitignore", "/.python-version", "/README.md", "/CONTRIBUTING.md", "/pyproject.toml", "/uv.lock",
-  "/requirements-core.txt", "/requirements-native.txt", "/src", "/tests", "/examples", "/scripts", "/docs",
+  "/src", "/tests", "/examples", "/scripts", "/docs",
 ]
 
 [project.scripts]

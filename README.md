@@ -12,10 +12,10 @@ A宽是本地 A 股策略、回测与模拟后端。A数达负责数据，RQAlph
 
 ```sh
 python scripts/stage_owner.py --source /path/to/ashare-data
-uv sync --frozen --extra native
+uv sync --locked --extra native
 ```
 
-安装使用已经配对的锁文件与 owner pin。修改数据依赖时按 [开发指南](docs/development.md) 更新。行情、凭据、账户和历史运行产物不随发行包发布。
+`uv.lock` 是安装版本和包哈希的唯一锁定来源；`--locked` 会拒绝与项目声明不一致的锁。核心、原生、离线安装及按需 pip 导出见 [依赖指南](docs/dependencies.md)，更新流程见 [开发指南](docs/development.md)。行情、凭据、账户和历史运行产物不随发行包发布。
 
 ## 快速开始
 

@@ -12,6 +12,7 @@ from packaging.requirements import Requirement
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--native", action="store_true")
+parser.add_argument("--check", action="store_true", help="Fail on stale snapshots without writing files")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 lock = tomllib.loads((root / "uv.lock").read_text())
@@ -33,6 +34,18 @@ while pending:
     result[name] = version
     pending.extend(metadata.requires(name) or [])
 target = root / "src/ashare_quant"
-(target / ("native-runtime-lock.json" if args.native else "runtime-lock.json")).write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
-(target / "lock.sha256").write_text(hashlib.sha256((root / "uv.lock").read_bytes()).hexdigest() + "\n")
-print(f"Verified and froze {len(result) - 1} runtime distributions")
+outputs = {
+    target / ("native-runtime-lock.json" if args.native else "runtime-lock.json"):
+        json.dumps(result, sort_keys=True, indent=2) + "\n",
+    target / "lock.sha256": hashlib.sha256((root / "uv.lock").read_bytes()).hexdigest() + "\n",
+}
+if args.check:
+    stale = [path.name for path, text in outputs.items()
+             if not path.is_file() or path.read_text() != text]
+    if stale:
+        parser.exit(1, "Stale dependency snapshots: " + ", ".join(stale) + "\n")
+    print(f"Verified {len(result) - 1} runtime distributions; snapshots are current")
+else:
+    for path, text in outputs.items():
+        path.write_text(text)
+    print(f"Verified and froze {len(result) - 1} runtime distributions")

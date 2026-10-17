@@ -1,4 +1,4 @@
-"""Reproduce the separately owned R09 case without editing its frozen directory."""
+"""Audit a frozen lunch-session minute-capacity regression in a new output directory."""
 
 import argparse
 import json
@@ -28,7 +28,7 @@ def trade_changes(before, after):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--case", required=True, type=Path, help="read-only frozen R09 case directory")
+    p.add_argument("--case", required=True, type=Path, help="read-only frozen lunch-session capacity case directory")
     p.add_argument("--before", required=True, type=Path, help="original frozen native run")
     p.add_argument("--input", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path, help="new writable evidence directory")
