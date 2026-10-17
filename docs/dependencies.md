@@ -39,7 +39,7 @@ uv export --locked --offline --no-dev --no-emit-project --output-file .verificat
 uv export --locked --offline --no-dev --extra native --no-emit-project --output-file .verification/runtime-native.txt
 uv venv /path/to/new-venv --offline
 uv pip install --python /path/to/new-venv/bin/python --require-hashes -r .verification/runtime-native.txt --offline
-uv pip install --python /path/to/new-venv/bin/python --no-deps dist/ashare_quant-0.12.0.dev2-py3-none-any.whl --offline
+uv pip install --python /path/to/new-venv/bin/python --no-deps dist/ashare_quant-0.12.0.dev3-py3-none-any.whl --offline
 ```
 
 导出保留包哈希，且不安装 AQ 项目本身；最后一步再装已构建的 AQ wheel。导出的 AD wheel 路径相对项目根目录，因此这些安装命令也从项目根运行。导出文件是临时交付物，不提交；core/native 只生成所需的一份即可。`scripts/verify_wheel.py` 已使用这条锁定导出链，在新环境安装时同时核对两种运行时快照和安装源码身份。
