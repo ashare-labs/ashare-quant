@@ -1,5 +1,5 @@
 {
-  "commit": "5205c52b48b1e1d2933af659a0be2e76ff50e4b7",
+  "commit": "1591e6df219a0632dc4baa30ca32069cd97eb381",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "fdc299f6f162dc168755dbbc2f7d2e84b156ca6ef84326e05d5c209831fa299a",
+    "__init__.py": "15340979af9be81706e2c01438a0d65cccc4c6c9d62dcb5670df0f8dbff38918",
     "cli/__init__.py": "db659dd47c3b5d75577400a5d7294c669e6c7fca1df158739c1bec0194cbefb0",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/corporate_actions.py": "f3c7e7db677a12897594383897c19072a327cfb2874bcb2bc9669652ed655603",
@@ -120,6 +120,7 @@
     "research/fact_types.py": "53578227f86d181e88b81cbb721a21d00f204ee27cfcb4de695910e4fba0b800",
     "research/finite_facts.py": "29b244886c82d3e1265be20a57ae2e49473bcf5d822ce2a396bcfa2c90fd0e73",
     "research/independent_queries.py": "1ac4d9bbec80f6855fcf4600ccec2b6898576239fe4897a86d702c3df909b084",
+    "research/minute_export.py": "c55bc1a4e6361d32ccfb4905b056bc1760fe2e915e4e296dd5848a9877ef1042",
     "research/order_inputs.py": "0a904ac5605bbf8ff84a715bafc437b4fb8ab8a57697d88730565ec051400659",
     "research/payloads.py": "b7842c617dd93ef4c43c169089720f357921663cacfb503a99f172c8194bcf6d",
     "research/portable-policy.json": "3385146f2738660da8fa91d7818c028f33a82a2aacfc2b64ddadcc2565c23d59",
@@ -135,10 +136,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "e718e76b82d54ac1c84343baef641ca37dc2483223a1bbe13b81655637c34703",
+  "runtime_code_sha256": "a09f9a019772c884aa7cd88004e9cf7fa3c1ab506213d6807f2d2d998218c620",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "e8b93e1b5deca06ac8d8884973a417ff1e2b6a5d",
-  "version": "0.10.0.dev4",
-  "wheel_sha256": "3df888cf0765d08ef64568fa2b70401cbd8b73049bceea6fa8fa8cbefebae0c5"
+  "tree": "fcd0db0f465f8473d8fa6f4a3e08d3e4cede5d01",
+  "version": "0.10.0.dev5",
+  "wheel_sha256": "8675c3cee871f55eb2d6a8164f248501857c45a6a163a685eaf135afefff3ad3"
 }

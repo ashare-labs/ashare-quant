@@ -85,7 +85,8 @@ def main():
                             ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copyfile(project / "pyproject.toml", validation / "pyproject.toml")
         tests = ["tests/test_api.py", "tests/test_contract_export.py", "tests/test_public_package.py",
-                 "tests/minute/test_native.py", "tests/paper/test_native.py", "tests/paper/test_recovery.py",
+                 "tests/minute/test_native.py", "tests/minute/test_research_contract.py",
+                 "tests/paper/test_native.py", "tests/paper/test_recovery.py",
                  "tests/portfolio/test_signals.py", "tests/execution/test_budget_account.py"]
         if args.daily_components:
             tests += ["tests/daily_tasks/test_review_binding.py",
