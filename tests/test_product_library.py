@@ -7,6 +7,7 @@ are created below pytest's temporary directory; the source library stays read-on
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -139,3 +140,86 @@ def test_real_missing_observations_are_not_filled_or_published(library_configura
         assert refused.status_code == 422 and refused.json()["error"]["origin"] == "ashare-data"
         assert client.get(Q + "/catalogue").json()["datasets"] == []
         assert client.get(Q + "/jobs").json()["items"] == []
+
+
+@pytest.mark.parametrize("stage", ["catalog_commit", "consumer_read"])
+def test_busy_publication_can_retry_exact_request_without_duplicate_state(
+    library_configuration, monkeypatch, stage
+):
+    """Real SQLite contention, not a fabricated OperationalError or replacement price feed."""
+    from ashare_data.product.publication import PUBLICATION_SCHEMA
+
+    from ashare_quant.product import publication, service
+
+    config = library_configuration
+    catalog = config.release_store_root / "catalog.sqlite"
+    with sqlite3.connect(catalog) as db:
+        db.executescript(PUBLICATION_SCHEMA)
+    causes = []
+    original_call = service.Product.call
+
+    def record_cause(self, operation):
+        try:
+            return original_call(self, operation)
+        except Exception as exc:
+            causes.append(exc.__cause__)
+            raise
+
+    monkeypatch.setattr(service.Product, "call", record_cause)
+    original_consume = publication.consume
+
+    def consume_while_catalog_locked(*args, **kwargs):
+        # AD has committed its release, but AQ has not yet imported it. Hold a real
+        # separate connection's EXCLUSIVE lock for this one read attempt only.
+        monkeypatch.setattr(publication, "consume", original_consume)
+        with sqlite3.connect(catalog, timeout=0) as blocker:
+            blocker.execute("BEGIN EXCLUSIVE")
+            try:
+                return original_consume(*args, **kwargs)
+            finally:
+                blocker.rollback()
+
+    request = {"securities": SECURITIES, "start": "2022-04-06", "end": "2022-04-11",
+               "source": "auto", "mode": "price_only_no_limits", "name": "Busy publication retry"}
+    with TestClient(create_app(product_configuration=config)) as client:
+        if stage == "consumer_read":
+            monkeypatch.setattr(publication, "consume", consume_while_catalog_locked)
+            failed = client.post(P + "/releases", json=request)
+        else:
+            # A normal reader can overlap the serialized writer's commit. Store's
+            # zero-wait SQLite policy returns BUSY instead of extending the request.
+            with sqlite3.connect(catalog.as_uri() + "?mode=ro", uri=True) as blocker:
+                blocker.execute("BEGIN")
+                blocker.execute("SELECT version FROM meta").fetchall()
+                try:
+                    failed = client.post(P + "/releases", json=request)
+                finally:
+                    blocker.rollback()
+        assert failed.status_code == 503, failed.text
+        assert failed.json()["error"]["code"] == "PRODUCT_DATA_UNAVAILABLE"
+        assert failed.headers["Retry-After"] == "2"
+        assert failed.headers["Cache-Control"] == "no-store"
+        assert len(causes) == 1 and isinstance(causes[0], sqlite3.OperationalError)
+        assert causes[0].sqlite_errorcode == sqlite3.SQLITE_BUSY
+        assert client.get(Q + "/catalogue").json()["datasets"] == []
+        assert client.get(Q + "/jobs").json()["items"] == []
+        with sqlite3.connect(catalog) as db:
+            expected = 0 if stage == "catalog_commit" else 1
+            assert db.execute("SELECT count(*) FROM local_daily_products").fetchone()[0] == expected
+        manifests = list((config.release_store_root / "local_daily_products").glob("*/manifest.json"))
+        assert len(manifests) == 1
+        original_bytes = {p.name: p.read_bytes() for p in manifests[0].parent.iterdir()}
+
+        # The lock has now gone; retry the unchanged payload, then repeat it again.
+        retry = client.post(P + "/releases", json=request)
+        repeat = client.post(P + "/releases", json=request)
+        assert retry.status_code == repeat.status_code == 201, retry.text + repeat.text
+        assert retry.json() == repeat.json()
+        result = retry.json()
+        assert result["release"]["dataset_id"] == manifests[0].parent.name
+        assert {p.name: p.read_bytes() for p in manifests[0].parent.iterdir()} == original_bytes
+        assert client.get(Q + "/catalogue").json()["datasets"] == [result["dataset"]]
+        assert client.get(Q + "/jobs").json()["items"] == []
+        with sqlite3.connect(catalog) as db:
+            assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert db.execute("SELECT count(*) FROM local_daily_products").fetchone()[0] == 1
