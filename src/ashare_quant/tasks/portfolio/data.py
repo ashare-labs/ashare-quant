@@ -389,6 +389,16 @@ class Datasets:
                         )
             doc["assumptions"], doc["limitations"] = assumptions, limitations
             data = validate(doc, selection)
+            if data.corporate_actions is not None:
+                from ashare_quant.portfolio.corporate import new_account_assumption
+
+                # Public jobs have no initial-position/receivable import. Bind this
+                # account policy and the exact selected events into the existing ack.
+                assumptions = [a for a in assumptions if not (
+                    isinstance(a, dict) and a.get("id") == "corporate_initial_entitlements"
+                )]
+                assumptions.append(new_account_assumption(data.corporate_actions, start))
+                doc["assumptions"] = assumptions
             gaps += data.preflight()["gaps"]
             if (
                 doc.get("state_mode") == "retrospective_model"

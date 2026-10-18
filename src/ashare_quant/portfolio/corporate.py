@@ -45,7 +45,12 @@ def iso(value, field):
 
 
 def schedule_rows(doc, ids, window, calendar):
-    """Validate first, then select. Never discard unresolved source issues by date."""
+    """Validate source evidence, then select without assuming account ownership.
+
+    A selected payment/credit may have a record date before this run. Keep that
+    source event; Inputs separately checks whether the starting account can own
+    it. Only record-close quantities captured inside the run create entitlements.
+    """
     schedule = doc.get("corporate_schedule")
     if schedule is None:
         return None
@@ -160,12 +165,12 @@ def schedule_rows(doc, ids, window, calendar):
             active_dates += [credit, tradable]
         if sid not in ids or record > window["end"] or max(active_dates) < window["start"]:
             continue
-        require(record >= window["start"], "CORPORATE_RECORD_BASIS_OUTSIDE_RUN")
         for day in active_dates:
             if window["start"] <= day <= window["end"]:
                 require(day in calendar, f"CORPORATE_STAGE_NOT_SESSION:{day}")
-        # Cost allocation has a defined old-share basis: no intervening trading session.
-        if ex <= window["end"]:
+        # Only an in-run record can create an old-share cost allocation. Earlier
+        # ex dates may be outside even the warmup calendar for delayed payments.
+        if window["start"] <= record and ex <= window["end"]:
             require(
                 calendar[calendar.index(ex) - 1] == record,
                 "CORPORATE_NONADJACENT_RECORD_EX_UNSUPPORTED",
@@ -178,3 +183,24 @@ def schedule_rows(doc, ids, window, calendar):
         dates.add(marker)
         selected.append(row)
     return sorted(selected, key=lambda r: (r["record_date"], r["security"], r["entitlement_key"]))
+
+
+def new_account_assumption(rows, start):
+    """Describe the public cash-only task, using validated source events only."""
+    return {
+        "id": "corporate_initial_entitlements",
+        "initial_account": "cash_only_no_positions_or_entitlements",
+        "text": (
+            "Each new task starts with cash only, no positions or inherited receivables. "
+            "Warmup prices do not establish holdings. Events recorded before the run "
+            "create no entitlement for this account; in-run record-close holdings "
+            "determine subsequent cash and share entitlements."
+        ),
+        "prior_record_events": [
+            {field: row.get(field) for field in (
+                "security", "entitlement_key", "record_date", "ex_date", "payment_date",
+                "share_credit_date", "new_shares_tradable_date",
+            )}
+            for row in rows if row["record_date"] < start
+        ],
+    }

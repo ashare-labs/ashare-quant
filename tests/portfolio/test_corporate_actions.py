@@ -125,11 +125,10 @@ def test_bad_event_blocked(tmp_path, field, value, error):
         load(tmp_path, doc, manifest)
 
 
-def test_coverage_conflicts_and_missing_basis_cannot_disappear_by_selecting_window(tmp_path):
+def test_empty_account_keeps_prior_record_but_source_conflicts_still_block(tmp_path):
     manifest, doc = fixture()
     manifest["windows"][0]["start"] = "2020-02-05"
-    with pytest.raises(ValueError, match="RECORD_BASIS_OUTSIDE_RUN"):
-        load(tmp_path, doc, manifest)
+    assert load(tmp_path, doc, manifest).corporate_actions == doc["corporate_schedule"]["rows"]
     doc["corporate_schedule"]["issues"] = [{"field": "payment_date", "reason": "conflict"}]
     with pytest.raises(ValueError, match="SOURCE_ISSUES"):
         load(tmp_path, doc, manifest)
@@ -197,9 +196,11 @@ def test_source_row_deletion_and_unaccepted_model_refused(tmp_path):
 
 
 def native(
-    tmp_path, *, doc=None, targets=None, fault="none", root=None, invocation="run", expect=0
+    tmp_path, *, doc=None, manifest=None, targets=None, fault="none", root=None,
+    invocation="run", expect=0
 ):
-    manifest, source = fixture()
+    default_manifest, source = fixture()
+    manifest = default_manifest if manifest is None else manifest
     doc = source if doc is None else doc
     question = tmp_path / "question"
     directory = question / "daily-equal-weight"

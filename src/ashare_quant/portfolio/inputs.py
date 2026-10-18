@@ -176,16 +176,25 @@ class Inputs:
 
         self.corporate_actions = schedule_rows(doc, self.ids, window, self.calendar)
         initial = manifest.get("execution", {}).get("initial_positions", {})
+        require(isinstance(initial, dict), "CORPORATE_INITIAL_HOLDING_MODEL_REQUIRED")
         if initial:
             require(
                 self.corporate_actions is not None
                 and manifest["execution"].get("initial_position_model")
                 == "research_seed_previous_close"
-                and isinstance(initial, dict)
                 and set(initial) <= set(self.ids)
                 and all(type(q) is int and 0 < q <= 2**53 for q in initial.values()),
                 "CORPORATE_INITIAL_HOLDING_MODEL_REQUIRED",
             )
+            # Seed quantities describe the previous close, not historical record
+            # holdings or inherited receivables. Never manufacture those rights.
+            for event in self.corporate_actions:
+                require(
+                    not (event["security"] in initial and event["record_date"] < window["start"]),
+                    "CORPORATE_RECORD_BASIS_OUTSIDE_RUN:"
+                    f"{event['security']}:{event['record_date']}:"
+                    "initial positions do not establish record holdings or inherited entitlements",
+                )
             for sid in initial:
                 prior = self.rows.get((sid, self.previous[window["start"]]), {})
                 for field in (

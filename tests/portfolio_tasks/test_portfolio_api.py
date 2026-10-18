@@ -90,9 +90,29 @@ def test_formal_corporate_source_survives_projection_publication_and_resume(tmp_
             == json.loads(Path(source).read_text())["corporate_schedule"]
         )
         later = client.post(P + "/preflight", json=selection | {"start_date": "2022-04-08"}).json()
-        assert not later["ready"] and any(
-            "RECORD_BASIS_OUTSIDE_RUN" in g.get("detail", "") for g in later["gaps"]
+        assert later["ready"], later
+        assert later["assumption_ack_sha256"] != report["assumption_ack_sha256"]
+        account_policy = next(a for a in later["assumptions"] if isinstance(a, dict)
+                              and a.get("id") == "corporate_initial_entitlements")
+        assert account_policy["initial_account"] == "cash_only_no_positions_or_entitlements"
+        event, = account_policy["prior_record_events"]
+        assert (event["security"], event["record_date"], event["payment_date"]) == (
+            "000651.XSHE", "2022-04-07", "2022-04-08",
         )
+        later_request = request | {"start_date": "2022-04-08", "idempotency_key": "after-record"}
+        stale = client.post(P + "/jobs", json=later_request)
+        assert stale.status_code == 409
+        assert stale.json()["error"]["code"] == "PORTFOLIO_ASSUMPTIONS_CHANGED"
+        later_job = client.post(P + "/jobs", json=later_request | {
+            "assumption_ack_sha256": later["assumption_ack_sha256"],
+        }).json()
+        assert work_one(app.state.daily_tasks, later_job["job_id"]) == later_job["job_id"]
+        after_record = client.get(P + "/jobs/" + later_job["job_id"] + "/result").json()
+        assert after_record["audit"]["passed"] and after_record["trades"]
+        assert not any(after_record["receipt"]["corporate_entitlements"].values())
+        assert after_record["assumptions"] == after_record["receipt"]["assumptions"] == later["assumptions"]
+        later_frozen = json.loads((jobs.directory(later_job["job_id"]) / "input.json").read_text())
+        assert later_frozen["corporate_schedule"] == frozen["corporate_schedule"]
         diagnostic = client.post(
             P + "/preflight", json=selection | {"mode": "price_only_no_limits"}
         ).json()

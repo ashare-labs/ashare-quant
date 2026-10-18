@@ -60,7 +60,7 @@ provides-extras = ["local-data"]
 
 [[package]]
 name = "ashare-quant"
-version = "0.12.0.dev4"
+version = "0.12.0.dev5"
 source = { editable = "." }
 dependencies = [
     { name = "ashare-data" },
