@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant import __version__
-from ashare_quant.contracts import SHANGHAI, Contract, DomainError, Money, Security
+from ashare_quant.contracts import SHANGHAI, Contract, DomainError, MarketSecurity, Money
 from ashare_quant.data import ASHARE_COMMIT, ASHARE_TREE, ASHARE_VERSION, ASHARE_WHEEL_SHA256
 from ashare_quant.identity import source_sha256
 from ashare_quant.runtime import runtime_fingerprint
@@ -19,7 +19,7 @@ PriceField = Literal["open", "high", "low", "close", "volume", "money"]
 
 
 class ResearchQuery(Contract):
-    securities: tuple[Security, ...] = Field(min_length=1, max_length=2)
+    securities: tuple[MarketSecurity, ...] = Field(min_length=1)
     start: date | None = None
     end: date | None = None
     count: int | None = Field(default=None, ge=1, le=1000)
@@ -46,7 +46,7 @@ class ResearchQuery(Contract):
 
 
 class ResearchCoverageQuery(Contract):
-    securities: tuple[Security, ...] = Field(min_length=1, max_length=2)
+    securities: tuple[MarketSecurity, ...] = Field(min_length=1)
     start: date
     end: date
 
@@ -58,7 +58,7 @@ class ResearchCoverageQuery(Contract):
 
 
 class DailyResearchRow(Contract):
-    security: Security
+    security: MarketSecurity
     source_date: date
     source_label_at: AwareDatetime
     # These are source labels, not certified bar intervals or execution timestamps.

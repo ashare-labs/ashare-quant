@@ -66,7 +66,7 @@ def main():
             sub.add_argument("--expected-parent")
             sub.add_argument("--reason", required=True)
     serve = commands.add_parser("serve")
-    serve.add_argument("--port", type=int, default=8808)
+    serve.add_argument("--port", type=int, default=18818)
     args = parser.parse_args()
     if args.command == "serve":
         import uvicorn

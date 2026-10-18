@@ -132,7 +132,7 @@ class PortfolioCatalogue(Contract):
     fee_models: tuple[JSONObject, ...]
     strategy_algorithms: tuple[str, ...]
     preflight_required: Literal[True] = True
-    dataset_registration: Literal["local_cli_only"] = "local_cli_only"
+    dataset_registration: Literal["local_cli_or_product_publication"] = "local_cli_or_product_publication"
     python_registration: Literal["not_supported_use_registered_algorithms"] = (
         "not_supported_use_registered_algorithms"
     )

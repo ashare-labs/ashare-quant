@@ -188,8 +188,8 @@
             "type": "string"
           },
           "dataset_registration": {
-            "const": "local_cli_only",
-            "default": "local_cli_only",
+            "const": "local_cli_or_product_publication",
+            "default": "local_cli_or_product_publication",
             "title": "Dataset Registration",
             "type": "string"
           },

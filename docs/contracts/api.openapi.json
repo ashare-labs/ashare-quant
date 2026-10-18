@@ -444,10 +444,7 @@
             "title": "Open"
           },
           "security": {
-            "enum": [
-              "600000.XSHG",
-              "000001.XSHE"
-            ],
+            "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$",
             "title": "Security",
             "type": "string"
           },
@@ -4296,8 +4293,8 @@
             "type": "string"
           },
           "dataset_registration": {
-            "const": "local_cli_only",
-            "default": "local_cli_only",
+            "const": "local_cli_or_product_publication",
+            "default": "local_cli_or_product_publication",
             "title": "Dataset Registration",
             "type": "string"
           },
@@ -5846,6 +5843,235 @@
         "title": "PreflightAvailability",
         "type": "object"
       },
+      "ProductConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "assets": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Assets",
+            "type": "array"
+          },
+          "capabilities": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Capabilities",
+            "type": "object"
+          },
+          "configuration_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration Id"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "data_owner": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Owner"
+          },
+          "default_dataset_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Dataset Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "product-configuration.v1",
+            "default": "product-configuration.v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "kind",
+          "configured",
+          "configuration_id",
+          "default_dataset_id",
+          "assets",
+          "capabilities",
+          "limitations",
+          "data_owner",
+          "error"
+        ],
+        "title": "ProductConfiguration",
+        "type": "object"
+      },
+      "ProductRelease": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/PortfolioDataset"
+          },
+          "release": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Release",
+            "type": "object"
+          }
+        },
+        "required": [
+          "release",
+          "dataset"
+        ],
+        "title": "ProductRelease",
+        "type": "object"
+      },
+      "ProductReleaseRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^\\S(?:[^\\r\\n]*\\S)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "securities": {
+            "items": {
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Securities",
+            "type": "array"
+          },
+          "source": {
+            "default": "auto",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.-]+$",
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "securities",
+          "start",
+          "end"
+        ],
+        "title": "ProductReleaseRequest",
+        "type": "object"
+      },
+      "ProductSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "securities": {
+            "items": {
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Securities",
+            "type": "array"
+          },
+          "source": {
+            "default": "auto",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.-]+$",
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "securities",
+          "start",
+          "end"
+        ],
+        "title": "ProductSelection",
+        "type": "object"
+      },
       "PythonCapabilities": {
         "additionalProperties": false,
         "properties": {
@@ -6237,13 +6463,9 @@
           },
           "securities": {
             "items": {
-              "enum": [
-                "600000.XSHG",
-                "000001.XSHE"
-              ],
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$",
               "type": "string"
             },
-            "maxItems": 2,
             "minItems": 1,
             "title": "Securities",
             "type": "array"
@@ -6352,7 +6574,7 @@
                 "type": "null"
               }
             ],
-            "default": "8fcce56df5c9cf8d448b9ee535787933f00689f1",
+            "default": "f45839460f3da2a65ca1e25088fd9b7bc70195aa",
             "title": "Commit"
           },
           "name": {
@@ -6370,7 +6592,7 @@
                 "type": "null"
               }
             ],
-            "default": "874e43b5aef4ebaa7d9bd3e90c4e7ba1e9c4729b",
+            "default": "79eafd226340a5f3283ad9950dc89db81f6405c3",
             "title": "Tree"
           },
           "version": {
@@ -6379,7 +6601,7 @@
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "5f79b450e7660527f94e0acbf359994889fe0dbc9299a4563fbb6254e9ed2a16",
+            "default": "6bc093644bcd9049748f0e8185ad6d5e16df4fef996b803837a48c94f01f0954",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -6481,13 +6703,9 @@
           },
           "securities": {
             "items": {
-              "enum": [
-                "600000.XSHG",
-                "000001.XSHE"
-              ],
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$",
               "type": "string"
             },
-            "maxItems": 2,
             "minItems": 1,
             "title": "Securities",
             "type": "array"
@@ -9589,6 +9807,410 @@
           }
         },
         "summary": "Strategy"
+      }
+    },
+    "/api/v1/product/catalogue": {
+      "get": {
+        "operationId": "catalogue_api_v1_product_catalogue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Catalogue Api V1 Product Catalogue Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Catalogue Api V1 Product Catalogue Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Catalogue"
+      }
+    },
+    "/api/v1/product/config": {
+      "get": {
+        "operationId": "configuration_view_api_v1_product_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductConfiguration"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Configuration View Api V1 Product Config Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Configuration View"
+      }
+    },
+    "/api/v1/product/prices": {
+      "post": {
+        "operationId": "prices_api_v1_product_prices_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Prices Api V1 Product Prices Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Prices Api V1 Product Prices Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Prices"
+      }
+    },
+    "/api/v1/product/releases": {
+      "post": {
+        "operationId": "publish_api_v1_product_releases_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductReleaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductRelease"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Publish Api V1 Product Releases Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Publish"
       }
     },
     "/api/v1/rqalpha/scenarios": {

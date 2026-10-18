@@ -1,5 +1,5 @@
 {
-  "commit": "8fcce56df5c9cf8d448b9ee535787933f00689f1",
+  "commit": "f45839460f3da2a65ca1e25088fd9b7bc70195aa",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -65,6 +65,11 @@
     "observations/intraday_refresh.py": "8ab1ede7b7c49d03406ea299dea7a1496885b46df5237c80db66ff99294fad78",
     "observations/phases.py": "b756757ade4bce0e84a908c38c60524a75ed721102f16f9d1823bee03d6358a8",
     "observations/response_replay.py": "426051222f234af62a2f4b3958b7a62759f8b9509ba7e952ae0cac9cbed094f1",
+    "product/__init__.py": "a6ebc28f75696f92c8129798e5d87e6a4f6adf0acbe416d9401e2e13557e77d8",
+    "product/__main__.py": "e1e4bab2f572f000c79960f49379e7afc31dbfbec7edebe61c2abb0a1700bc5d",
+    "product/configuration.py": "65b575f50d64d2176fa8814a848da5b969eda3048e57a7862ea8ca60ca2f12d9",
+    "product/daily.py": "f1378f9d09a23f3a09d0aa22df3a81a3a408688b8e32780ef93289cdc416f96c",
+    "product/publication.py": "4f45fb874ba226545d9b11b907eeb4ea3eabce7143d9ed63854050c87267bb05",
     "providers/__init__.py": "8b10b9a473601fac41f8c5831e2078b375c21edda014a8716c927808e5ce0240",
     "providers/baostock-sdk.json": "a7deb81f33010205f856583bcf2143a42aca3f415068ee6e61a7cc44534f7e27",
     "providers/baostock.py": "ac67a4455fb98e143d49126dec210a3a11ed6e7e32f950aabf5fe3b0e02265d4",
@@ -85,7 +90,7 @@
     "providers/sina-decode.js": "8d6b58c90919640cbee822bd6dcc1a91dd8ee631b633740c785862d44ba570a2",
     "providers/sse_snapshot.py": "23deb36e21dbca4f994ed8416ce90e0849e4771706ea5ca9274fc5a8ca1b069f",
     "providers/tdx_bars.py": "3075f16a04a81e565fd22d345c380b1d2499f66a304db9100db57915212fbcc0",
-    "providers/tdx_bars_worker.py": "10dd1ba54003e052e6027f681e3986d554db29266821f80a0a09254e29fced76",
+    "providers/tdx_bars_worker.py": "7b9fd9410557e23a9168277f3212482f2d7454d5ae147312ebd6519042bb1e9c",
     "providers/tdx_collection.py": "2816ad4dcca36a76ddba5dfff08468e2d229851fae583fc1d7c12833fd6ef623",
     "providers/tdx_points.py": "52ec0ece3cdffac469d5c65e8e260e3f318eec611b8bab69b5475c28fbe8ded4",
     "providers/zzshare.py": "397fbe999a6ced4b995853676200782909c52cef532a5a2616cef4a3098ba47d",
@@ -123,15 +128,15 @@
     "research/preflight.py": "49b6b6f84fa5aae324f06a4ef2009adbd950fa6f272b1bfb89ad194aa71bba7a",
     "research/snapshots.py": "eecca42a543961e0c5b631b241aba87c5a299918b1aa7a969adffe92cd92ea00",
     "storage/__init__.py": "478d5cd6162d6d82fcd67489e7e3befadd7cc953e42921965321bf393b1bab72",
-    "storage/immutable.py": "971a29106bd6ab2e1c019c2c0c801ef87820afb2283b53d4b2f681c848ecc1f4",
+    "storage/immutable.py": "5cdad651e1b491512ebc34ab84a436a503e3bae312d969e4b1fb932806730c32",
     "storage/local_daily.py": "28db57c2e6d56dfdfb0b9c4a77b8b0e33e72f89784da100a5d9ef6a03370ace7"
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "d90173447906d296bba28b1836e4f67abc1e54680ce9d611a5c02ccd6911f502",
+  "runtime_code_sha256": "dd682b5c9cce44898c1f66f31a5a8ba5b87e67bc9592fdb99093c751146d07b1",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "874e43b5aef4ebaa7d9bd3e90c4e7ba1e9c4729b",
+  "tree": "79eafd226340a5f3283ad9950dc89db81f6405c3",
   "version": "0.10.0.dev3",
-  "wheel_sha256": "5f79b450e7660527f94e0acbf359994889fe0dbc9299a4563fbb6254e9ed2a16"
+  "wheel_sha256": "6bc093644bcd9049748f0e8185ad6d5e16df4fef996b803837a48c94f01f0954"
 }

@@ -11,6 +11,9 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 Money = Annotated[str, Field(pattern=r"^(0|[1-9][0-9]*)(\.[0-9]{1,8})?$", max_length=40)]
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$")]
 Security = Literal["600000.XSHG", "000001.XSHE"]
+# The fixed replay protocol above remains intentionally finite. Public market
+# reads use exchange-qualified identifiers independently of that fixture universe.
+MarketSecurity = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE|XBSE)$")]
 Frequency = Literal["daily", "1m"]
 Verdict = Literal["accepted", "rejected", "unknown"]
 

@@ -30,7 +30,7 @@ def emit(value):
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="A宽 backend — synthetic execution and exploratory D0 reads")
+    parser = argparse.ArgumentParser(description="A宽 backend — tasks, portfolio research and explicit data reads")
     parser.add_argument("--db", default=os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "capabilities", "scenarios", "strategies", "runs", "openapi"):
@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     demo.add_argument("--scenario", default="buy_hold", choices=list(specifications()))
     demo.add_argument("--key", default="demo-buy-hold-v1")
     demo.add_argument("--engine", choices=["fixture-replay-v1", "rqalpha"], default="fixture-replay-v1")
-    backup = sub.add_parser("backup")
+    backup = sub.add_parser("backup", help="SQLite-only snapshot; use ashare_quant.deployment backup for complete recovery")
     backup.add_argument("destination")
     for command in ("market-describe", "market-read", "market-coverage"):
         research = sub.add_parser(command)
@@ -92,7 +92,7 @@ def main(argv=None) -> int:
         if command != "market-describe":
             research.add_argument("--request", required=True, help="Path to a typed JSON query; no collection")
     serve = sub.add_parser("serve")
-    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--port", type=int, default=18839)
     args = parser.parse_args(argv)
     try:
         if args.command == "database-upgrade":
@@ -249,7 +249,9 @@ def main(argv=None) -> int:
                       "state": store.state(run.run_id), "manifest": store.manifest(run.run_id)})
             case "backup":
                 store.backup(args.destination)
-                emit({"backup": args.destination})
+                emit({"backup": args.destination, "scope": "sqlite_only",
+                      "complete_recovery": False,
+                      "complete_backup_command": "python -m ashare_quant.deployment --deployment DEPLOYMENT backup DESTINATION"})
         return 0
     except DomainError as exc:
         emit({"error": exc.body()})

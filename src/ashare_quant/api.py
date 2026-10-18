@@ -46,7 +46,7 @@ from ashare_quant.storage.store import Store
 from ashare_quant.tasks.synthetic.service import Service
 
 
-def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None) -> FastAPI:
+def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None) -> FastAPI:
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
                   responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse},
@@ -55,6 +55,25 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
                              422: {"model": ErrorResponse | ValidationResponse}})
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     try:
+        if product_configuration is None and (os.getenv("ASHARE_DEPLOYMENT") or os.getenv("ASHARE_DATA_ROOT")):
+            from ashare_quant.product.service import environment_configuration
+
+            product_configuration = environment_configuration()
+        if product_configuration is not None:
+            from pathlib import Path as FilePath
+
+            from ashare_quant.deployment.runtime import require_initialized
+            from ashare_quant.tasks.daily.executor import Configuration
+
+            db_path = db_path if db_path is not None else str(product_configuration.control_db)
+            if FilePath(db_path).expanduser().resolve() != product_configuration.control_db:
+                raise DomainError(
+                    "PRODUCT_STATE_MISMATCH",
+                    "Start the API and task worker with the same deployment state database", 409,
+                )
+            require_initialized(product_configuration)
+            if daily_tasks_configuration is None:
+                daily_tasks_configuration = Configuration(product_configuration.owner_store_root)
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
         from ashare_quant.tasks.daily.service import Jobs
 
@@ -78,6 +97,8 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     mount_tasks(app, store, daily_tasks_configuration, jobs=jobs)
     from ashare_quant.tasks.portfolio.api import mount as mount_portfolio_jobs
     mount_portfolio_jobs(app, store, daily_tasks_configuration)
+    from ashare_quant.product.api import mount as mount_product
+    mount_product(app, store, product_configuration)
     from ashare_quant.diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
     roots = dict(market_stores) if market_stores is not None else json.loads(os.getenv("ASHARE_QUANT_MARKET_STORES", "{}"))

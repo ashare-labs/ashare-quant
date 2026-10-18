@@ -19,15 +19,20 @@ uv sync --locked --extra native
 
 ## 快速开始
 
-以下命令只创建新的合成演示状态：
+使用已有正式日线库时，先按 [数据选择、运行与恢复](docs/data-runtime.md) 准备资产清单。清单引用现有数据，运行状态另存；无需复制整库。所有命令使用同一清单，与当前工作目录无关：
 
 ```sh
-ashare-quant --db .state/demo/control.sqlite3 demo
-ashare-quant --db .state/demo/control.sqlite3 runs
-ashare-quant --db .state/demo/control.sqlite3 capabilities
+export ASHARE_DEPLOYMENT=/path/to/data/deployment.json
+python -m ashare_quant.deployment doctor
+python -m ashare_quant.deployment init
+python -m ashare_quant.deployment api
+# 另一个终端，使用同一 ASHARE_DEPLOYMENT
+python -m ashare_quant.deployment task-worker
 ```
 
-有已准备的 A数达本地数据时，在新控制库中创建任务：
+在配对 quant-web 的正式数据页选择证券、日期和来源，查询后发布回测输入。发布携带预热期、交易日历和来源回执；行情或预热缺失会明确拒绝。缺少公司行动和价限证据的窗口只能在显式确认后运行价格诊断，结果不表示完整经济收益。
+
+固定评测使用独立控制库和明确的便携 owner，不作为正式产品默认数据：
 
 ```sh
 export ASHARE_QUANT_DAILY_STORE=/path/to/new/data-store
@@ -42,12 +47,13 @@ ashare-quant --db .state/tasks/control.sqlite3 task-worker --once
 ## 使用指南
 
 - [日频任务与策略](docs/tasks.md)：绑定、参数、可信代码、队列、结果及恢复。
+- [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份与空目录恢复。
 - [组合和公司行动](docs/portfolio.md)：多证券导入、预检、原生组合和权益到账。
 - [分钟与合成回测](docs/backtests.md)：模块入口、示例和边界。
 - [paper 模拟](docs/paper.md)：新账户、观察输入、连续状态及恢复身份。
 - [数据与诊断](docs/providers.md)、[开发与契约](docs/development.md)、[迁移说明](docs/migration.md)。
 
-HTTP 本地入口为 `ashare-quant --db NEW_DATABASE serve`。日频任务前缀 `/api/v1/tasks/daily`，组合 `/api/v1/portfolio`，市场 `/api/v1/market`。paper 是独立应用。生成契约位于 [docs/contracts](docs/contracts)。
+统一入口的 API 默认端口为 `18839`、paper 为 `18818`、web 为 `41839`。正式数据前缀 `/api/v1/product`，日频评测 `/api/v1/tasks/daily`，组合 `/api/v1/portfolio`，已发布研究行情 `/api/v1/market`。paper 使用独立状态根。生成契约位于 [docs/contracts](docs/contracts)。
 
 ## 限制与说明
 

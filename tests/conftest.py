@@ -5,6 +5,13 @@ from ashare_quant.storage.store import Store
 from ashare_quant.tasks.synthetic.service import Service
 
 
+@pytest.fixture(autouse=True)
+def isolated_deployment_environment(monkeypatch):
+    """A developer's selected product must never redirect a test's temporary state."""
+    for key in ("ASHARE_DEPLOYMENT", "ASHARE_DATA_ROOT", "ASHARE_QUANT_DB"):
+        monkeypatch.delenv(key, raising=False)
+
+
 @pytest.fixture
 def store(tmp_path):
     return Store(tmp_path / "control.sqlite3")

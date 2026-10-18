@@ -3,7 +3,9 @@
 import argparse
 import hashlib
 import json
+import os
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from ashare_quant import __version__
@@ -13,12 +15,23 @@ from ashare_quant.paper.api import create_app as create_paper_app
 from ashare_quant.tasks.openapi import document, portfolio_document
 
 
+@contextmanager
+def isolated_configuration():
+    """Contract generation cannot select a developer's live deployment or daily store."""
+    keys = ("ASHARE_DEPLOYMENT", "ASHARE_DATA_ROOT", "ASHARE_QUANT_DB", "ASHARE_QUANT_DAILY_STORE")
+    previous = {key: os.environ.pop(key) for key in keys if key in os.environ}
+    try:
+        yield
+    finally:
+        os.environ.update(previous)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("docs/contracts"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="aq-contracts-") as temporary:
+    with isolated_configuration(), tempfile.TemporaryDirectory(prefix="aq-contracts-") as temporary:
         root = Path(temporary)
         app = create_app(str(root / "control.sqlite3"), market_stores={}, diagnostics_configuration={})
         if getattr(app.state, "database_error", None):
