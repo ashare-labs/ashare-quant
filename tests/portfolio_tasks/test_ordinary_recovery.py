@@ -19,7 +19,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
-from ashare_quant.storage.artifacts import canonical, digest
+from ashare_quant.portfolio.inputs import digest as input_digest
+from ashare_quant.storage.artifacts import canonical
 from ashare_quant.tasks.worker import work_one
 
 P = "/api/v1/portfolio"
@@ -99,8 +100,8 @@ def ordinary_host(tmp_path_factory):
         assert json.loads((path.parent / "ad-manifest.json").read_text()) == identity["manifest"]
         assert json.loads((path.parent / "coverage.json").read_text()) == document["product_coverage"]
         assert json.loads((path.parent / "corporate-schedule.json").read_text()) == document["corporate_schedule"]
-        assert digest(json.loads((path.parent / "base-input.json").read_text())) == identity["portfolio_input_semantic_sha256"]
-        assert digest(document["corporate_schedule"]) == identity["corporate_schedule_semantic_sha256"]
+        assert input_digest(json.loads((path.parent / "base-input.json").read_text())) == identity["portfolio_input_semantic_sha256"]
+        assert input_digest(document["corporate_schedule"]) == identity["corporate_schedule_semantic_sha256"]
         root = tmp_path_factory.mktemp("ordinary-" + case["name"])
         app = create_app(str(root / "control.sqlite3"))
         jobs = app.state.portfolio_jobs
