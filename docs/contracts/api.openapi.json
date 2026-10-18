@@ -4495,6 +4495,11 @@
             "title": "Dataset Id",
             "type": "string"
           },
+          "diagnostic_allowed": {
+            "default": true,
+            "title": "Diagnostic Allowed",
+            "type": "boolean"
+          },
           "input_sha256": {
             "pattern": "^[a-f0-9]{64}$",
             "title": "Input Sha256",
@@ -4506,6 +4511,15 @@
             },
             "title": "Limitations",
             "type": "array"
+          },
+          "mode": {
+            "default": "covered_research",
+            "enum": [
+              "covered_research",
+              "price_only_no_limits"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -5905,6 +5919,17 @@
             ],
             "title": "Default Dataset Id"
           },
+          "default_reference_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Reference Set"
+          },
           "error": {
             "anyOf": [
               {
@@ -5937,6 +5962,17 @@
             "title": "Profile",
             "type": "string"
           },
+          "reference_sets": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Reference Sets",
+            "type": "array"
+          },
           "schema_version": {
             "const": "product-configuration.v1",
             "default": "product-configuration.v1",
@@ -5957,6 +5993,58 @@
           "error"
         ],
         "title": "ProductConfiguration",
+        "type": "object"
+      },
+      "ProductCoverageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "reference_set": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Set"
+          },
+          "securities": {
+            "items": {
+              "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Securities",
+            "type": "array"
+          },
+          "source": {
+            "default": "auto",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.-]+$",
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "securities",
+          "start",
+          "end"
+        ],
+        "title": "ProductCoverageRequest",
         "type": "object"
       },
       "ProductRelease": {
@@ -5988,6 +6076,15 @@
             "title": "End",
             "type": "string"
           },
+          "mode": {
+            "default": "covered_research",
+            "enum": [
+              "covered_research",
+              "price_only_no_limits"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "anyOf": [
               {
@@ -6001,6 +6098,19 @@
               }
             ],
             "title": "Name"
+          },
+          "reference_set": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Set"
           },
           "securities": {
             "items": {
@@ -6574,7 +6684,7 @@
                 "type": "null"
               }
             ],
-            "default": "f45839460f3da2a65ca1e25088fd9b7bc70195aa",
+            "default": "5205c52b48b1e1d2933af659a0be2e76ff50e4b7",
             "title": "Commit"
           },
           "name": {
@@ -6592,16 +6702,16 @@
                 "type": "null"
               }
             ],
-            "default": "79eafd226340a5f3283ad9950dc89db81f6405c3",
+            "default": "e8b93e1b5deca06ac8d8884973a417ff1e2b6a5d",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev3",
+            "default": "0.10.0.dev4",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "6bc093644bcd9049748f0e8185ad6d5e16df4fef996b803837a48c94f01f0954",
+            "default": "3df888cf0765d08ef64568fa2b70401cbd8b73049bceea6fa8fa8cbefebae0c5",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -6754,7 +6864,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev3",
+            "default": "0.12.0.dev4",
             "title": "Backend Version",
             "type": "string"
           },
@@ -7764,7 +7874,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev3"
+    "version": "0.12.0.dev4"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10017,6 +10127,104 @@
           }
         },
         "summary": "Configuration View"
+      }
+    },
+    "/api/v1/product/coverage": {
+      "post": {
+        "operationId": "coverage_api_v1_product_coverage_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCoverageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Coverage Api V1 Product Coverage Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Coverage Api V1 Product Coverage Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Coverage"
       }
     },
     "/api/v1/product/prices": {

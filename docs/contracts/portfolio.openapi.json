@@ -390,6 +390,11 @@
             "title": "Dataset Id",
             "type": "string"
           },
+          "diagnostic_allowed": {
+            "default": true,
+            "title": "Diagnostic Allowed",
+            "type": "boolean"
+          },
           "input_sha256": {
             "pattern": "^[a-f0-9]{64}$",
             "title": "Input Sha256",
@@ -401,6 +406,15 @@
             },
             "title": "Limitations",
             "type": "array"
+          },
+          "mode": {
+            "default": "covered_research",
+            "enum": [
+              "covered_research",
+              "price_only_no_limits"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -1820,7 +1834,7 @@
   },
   "info": {
     "title": "A宽 portfolio tasks",
-    "version": "0.12.0.dev3"
+    "version": "0.12.0.dev4"
   },
   "openapi": "3.1.0",
   "paths": {

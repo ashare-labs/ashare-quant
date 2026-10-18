@@ -72,7 +72,7 @@ def test_real_non_sample_release_worker_and_restart(library_configuration, start
         public_owner = LocalDailyProduct(config.daily_root).prices(**query)
         assert observed["rows"] == public_owner["rows"]
         assert observed["receipt"]["rows_sha256"] == public_owner["receipt"]["rows_sha256"]
-        published = client.post(P + "/releases", json=query)
+        published = client.post(P + "/releases", json=query | {"mode": "price_only_no_limits"})
         assert published.status_code == 201, published.text
         descriptor = published.json()["dataset"]
         assert descriptor["real_market_data"] and descriptor["source_refs"]

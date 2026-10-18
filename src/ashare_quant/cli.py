@@ -29,9 +29,43 @@ def emit(value):
     print(json.dumps(value, default=encode, ensure_ascii=False, indent=2))
 
 
+def selected_runtime(args):
+    """Resolve state before opening it; legacy entry points share the deployment."""
+    stateless = {"capabilities", "scenarios", "source-diagnostics-capabilities", "source-diagnostics"}
+    if args.command in stateless or args.command.startswith("market-"):
+        return None
+    selected = args.deployment or os.getenv("ASHARE_DEPLOYMENT") or os.getenv("ASHARE_DATA_ROOT")
+    if selected:
+        from ashare_quant.deployment import resolve
+        from ashare_quant.deployment.runtime import require_initialized
+
+        config = resolve(args.deployment, args.profile)
+        # As in create_app, an environment DB never overrides the manifest. An
+        # explicit conflicting flag is an error, not permission to fork state.
+        if args.db is not None and Path(args.db).expanduser().resolve() != config.control_db:
+            raise DomainError("PRODUCT_STATE_MISMATCH", "--db differs from the selected deployment", 409)
+        if args.command == "serve" and args.port is not None and args.port != config.api_port:
+            raise DomainError("DEPLOYMENT_PORT_MISMATCH", "--port differs from the selected API port", 409)
+        args.db = str(config.control_db)
+        if args.command != "init":
+            require_initialized(config)
+        return config
+    args.db = args.db or os.getenv("ASHARE_QUANT_DB")
+    if not args.db:
+        raise DomainError(
+            "CLI_STATE_NOT_CONFIGURED",
+            "Select --deployment / ASHARE_DEPLOYMENT, or an explicit --db / ASHARE_QUANT_DB; "
+            "no working-directory state is selected automatically",
+            503,
+        )
+    return None
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="A宽 backend — tasks, portfolio research and explicit data reads")
-    parser.add_argument("--db", default=os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
+    parser.add_argument("--db", help="Explicit state database when no deployment is selected")
+    parser.add_argument("--deployment", help="Shared deployment manifest; also accepts ASHARE_DEPLOYMENT")
+    parser.add_argument("--profile", default="product")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "capabilities", "scenarios", "strategies", "runs", "openapi"):
         sub.add_parser(name)
@@ -83,7 +117,7 @@ def main(argv=None) -> int:
     demo.add_argument("--scenario", default="buy_hold", choices=list(specifications()))
     demo.add_argument("--key", default="demo-buy-hold-v1")
     demo.add_argument("--engine", choices=["fixture-replay-v1", "rqalpha"], default="fixture-replay-v1")
-    backup = sub.add_parser("backup", help="SQLite-only snapshot; use ashare_quant.deployment backup for complete recovery")
+    backup = sub.add_parser("backup", help="Complete backup with a deployment; otherwise explicitly SQLite only")
     backup.add_argument("destination")
     for command in ("market-describe", "market-read", "market-coverage"):
         research = sub.add_parser(command)
@@ -92,9 +126,22 @@ def main(argv=None) -> int:
         if command != "market-describe":
             research.add_argument("--request", required=True, help="Path to a typed JSON query; no collection")
     serve = sub.add_parser("serve")
-    serve.add_argument("--port", type=int, default=18839)
+    serve.add_argument("--port", type=int)
     args = parser.parse_args(argv)
     try:
+        configuration = selected_runtime(args)
+        if configuration is not None and args.command in {"init", "serve", "task-worker", "backup"}:
+            from ashare_quant.deployment.backup import create_backup
+            from ashare_quant.deployment.runtime import initialize, run
+
+            if args.command == "init":
+                emit(initialize(configuration))
+            elif args.command == "backup":
+                emit(create_backup(configuration, args.destination))
+            else:
+                return run(configuration, "api" if args.command == "serve" else "task-worker",
+                           once=getattr(args, "once", False), task_id=getattr(args, "job_id", None))
+            return 0
         if args.command == "database-upgrade":
             from ashare_quant.storage.upgrade import upgrade_copy
             emit(upgrade_copy(args.db, args.destination))
@@ -136,9 +183,10 @@ def main(argv=None) -> int:
             return 0
         if args.command == "tasks" or args.command.startswith("task-"):
             from ashare_quant.tasks.daily.contracts import JobCreate
+            from ashare_quant.tasks.daily.executor import Configuration
             from ashare_quant.tasks.daily.service import Jobs
             from ashare_quant.tasks.worker import work_one as work_job
-            jobs = Jobs(Store(args.db))
+            jobs = Jobs(Store(args.db), Configuration(configuration.owner_store_root) if configuration else None)
             if args.command == "tasks":
                 emit(jobs.list())
             elif args.command == "task-service":
@@ -202,10 +250,10 @@ def main(argv=None) -> int:
             return 0
         if args.command == "serve":
             import uvicorn
-            uvicorn.run(create_app(args.db), host="127.0.0.1", port=args.port)
+            uvicorn.run(create_app(args.db), host="127.0.0.1", port=args.port or 18839)
             return 0
         if args.command == "openapi":
-            emit(create_app(args.db).openapi())
+            emit(create_app(args.db, product_configuration=configuration).openapi())
             return 0
         store = Store(args.db)
         service = Service(store)

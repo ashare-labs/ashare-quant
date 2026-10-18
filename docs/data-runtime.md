@@ -4,7 +4,7 @@
 
 ## 使用已有正式数据
 
-最小清单如下。`main` 指向已有 `ashare-data-local`，发布 Store 和运行状态放在另一目录，不复制主库。
+行情查询的最小清单如下。`main` 指向已有 `ashare-data-local`，发布 Store 和运行状态放在另一目录，不复制主库。普通回测还需配置下述参考集合。
 
 ```json
 {
@@ -27,6 +27,8 @@
 
 `owner_store_asset` 可为固定评测选择独立 Store；默认使用发布 Store。`required_assets` 列出本配置必需的库外输入、运行安装包等资产名称。不能把临时目录或受保护的旧环境列为必需输入。其他配置的资产和受保护外部资产仅登记，不随正式状态包复制。
 
+普通回测在资产中登记 `daily_research`、`daily_execution` 和 `corporate_history` 包，每项包含 `path`、相对包目录的 `binding`（通常为 `binding.json`）和该绑定文件的 `binding_sha256`。在 profile 中添加 `reference_sets`，例如 `{"daily":{"kind":"daily_execution","research_asset":"research","execution_asset":"execution","corporate_history_asset":"corporate"}}`，并设置 `default_reference_set="daily"`。另一种集合用 `kind="historical_market"`、`market_asset` 和 `corporate_history_asset`。配置只说明来源可选择；所选证券和日期是否就绪，由 coverage 逐项检查。接口、来源范围和研究假设见[组合回测](portfolio.md)。
+
 ## 检查和启动
 
 ```sh
@@ -47,7 +49,9 @@ python -m ashare_quant.deployment --deployment /data/product/deployment.json pap
 
 API 和任务 worker 共用同一 `control_db`，paper 使用同一清单的 `paper_root`。默认端口分别为 `18839`、`18818`。`commands` 输出 Web 所需 `FRONTEND_PORT=41839`、`ASHARE_API_URL` 和 `ASHARE_PAPER_URL`，在 quant-web 目录按其说明启动。命令不安装自启，不连接券商，也不采集数据。
 
-Web 的正式数据页按真实证券目录搜索、选择日期并发布有界行情，再进入组合回测。正式来源不自动回退到固定评测。当前无完整公司行动/历史状态的行情只能在明确确认后用于 `price_only_no_limits` 诊断；缺行情或预热数据仍拒绝执行。
+旧 `ashare-quant` / `python -m ashare_quant.cli` 命令选择清单后也使用同一状态、端口和完整备份入口。显式 `--db` 与清单冲突时拒绝；未选清单时，涉及状态的旧命令必须明确提供 `--db` 或 `ASHARE_QUANT_DB`，不会在当前目录另建默认库。
+
+Web 的正式数据页按真实证券目录搜索、选择日期及参考集合，先检查覆盖再发布，随后进入普通组合回测。它保留真实来源、交易状态、派生价限与独立公司行动计划，需确认页面展示的回溯研究模型。缺证会明确拒绝；用户可另外选择 `price_only_no_limits` 价格诊断，但它不承担经济回测语义，已有公司行动计划也不能在任务中被剥离。缺行情或预热数据始终拒绝执行。
 
 ## 保存运行状态
 
@@ -58,9 +62,9 @@ python -m ashare_quant.deployment --deployment /data/product/deployment.json bac
 python -m ashare_quant.deployment verify /backup/product-state --expected-sha256 RETAINED_MANIFEST_SHA256
 ```
 
-返回值给出 `manifest_sha256`，应与备份分开保存。备份目录包含 AQ 数据库一致性快照、`.tasks`、`engines`、`inputs`、检查点/回执、完整 paper 目录、已发布 Store、选用 owner Store、`required_assets`、原始清单和运行源码/依赖身份。输入和回执保留原字节，包括原始来源路径字符串。
+返回值给出 `manifest_sha256`，应与备份分开保存。备份目录包含 AQ 数据库一致性快照、`.tasks`、`engines`、`inputs`、检查点/回执、完整 paper 目录、已发布 Store、选用 owner Store、选中参考集合的小型来源包、`required_assets`、原始清单和运行源码/依赖身份。显式必需的 `financial`、`factor` 或其他库外输入都会保存；若把整个 `local_daily` 主库列为必需，则必须显式选择下述整库备份，否则提前拒绝。输入和回执保留原字节，包括原始来源路径字符串。
 
-备份持有配置锁、既有文件写锁和状态数据库写保留锁；有运行进程、活动/未核对的任务、缺失或变化的检查点、变化的库外文件时拒绝。待执行任务可以保存。源文件在复制前后做清单和 hash 检查；不能以单个 SQLite 成功快照代替整个目录的一致性。已有 `ashare-quant backup` 仅是 SQLite 文件快照，不能用于完整恢复。
+备份持有配置锁、既有文件写锁和状态数据库写保留锁；有运行进程、活动/未核对的任务、缺失或变化的检查点、变化的库外文件时拒绝。待执行任务可以保存。源文件在复制前后做清单和 hash 检查；不能以单个 SQLite 成功快照代替整个目录的一致性。未选择清单、仅显式选择 `--db` 的旧 `ashare-quant backup` 仍只是 SQLite 文件快照，不能用于完整恢复。
 
 状态包不包含完整正式行情大库。它能恢复已有冻结任务、账户和成交，继续已有任务；在新机器搜索或发布新行情，还需可用主库或下述源资产包。
 

@@ -14,7 +14,7 @@ from ashare_quant.contracts import DataQuery, DomainError
 from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
 from ashare_quant.market.reader import DailyResearchRow, ResearchCoverageQuery, ResearchQuery
-from ashare_quant.product import service
+from ashare_quant.product import publication, service
 from ashare_quant.tasks.portfolio.contracts import PortfolioDataset
 
 P = "/api/v1/product"
@@ -186,6 +186,58 @@ def test_owner_missing_api_is_a_configuration_error(configuration, owner_protoco
         assert response.json()["error"]["code"] == "PRODUCT_OWNER_API_UNAVAILABLE"
 
 
+def test_coverage_requires_the_pinned_owner_api(configuration, owner_protocol):
+    with TestClient(create_app(product_configuration=configuration)) as client:
+        response = client.post(P + "/coverage", json=SELECTION)
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "PRODUCT_OWNER_API_UNAVAILABLE"
+
+
+def test_coverage_selection_and_config_identity_bind_references(configuration, owner_protocol, monkeypatch):
+    from ashare_quant.deployment.configuration import Binding, ReferenceSet
+    from ashare_quant.portfolio.product_reference import owner_digest, source_bindings
+    from ashare_quant.product.contracts import ProductCoverageRequest
+
+    def binding(role, kind, pin):
+        return Binding(role, kind, configuration.data_root / role,
+                       configuration.data_root / role / "binding.json", pin * 64)
+    reference = ReferenceSet("chosen", "historical_market",
+        corporate=binding("corporate", "corporate_history", "a"),
+        market=binding("market", "historical_market", "b"))
+    config = replace(configuration, reference_sets=(reference,), default_reference_set="chosen")
+    calls = []
+
+    def coverage(owner, securities, start, end, source, references):
+        calls.append(references)
+        value = {"schema": "ad-local-daily-coverage.v1",
+                 "scope": publication.scope(ProductCoverageRequest(**SELECTION)),
+                 "ready": False, "gaps": [{"code": "TEST_MISSING_REFERENCE", "field": "reference"}],
+                 "assumptions": [], "limitations": ["Protocol double; no source acceptance"],
+                 "reference_set": {"name": "chosen", "kind": "historical_market"},
+                 "source_bindings": source_bindings(references)}
+        return value | {"coverage_sha256": owner_digest(value)}
+
+    monkeypatch.setattr(owner_protocol[0], "coverage", coverage, raising=False)
+    with TestClient(create_app(product_configuration=config)) as client:
+        description = client.get(P + "/config").json()
+        assert description["capabilities"]["covered_research"]
+        assert description["default_reference_set"] == "chosen"
+        assert description["reference_sets"][0]["source_bindings"] == reference.source_bindings()
+        response = client.post(P + "/coverage", json=SELECTION)
+        assert response.status_code == 200 and response.json()["ready"] is False
+        assert calls == [reference.references()]
+        response = client.post(P + "/coverage", json=SELECTION | {"reference_set": "missing"})
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "PRODUCT_REFERENCE_SET_UNKNOWN"
+        assert len(calls) == 1  # No fallback to the selected or another set.
+        response = client.post(P + "/coverage", json=SELECTION | {"mode": "price_only_no_limits"})
+        assert response.status_code == 422
+    changed = replace(config, reference_sets=(replace(reference,
+        market=replace(reference.market, binding_sha256="c" * 64)),))
+    with TestClient(create_app(product_configuration=changed)) as client:
+        assert client.get(P + "/config").json()["configuration_id"] != description["configuration_id"]
+
+
 def test_owner_data_gaps_and_storage_failures_are_not_500(
     configuration, owner_protocol, monkeypatch
 ):
@@ -242,6 +294,8 @@ def test_publication_imports_into_the_same_portfolio_service(
         return release
 
     monkeypatch.setattr(owner_protocol[0], "publish", publish, raising=False)
+    # Release validation has its own tamper tests; this double checks HTTP delegation only.
+    monkeypatch.setattr(publication, "consume", lambda *args: path)
     app = create_app(product_configuration=configuration)
     descriptor = PortfolioDataset(
         dataset_id="a" * 64, name="Protocol double", input_sha256="c" * 64,
@@ -261,13 +315,9 @@ def test_publication_imports_into_the_same_portfolio_service(
         assert response.json() == {"release": release, "dataset": descriptor.model_dump(mode="json")}
         assert calls == [
             ((configuration.release_store_root, SELECTION["securities"], "2024-01-02", "2024-01-05"),
-             {"source": "auto"}),
+             {"source": "auto", "mode": "covered_research", "references": None}),
             (path, "Chosen window"),
         ]
-        release["portfolio_input_path"] = str(configuration.data_root / "outside.json")
-        response = client.post(P + "/releases", json=SELECTION)
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "PRODUCT_OWNER_CONTRACT_MISMATCH"
 
 
 def test_state_selection_changes_the_configuration_identity(configuration, owner_protocol):

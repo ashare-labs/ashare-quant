@@ -24,8 +24,13 @@ class ProductSelection(Contract):
         return self
 
 
-class ProductReleaseRequest(ProductSelection):
+class ProductCoverageRequest(ProductSelection):
+    reference_set: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+class ProductReleaseRequest(ProductCoverageRequest):
     name: str | None = Field(default=None, min_length=1, max_length=80, pattern=r"^\S(?:[^\r\n]*\S)?$")
+    mode: Literal["covered_research", "price_only_no_limits"] = "covered_research"
 
 
 class ProductConfiguration(Contract):
@@ -37,6 +42,8 @@ class ProductConfiguration(Contract):
     default_dataset_id: Sha | None
     assets: tuple[JSONObject, ...]
     capabilities: JSONObject
+    reference_sets: tuple[JSONObject, ...] = ()
+    default_reference_set: str | None = None
     limitations: tuple[str, ...]
     data_owner: JSONObject | None
     error: ErrorBody | None

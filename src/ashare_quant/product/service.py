@@ -11,10 +11,11 @@ from ashare_quant.storage.artifacts import digest
 
 LIMITATIONS = (
     "Prices are raw observed market data; unavailable observations are never replaced by sample data.",
-    "This local asset does not establish complete historical corporate actions or price limits.",
-    "Portfolio execution requires explicit price_only_no_limits and retrospective-state acceptance, "
-    "then acknowledgement of the exact preflight. It excludes corporate actions and price limits "
-    "and is not a total-return backtest.",
+    "Ordinary research requires the selected reference set to cover every requested security/day; "
+    "configured references do not establish whole-library coverage or historical PIT.",
+    "Price-only diagnosis is an explicit separate choice and excludes corporate actions and limits.",
+    "Execution requires acceptance of the exact preflight, including retrospective state, "
+    "source-scoped corporate coverage, date-level gross cash/share credit and fixed fees.",
     "The portfolio engine supports ordinary main-board A shares and requires 120 observed "
     "warmup sessions and a successor session.",
     "Fixed daily evaluations remain a separate explicit data binding.",
@@ -110,12 +111,18 @@ class Product:
                 "daily_root": str(config.daily_root),
                 "release_store_root": str(config.release_store_root),
             }
-            configuration_id = digest({"profile": config.profile, "kind": config.kind, **paths})
+            configuration_id = digest({
+                "profile": config.profile, "kind": config.kind, **paths,
+                "default_reference_set": config.default_reference_set,
+                "reference_sets": [item.references() for item in config.reference_sets],
+            })
             assets = tuple({
                 "name": item.name, "kind": item.kind, "role": item.role,
                 "path": str(item.path), "retention": item.retention,
                 "read_only": item.path != config.release_store_root,
                 "selected": item.name in config.selected_assets,
+                **({"binding": item.binding, "binding_sha256": item.binding_sha256}
+                   if item.binding is not None else {}),
             } for item in config.assets) + (
                 {"kind": "sqlite", "role": "task_state", "path": paths["control_db"], "read_only": False},
             )
@@ -132,7 +139,7 @@ class Product:
                 "prices": error is None,
                 "publish": error is None,
                 "portfolio": error is None,
-                "covered_research": False,
+                "covered_research": error is None and bool(config and config.reference_sets),
                 "price_only_no_limits": error is None,
                 "fixed_evaluation": "separate_explicit_binding",
                 "portfolio_instrument_scope": "main_board_ordinary_a_shares",
@@ -140,6 +147,10 @@ class Product:
                 "preflight_required": True,
             },
             limitations=LIMITATIONS,
+            reference_sets=tuple({"name": item.name, "kind": item.kind,
+                                  "source_bindings": item.source_bindings()}
+                                 for item in config.reference_sets) if config else (),
+            default_reference_set=config.default_reference_set if config else None,
             data_owner={key: owner_pin[key] for key in (
                 "version", "commit", "tree", "runtime_code_sha256", "wheel_sha256"
             )},
@@ -155,9 +166,31 @@ class Product:
             source=selection.source,
         )))
 
+    def coverage(self, selection):
+        from ashare_quant.product.publication import check_coverage
+
+        references = self.configured().references(selection.reference_set)
+        value = self.call(lambda owner: wire(self.operation(owner, "coverage")(
+            list(selection.securities), str(selection.start), str(selection.end),
+            source=selection.source, references=references,
+        )))
+        check_coverage(value, selection, references)
+        return value
+
+    @staticmethod
+    def operation(owner, name):
+        method = getattr(owner, name, None)
+        if method is None:
+            raise DomainError("PRODUCT_OWNER_API_UNAVAILABLE",
+                              "Install the pinned AD product interface", 503)
+        return method
+
     def publish(self, selection):
+        from ashare_quant.product.publication import consume
+
         config = self.configured()
         self.jobs.guard()
+        references = config.references(selection.reference_set)
         unsupported = [sid for sid in selection.securities if not (
             sid.endswith(".XSHG") and sid[:3] in {"600", "601", "603", "605"}
             or sid.endswith(".XSHE") and sid[:3] in {"000", "001", "002", "003"}
@@ -168,21 +201,11 @@ class Product:
                 "Portfolio publication supports ordinary main-board A shares",
                 422, details={"securities": unsupported},
             )
-        release = self.call(lambda owner: wire(owner.publish(
+        release = self.call(lambda owner: wire(self.operation(owner, "publish")(
             config.release_store_root, list(selection.securities), str(selection.start),
-            str(selection.end), source=selection.source,
+            str(selection.end), source=selection.source, mode=selection.mode, references=references,
         )))
-        try:
-            path = Path(release["portfolio_input_path"])
-            if not path.is_absolute() or not path.resolve().is_relative_to(
-                Path(config.release_store_root).resolve()
-            ):
-                raise ValueError("Input is outside the configured publication Store")
-        except (KeyError, TypeError, ValueError) as exc:
-            raise DomainError(
-                "PRODUCT_OWNER_CONTRACT_MISMATCH",
-                "AD publication did not return an input inside the configured Store", 409,
-            ) from exc
+        path = self.call(lambda owner: consume(release, selection, config, references))
         name = selection.name or f"Market {selection.start} to {selection.end}"
         dataset = self.jobs.import_data(path, name)
         return ProductRelease(release=release, dataset=dataset)

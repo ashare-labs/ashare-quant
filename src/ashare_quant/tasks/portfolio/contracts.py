@@ -121,6 +121,8 @@ class PortfolioDataset(Contract):
     action_coverage: JSONObject
     source_refs: tuple[JSONObject | str, ...]
     limitations: tuple[str, ...]
+    mode: Literal["covered_research", "price_only_no_limits"] = "covered_research"
+    diagnostic_allowed: bool = True
 
 
 class PortfolioCatalogue(Contract):

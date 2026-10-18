@@ -148,16 +148,25 @@ class Datasets:
             raise DomainError(
                 "PORTFOLIO_DATASET_NOT_FOUND", "Import this immutable AD export locally", 404
             )
-        descriptor = PortfolioDataset.model_validate_json(regular(root / "descriptor.json"))
+        declared = json.loads(regular(root / "descriptor.json"))
+        descriptor = PortfolioDataset.model_validate(declared)
         raw = self.bounded_file(root / "input.json")
         require(sha(raw) == descriptor.input_sha256 and descriptor.dataset_id == dataset_id)
         require(dataset_id == digest({"name": descriptor.name, "input_sha256": sha(raw)}))
         doc = json.loads(raw)
-        require(descriptor == self.describe(doc, descriptor.name, raw))
-        return descriptor, doc
+        current = self.describe(doc, descriptor.name, raw)
+        # Older descriptors lack these derived display fields; preserve their bytes
+        # and content identity while exposing modes from the actual frozen input.
+        compatible = current.model_copy(update={k: getattr(descriptor, k)
+            for k in ("mode", "diagnostic_allowed") if k not in declared})
+        require(descriptor == compatible)
+        return current, doc
 
     @staticmethod
     def describe(doc, name, raw):
+        from ashare_quant.portfolio.product_reference import validate
+
+        validate(doc)
         require(
             doc["schema"] == "ad-daily-portfolio.v1",
             "PORTFOLIO_DATA_SCHEMA",
@@ -184,6 +193,9 @@ class Datasets:
             action_coverage=doc["action_coverage"],
             source_refs=doc["source_refs"],
             limitations=doc["limitations"],
+            mode=("price_only_no_limits" if doc.get("research_model") == "price_only_no_actions"
+                  else "covered_research"),
+            diagnostic_allowed="corporate_schedule" not in doc,
         )
 
     def import_file(self, path, name):

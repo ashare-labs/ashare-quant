@@ -107,10 +107,15 @@ def doctor(config):
     missing = [item["name"] for item in checks
                if not item["present"] and item.get("selected", True)]
     invalid = [name for name, value in databases.items() if not value["readable"]]
+    from ashare_quant.deployment.backup import reference_asset_checks
+    references = reference_asset_checks(config)
+    invalid_references = [name for name, value in references.items() if not value["ready"]]
     return {"schema": "ashare-deployment-doctor.v1", "profile": config.profile,
             "kind": config.kind, "data_root": str(config.data_root),
-            "configured": True, "ready": not missing and not invalid and all(v["ready"] for v in runtime.values()),
+            "configured": True, "ready": not missing and not invalid and not invalid_references
+            and all(v["ready"] for v in runtime.values()),
             "missing": missing, "invalid_databases": invalid, "databases": databases,
+            "invalid_reference_assets": invalid_references, "reference_assets": references,
             "runtime": runtime, "checks": checks, "commands": commands(config), "modified_source": False}
 
 

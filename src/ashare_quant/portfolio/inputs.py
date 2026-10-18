@@ -48,6 +48,9 @@ class Inputs:
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
+        from ashare_quant.portfolio.product_reference import validate
+
+        validate(doc)
         self.no_price_limits = doc.get("price_limit_policy") == "disabled_for_price_only_diagnostic"
         if self.no_price_limits:
             require(

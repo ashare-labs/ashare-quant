@@ -21,7 +21,7 @@ from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.deployment.configuration import resolve
+from ashare_quant.deployment.configuration import REFERENCE_KINDS, resolve
 from ashare_quant.deployment.runtime import deployment_lock
 from ashare_quant.storage.lifecycle import database_lock
 
@@ -136,6 +136,7 @@ def _runtime_payload(destination, identity):
 
 def _plan(config, include_source_assets):
     roots, mapped = [], {}
+    required_assets = set(config.document["profiles"][config.profile].get("required_assets", []))
 
     def add(name, source, target, *, required=False, source_asset=False):
         if not source.exists():
@@ -161,13 +162,19 @@ def _plan(config, include_source_assets):
     for asset in config.assets:
         spec = config.document["assets"][asset.name]
         selected = asset.name in config.selected_assets
-        source_asset = asset.kind == "local_daily" or asset.role in SOURCE_ROLES
+        reference_asset = asset.kind in REFERENCE_KINDS
+        source_asset = asset.kind == "local_daily" or asset.role in SOURCE_ROLES or reference_asset
         protected = (spec.get("protected") or asset.retention in {"protected_external", "frozen"}
                      or asset.role == "protected_external")
         temporary = asset.retention in {"temporary", "discard"} or asset.role == "temporary"
         if selected and (protected or temporary):
             fail("BACKUP_PROFILE_ASSET_INVALID", f"Required input cannot be excluded/protected: {asset.name}")
-        include = selected and not source_asset or include_source_assets and not protected and not temporary
+        if asset.kind == "local_daily" and asset.name in required_assets and not include_source_assets:
+            fail("BACKUP_REQUIRED_SOURCE_REQUIRES_OPT_IN",
+                 f"Required whole source {asset.name} needs --include-source-assets; "
+                 "default state backup never silently copies or omits a required main library")
+        include = (selected and (not source_asset or reference_asset or asset.name in required_assets)
+                   or include_source_assets and not protected and not temporary)
         if include:
             # Asset names are logical identifiers, never archive paths.
             target = "payload/assets/" + hashlib.sha256(asset.name.encode()).hexdigest()[:24]
@@ -177,6 +184,97 @@ def _plan(config, include_source_assets):
                             "reason": "protected_external" if protected else "temporary" if temporary
                             else "external_source" if source_asset else "other_profile"})
     return roots, mapped, omitted
+
+
+def reference_asset_checks(config, *, relocated=None):
+    """Read immutable source packages through AD, including execution/base pairing.
+
+    Used by doctor and by the backup verifier. A relocated mapping contains only
+    package roots inside the bundle, so verification never falls back to an old
+    machine path. No Store, source query or package writer is constructed.
+    """
+    specs = {}
+    for asset in config.assets:
+        selected = asset.name in (relocated if relocated is not None else config.selected_assets)
+        if selected and asset.kind in REFERENCE_KINDS:
+            specs[asset.name] = {
+                "kind": asset.kind, "path": (relocated[asset.name] if relocated is not None else asset.path),
+                "binding": asset.binding, "binding_sha256": asset.binding_sha256,
+            }
+    return _reference_checks(specs)
+
+
+def _reference_checks(specs):
+    if not specs:
+        return {}
+    from ashare_data import (
+        CorporateHistoryView,
+        DailyExecutionView,
+        DailyResearchView,
+        HistoricalMarketView,
+    )
+    from ashare_data.core.model import DataError
+
+    constructors = {"daily_research": DailyResearchView, "historical_market": HistoricalMarketView,
+                    "corporate_history": CorporateHistoryView}
+    results, research = {}, {}
+    # Base snapshots must be loaded before their independently pinned supplements.
+    for name, spec in sorted(specs.items(), key=lambda item: item[1]["kind"] == "daily_execution"):
+        binding = Path(spec["path"]) / _relative(spec["binding"] or "binding.json")
+        result = {"kind": spec["kind"], "path": str(spec["path"]), "binding_path": str(binding),
+                  "binding_sha256": spec["binding_sha256"], "ready": False}
+        try:
+            if not binding.is_file():
+                raise DomainError("REFERENCE_BINDING_MISSING", f"Missing binding: {binding}", 409)
+            if binding.stat().st_size > 2 * 1024 * 1024:
+                raise DomainError("REFERENCE_BINDING_INVALID", "Binding exceeds 2 MiB", 409)
+            if digest_file(binding) != spec["binding_sha256"]:
+                raise DomainError("REFERENCE_BINDING_CHANGED", f"Binding pin differs: {binding}", 409)
+            if spec["kind"] == "daily_execution":
+                base_pin = json.loads(binding.read_bytes())["research_binding_sha256"]
+                if base_pin not in research:
+                    raise DomainError("REFERENCE_DEPENDENCY_MISSING",
+                                      "Execution package needs its valid pinned research asset", 409)
+                view = DailyExecutionView(research[base_pin], binding,
+                                          expected_binding_sha256=spec["binding_sha256"])
+                result["research_binding_sha256"] = base_pin
+            else:
+                view = constructors[spec["kind"]](binding, expected_binding_sha256=spec["binding_sha256"])
+                if spec["kind"] == "daily_research":
+                    research[spec["binding_sha256"]] = view
+            result["ready"] = True
+        except (DataError, DomainError, OSError, ValueError, KeyError, TypeError) as exc:
+            result.update(error=getattr(exc, "code", "REFERENCE_PACKAGE_INVALID"), message=str(exc))
+        results[name] = result
+    return results
+
+
+def _require_reference_checks(checks):
+    invalid = {name: check for name, check in checks.items() if not check["ready"]}
+    if invalid:
+        raise DomainError("BACKUP_REFERENCE_INVALID", "Required reference package is missing or invalid", 409,
+                          details={"assets": invalid})
+
+
+def _bundle_reference_checks(manifest, directory):
+    """All selected small source packages and explicit required inputs must exist."""
+    config = manifest["configuration"]
+    profile = config["profiles"][manifest["profile"]]
+    required = set(profile.get("required_assets", []))
+    for reference in profile.get("reference_sets", {}).values():
+        required.update(value for key, value in reference.items() if key.endswith("_asset"))
+    missing = sorted(name for name in required if "asset:" + name not in manifest["paths"])
+    if missing:
+        fail("BACKUP_REQUIRED_ASSET_MISSING", f"Bundle omitted explicitly required assets: {missing}")
+    specs = {}
+    for name, asset in config["assets"].items():
+        target = manifest["paths"].get("asset:" + name)
+        if asset["kind"] in REFERENCE_KINDS and target is not None:
+            specs[name] = {**asset, "path": directory / _relative(target),
+                           "binding": asset.get("binding", "binding.json")}
+    checks = _reference_checks(specs) if specs else {}
+    _require_reference_checks(checks)
+    return checks
 
 
 def _is_sqlite(path):
@@ -276,6 +374,9 @@ def create_backup(config, destination, *, include_source_assets=False):
     for entry in roots:
         if destination == entry["source"] or destination.is_relative_to(entry["source"]):
             fail("BACKUP_PATH_CONFLICT", "Backup must be outside every included source tree")
+    checks = reference_asset_checks(config, relocated={a.name: a.path for a in config.assets
+                                                      if "asset:" + a.name in mapped})
+    _require_reference_checks(checks)
     identity = runtime_identity()
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.mkdir(mode=0o700)  # create-only; incomplete bundles never receive manifest.json
@@ -353,6 +454,7 @@ def create_backup(config, destination, *, include_source_assets=False):
                     "size": p.stat().st_size, "sha256": digest_file(p)
                 } for p in files(destination)},
             }
+            manifest["reference_assets"] = _bundle_reference_checks(manifest, destination)
             raw = canonical(manifest)
             (destination / "manifest.json").write_bytes(raw)
             digest = hashlib.sha256(raw).hexdigest()
@@ -405,6 +507,7 @@ def verify_backup(directory, *, expected_sha256=None, check_runtime=True):
             path = directory / _relative(name)
             if not path.exists():
                 fail("BACKUP_INCOMPLETE", f"Required bundle root is missing: {name}")
+        _bundle_reference_checks(manifest, directory)
         if check_runtime and manifest["runtime"] != runtime_identity():
             fail("BACKUP_RUNTIME_MISMATCH", "Use this backup's exact Python, dependency and AQ/AD source versions")
     except (ValueError, KeyError, TypeError) as exc:
@@ -452,11 +555,14 @@ def restore_backup(directory, destination, *, expected_sha256=None):
     config_path = destination / "deployment.json"
     config_path.write_bytes(canonical(document))
     config = resolve(config_path, manifest["profile"])
+    reference_checks = reference_asset_checks(config)
+    _require_reference_checks(reference_checks)
     receipt = {"schema": "ashare-restore.v1", "deployment": str(config_path),
                "scope": manifest["scope"], "manifest_sha256": digest_file(source / "manifest.json"),
                "verified_files": len(manifest["files"]), "runtime_verified": True,
                "control_db": str(config.control_db), "paper_root": str(config.paper_root),
                "source_data_available": config.daily_root.is_dir(),
+               "reference_assets": reference_checks,
                "provenance_bytes_rewritten": False}
     (destination / "restore-receipt.json").write_bytes(canonical(receipt))
     return receipt

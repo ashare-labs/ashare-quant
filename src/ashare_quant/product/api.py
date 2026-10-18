@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from ashare_quant.contracts import DomainError
 from ashare_quant.product.contracts import (
     ProductConfiguration,
+    ProductCoverageRequest,
     ProductRelease,
     ProductReleaseRequest,
     ProductSelection,
@@ -77,3 +78,8 @@ def mount(app, store, configuration=None):
     def publish(body: ProductReleaseRequest, request: Request) -> ProductRelease:
         closed(request)
         return product.publish(body)
+
+    @app.post(prefix + "/coverage")
+    def coverage(body: ProductCoverageRequest, request: Request) -> dict:
+        closed(request)
+        return product.coverage(body)

@@ -8,7 +8,7 @@ HTTP /api/v1/m2 改为 /api/v1/tasks/daily，/api/v1/research 改为 /api/v1/mar
 
 算法 ID 和部分 wire 标签保留语义，例如 `daily_portfolio.v1`、`m2-jobs.v6`、`m2-job-manifest.v6` 和 `m2job-` ID 前缀。这些是序列化业务标识，没有旧 Python 模块别名。AD 的旧窗口 `m2a` 明确改为 `two_day`，`w1`、`w2` 保留；请求必须使用当前 catalogue 返回的窗口，不能机械改写旧回执。
 
-源码路径、模块名、策略 SDK 摘要及包版本都改变，因此新版产生新任务、账户和恢复身份；旧库不能只换目录后继续运行。AQ `0.12.0.dev3` 固定 AD `0.10.0.dev3` 的候选提交、wheel 及代码清单；所有数据域共用这一安装。新身份是 `not_reviewed`，不复用旧 PASS。
+源码路径、模块名、策略 SDK 摘要及包版本都改变，因此新版产生新任务、账户和恢复身份；旧库不能只换目录后继续运行。AQ `0.12.0.dev4` 固定 AD `0.10.0.dev4` 的候选提交、wheel 及代码清单；所有数据域共用这一安装。新身份是 `not_reviewed`，不复用旧 PASS。
 
 可信 Python 策略将 `ashare_quant.strategy_api` 改为 `ashare_quant.strategies.api` 后重新注册；组合策略将 `ashare_quant.daily_portfolio.signals` 改为 `ashare_quant.portfolio.signals`。新的源码字节与 SDK 摘要会产生新策略版本，不覆盖旧任务封存的策略。RQAlpha 适配器类路径也已改变，旧检查点只交给原固定环境恢复。
 
