@@ -1,5 +1,5 @@
 {
-  "commit": "8fcce56df5c9cf8d448b9ee535787933f00689f1",
+  "commit": "0a12cdda04778cd0a6ea6fb89a317ce9a51446d0",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "2df3c219d896ce3f274ad3c6cc53767bfad6256913ed54aca3c76b7ebff63f74",
+    "__init__.py": "cbe436728820e46dc331556ccf9a03d014729d55cdd274a64897ead0326afec7",
     "cli/__init__.py": "db659dd47c3b5d75577400a5d7294c669e6c7fca1df158739c1bec0194cbefb0",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/corporate_actions.py": "f3c7e7db677a12897594383897c19072a327cfb2874bcb2bc9669652ed655603",
@@ -113,6 +113,7 @@
     "research/fact_types.py": "53578227f86d181e88b81cbb721a21d00f204ee27cfcb4de695910e4fba0b800",
     "research/finite_facts.py": "29b244886c82d3e1265be20a57ae2e49473bcf5d822ce2a396bcfa2c90fd0e73",
     "research/independent_queries.py": "1ac4d9bbec80f6855fcf4600ccec2b6898576239fe4897a86d702c3df909b084",
+    "research/minute_export.py": "c55bc1a4e6361d32ccfb4905b056bc1760fe2e915e4e296dd5848a9877ef1042",
     "research/order_inputs.py": "0a904ac5605bbf8ff84a715bafc437b4fb8ab8a57697d88730565ec051400659",
     "research/payloads.py": "b7842c617dd93ef4c43c169089720f357921663cacfb503a99f172c8194bcf6d",
     "research/portable-policy.json": "3385146f2738660da8fa91d7818c028f33a82a2aacfc2b64ddadcc2565c23d59",
@@ -128,10 +129,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "d90173447906d296bba28b1836e4f67abc1e54680ce9d611a5c02ccd6911f502",
+  "runtime_code_sha256": "5ad17ac58a6904e3fd00e534dd5753d97c2645c2d13ae3c495258514c9c590f1",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "874e43b5aef4ebaa7d9bd3e90c4e7ba1e9c4729b",
+  "tree": "4c925271d977b78099992ffe066d8f6645f99017",
   "version": "0.10.0.dev3",
-  "wheel_sha256": "5f79b450e7660527f94e0acbf359994889fe0dbc9299a4563fbb6254e9ed2a16"
+  "wheel_sha256": "122d5ec15d8182d2ea408298157485132522e0421fd63f59f486f219e8ce8b3f"
 }

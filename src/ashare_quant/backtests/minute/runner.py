@@ -90,6 +90,7 @@ def run_backtest(
         accept_state_replay=accept_state_replay,
         accept_research=accept_research,
     )
+    data.validate_execution(settings)
     require(
         not (data.research and data.full_session_input)
         or settings["lifecycle"] == "jq_minute",

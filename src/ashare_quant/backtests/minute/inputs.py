@@ -35,13 +35,14 @@ class MinuteInputs:
     """Immutable, complete declared sessions; no forward fill or guessed status.
 
     `assumed_closed` is an explicit research model, never verified historical PIT.
-    Actual interval labels must already be supplied by AD, even in this mode.
+    Source labels and separate model clocks must already be supplied by AD.
     """
 
     def __init__(
         self, path, *, accept_assumed=False, accept_state_replay=False, accept_research=False
     ):
-        import ashare_quant.backtests.minute.bounded as research
+        import ashare_quant.backtests.minute.bounded as bounded
+        import ashare_quant.backtests.minute.research as generic
 
         require(type(accept_assumed) is bool, "MINUTE_VISIBILITY_OPT_IN_MUST_BE_BOOLEAN")
         require(type(accept_state_replay) is bool, "MINUTE_STATE_OPT_IN_MUST_BE_BOOLEAN")
@@ -49,8 +50,11 @@ class MinuteInputs:
         raw = Path(path).read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
-        self.research = doc["schema"] in {research.SCHEMA, research.SCHEMA_FULL}
-        self.full_session_input = doc["schema"] in {"ad-minute-backtest.v2", research.SCHEMA_FULL}
+        self.generic_research = doc["schema"] == generic.SCHEMA
+        research = generic if self.generic_research else bounded
+        self._research_policy = research
+        self.research = self.generic_research or doc["schema"] in {bounded.SCHEMA, bounded.SCHEMA_FULL}
+        self.full_session_input = doc["schema"] in {"ad-minute-backtest.v2", bounded.SCHEMA_FULL}
         require(
             self.research or doc["schema"] in {"ad-minute-backtest.v1", "ad-minute-backtest.v2"},
             "MINUTE_INPUT_SCHEMA",
@@ -202,13 +206,16 @@ class MinuteInputs:
                 self.state_times[key] = available
             if self.research:
                 research.validate_state(state)
-                require(
-                    state["evidence"]["binding_sha256"]
-                    == doc["source_refs"]["state_binding_sha256"]
-                    and state["tdx_previous_close"]["manifest_sha256"]
-                    == doc["source_refs"]["tdx_manifest_sha256"][key[0]],
-                    "MINUTE_RESEARCH_STATE_SOURCE_BINDING",
-                )
+                if self.generic_research:
+                    research.validate_state_binding(state, doc, self.previous[key[1]])
+                else:
+                    require(
+                        state["evidence"]["binding_sha256"]
+                        == doc["source_refs"]["state_binding_sha256"]
+                        and state["tdx_previous_close"]["manifest_sha256"]
+                        == doc["source_refs"]["tdx_manifest_sha256"][key[0]],
+                        "MINUTE_RESEARCH_STATE_SOURCE_BINDING",
+                    )
             else:
                 require(
                     number(state["lower_limit"]) <= number(state["upper_limit"]),
@@ -249,11 +256,14 @@ class MinuteInputs:
             require(volume == volume.to_integral_value(), "MINUTE_VOLUME_NOT_SHARES")
             amount = number(row["amount"], zero=True)
             if self.research:
-                require(
-                    row["evidence"]["manifest_sha256"]
-                    == doc["source_refs"]["tdx_manifest_sha256"][sid],
-                    "MINUTE_RESEARCH_BAR_SOURCE_BINDING",
-                )
+                if self.generic_research:
+                    research.validate_bar_binding(row, doc)
+                else:
+                    require(
+                        row["evidence"]["manifest_sha256"]
+                        == doc["source_refs"]["tdx_manifest_sha256"][sid],
+                        "MINUTE_RESEARCH_BAR_SOURCE_BINDING",
+                    )
                 research.validate_activity(row, volume, amount, full=self.full_session_input)
                 research.check_price(self.states[sid, d], row["low"], row["high"])
             require(not self.states[sid, d]["suspended"], "MINUTE_SUSPENDED_BAR_CONFLICT")
@@ -299,16 +309,16 @@ class MinuteInputs:
     def price_bounds(self, sid, day, *, at):
         state = self.state(sid, day, at=at)
         if self.research:
-            from ashare_quant.backtests.minute.bounded import envelope
-
-            return envelope(state["previous_close"])
+            return self._research_policy.envelope(state["previous_close"])
         return number(state["lower_limit"]), number(state["upper_limit"])
 
     def check_order_price(self, sid, price, *, at):
         if self.research:
-            from ashare_quant.backtests.minute.bounded import check_price
+            self._research_policy.check_price(self.state(sid, str(at.date()), at=at), price, price)
 
-            check_price(self.state(sid, str(at.date()), at=at), price, price)
+    def validate_execution(self, settings):
+        if self.generic_research:
+            self._research_policy.validate_execution(settings)
 
     def visible(self, sid, at, *, include_now=True, count=None, end=None):
         require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
@@ -413,6 +423,12 @@ class MinuteInputs:
                 native_price_bounds="4% inward execution envelope; exchange limits unknown",
                 requires_flat_end=not self.full_session_input,
             )
+            if self.generic_research:
+                result["valuation_cutoff"] = {
+                    day: self.ends[day][-1].isoformat() for day in self.days
+                }
+                result["valuation_basis"] = "last source label under declared research clock"
+                result["capabilities"] = self.document["research"]["capabilities"]
         if self.session_data is not None:
             result["session_observations"] = {
                 "schema": self.session_data.document["schema"],

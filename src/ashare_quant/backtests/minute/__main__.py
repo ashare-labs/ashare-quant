@@ -18,7 +18,7 @@ def main():
     p.add_argument(
         "--accept-research",
         action="store_true",
-        help="accept the separately named bounded TDX research profile",
+        help="accept an explicit supported bounded research schema and its assumptions",
     )
     p.add_argument("--preflight", action="store_true")
     p.add_argument("--timeout", type=float, default=120)
