@@ -84,8 +84,12 @@ class Product:
                 "PRODUCT_CONFIGURATION_CHANGED",
                 "Deployment configuration changed or became unreadable; "
                 "restart the API with the selected deployment",
-                409, details={"deployment": str(config.deployment), "profile": config.profile,
-                              "restart_required": True},
+                409,
+                details={
+                    "deployment": str(config.deployment),
+                    "profile": config.profile,
+                    "restart_required": True,
+                },
             )
 
     def owner(self, *, minute=False):
@@ -107,7 +111,7 @@ class Product:
                 "Install the pinned AD candidate that provides LocalDailyProduct",
                 503,
             ) from exc
-        return LocalDailyProduct(config.daily_root)
+        return LocalDailyProduct.from_deployment(config.deployment, profile=config.profile)
 
     def call(self, operation, *, minute=False):
         try:
@@ -118,14 +122,11 @@ class Product:
             ) from exc
 
         try:
-            if minute:
-                config = self.configured()
-                try:
-                    return operation(self.owner(minute=True))
-                finally:
-                    # Also reject a deployment edit during source construction/read.
-                    self.require_configuration_snapshot(config)
-            return operation(self.owner())
+            config = self.configured()
+            try:
+                return operation(self.owner(minute=minute))
+            finally:
+                self.require_configuration_snapshot(config)
         except DataError as exc:
             raise DomainError(
                 exc.code, exc.message, 422, details=wire(exc.details), origin="ashare-data"
@@ -154,22 +155,48 @@ class Product:
                 "daily_root": str(config.daily_root),
                 "release_store_root": str(config.release_store_root),
             }
-            configuration_id = digest({
-                "profile": config.profile, "kind": config.kind, **paths,
-                "default_reference_set": config.default_reference_set,
-                "reference_sets": [item.references() for item in config.reference_sets],
-                "minute_sources": config.document["profiles"][config.profile].get("minute_sources", {}),
-                "asset_paths": {item.name: str(item.path) for item in config.assets},
-            })
-            assets = tuple({
-                "name": item.name, "kind": item.kind, "role": item.role,
-                "path": str(item.path), "retention": item.retention,
-                "read_only": item.path != config.release_store_root,
-                "selected": item.name in config.selected_assets,
-                **({"binding": item.binding, "binding_sha256": item.binding_sha256}
-                   if item.binding is not None else {}),
-            } for item in config.assets) + (
-                {"kind": "sqlite", "role": "task_state", "path": paths["control_db"], "read_only": False},
+            configuration_id = digest(
+                {
+                    "profile": config.profile,
+                    "kind": config.kind,
+                    **paths,
+                    "default_reference_set": config.default_reference_set,
+                    "reference_sets": [item.references() for item in config.reference_sets],
+                    "minute_sources": config.document["profiles"][config.profile].get(
+                        "minute_sources", {}
+                    ),
+                    "market_release": config.document["profiles"][config.profile].get(
+                        "market_release"
+                    ),
+                    "default_minute_source": config.document["profiles"][config.profile].get(
+                        "default_minute_source", "tdx"
+                    ),
+                    "asset_paths": {item.name: str(item.path) for item in config.assets},
+                }
+            )
+            assets = tuple(
+                {
+                    "name": item.name,
+                    "kind": item.kind,
+                    "role": item.role,
+                    "path": str(item.path),
+                    "retention": item.retention,
+                    "read_only": item.path != config.release_store_root,
+                    "selected": item.name in config.selected_assets,
+                    **(
+                        {"binding": item.binding, "binding_sha256": item.binding_sha256}
+                        if item.binding is not None
+                        else {}
+                    ),
+                }
+                for item in config.assets
+            ) + (
+                {
+                    "kind": "sqlite",
+                    "role": "task_state",
+                    "path": paths["control_db"],
+                    "read_only": False,
+                },
             )
         owner_pin = pin()
         return ProductConfiguration(
@@ -192,43 +219,73 @@ class Product:
                 "portfolio_instrument_scope": "main_board_ordinary_a_shares",
                 "warmup_sessions": 120,
                 "preflight_required": True,
+                "market_release": config.document["profiles"][config.profile].get("market_release")
+                if config
+                else None,
             },
             limitations=LIMITATIONS,
-            reference_sets=tuple({"name": item.name, "kind": item.kind,
-                                  "source_bindings": item.source_bindings()}
-                                 for item in config.reference_sets) if config else (),
+            reference_sets=tuple(
+                {"name": item.name, "kind": item.kind, "source_bindings": item.source_bindings()}
+                for item in config.reference_sets
+            )
+            if config
+            else (),
             default_reference_set=config.default_reference_set if config else None,
-            data_owner={key: owner_pin[key] for key in (
-                "version", "commit", "tree", "runtime_code_sha256", "wheel_sha256"
-            )},
+            data_owner={
+                key: owner_pin[key]
+                for key in ("version", "commit", "tree", "runtime_code_sha256", "wheel_sha256")
+            },
             error=error,
         )
 
     def catalogue(self, query, limit, offset):
-        return self.call(lambda owner: wire(owner.catalogue(query=query, limit=limit, offset=offset)))
+        return self.call(
+            lambda owner: wire(owner.catalogue(query=query, limit=limit, offset=offset))
+        )
 
     def prices(self, selection):
-        return self.call(lambda owner: wire(owner.prices(
-            list(selection.securities), str(selection.start), str(selection.end),
-            source=selection.source,
-        )))
+        return self.call(
+            lambda owner: wire(
+                owner.prices(
+                    list(selection.securities),
+                    str(selection.start),
+                    str(selection.end),
+                    source=selection.source,
+                )
+            )
+        )
 
     def minute_sources(self):
         return self.call(lambda owner: wire(owner.sources()), minute=True)
 
     def minute_prices(self, selection):
-        return self.call(lambda owner: wire(owner.prices(
-            selection.security, selection.start, selection.end, source=selection.source,
-        )), minute=True)
+        return self.call(
+            lambda owner: wire(
+                owner.prices(
+                    selection.security,
+                    selection.start,
+                    selection.end,
+                    source=selection.source,
+                )
+            ),
+            minute=True,
+        )
 
     def coverage(self, selection):
         from ashare_quant.product.publication import check_coverage
 
         references = self.configured().references(selection.reference_set)
-        value = self.call(lambda owner: wire(self.operation(owner, "coverage")(
-            list(selection.securities), str(selection.start), str(selection.end),
-            source=selection.source, references=references,
-        )))
+        value = self.call(
+            lambda owner: wire(
+                self.operation(owner, "coverage")(
+                    list(selection.securities),
+                    str(selection.start),
+                    str(selection.end),
+                    source=selection.source,
+                    references=references,
+                )
+            )
+        )
         check_coverage(value, selection, references)
         return value
 
@@ -236,8 +293,9 @@ class Product:
     def operation(owner, name):
         method = getattr(owner, name, None)
         if method is None:
-            raise DomainError("PRODUCT_OWNER_API_UNAVAILABLE",
-                              "Install the pinned AD product interface", 503)
+            raise DomainError(
+                "PRODUCT_OWNER_API_UNAVAILABLE", "Install the pinned AD product interface", 503
+            )
         return method
 
     def publish(self, selection):
@@ -246,20 +304,36 @@ class Product:
         config = self.configured()
         self.jobs.guard()
         references = config.references(selection.reference_set)
-        unsupported = [sid for sid in selection.securities if not (
-            sid.endswith(".XSHG") and sid[:3] in {"600", "601", "603", "605"}
-            or sid.endswith(".XSHE") and sid[:3] in {"000", "001", "002", "003"}
-        )]
+        unsupported = [
+            sid
+            for sid in selection.securities
+            if not (
+                sid.endswith(".XSHG")
+                and sid[:3] in {"600", "601", "603", "605"}
+                or sid.endswith(".XSHE")
+                and sid[:3] in {"000", "001", "002", "003"}
+            )
+        ]
         if unsupported:
             raise DomainError(
                 "PORTFOLIO_INSTRUMENT_UNSUPPORTED",
                 "Portfolio publication supports ordinary main-board A shares",
-                422, details={"securities": unsupported},
+                422,
+                details={"securities": unsupported},
             )
-        release = self.call(lambda owner: wire(self.operation(owner, "publish")(
-            config.release_store_root, list(selection.securities), str(selection.start),
-            str(selection.end), source=selection.source, mode=selection.mode, references=references,
-        )))
+        release = self.call(
+            lambda owner: wire(
+                self.operation(owner, "publish")(
+                    config.release_store_root,
+                    list(selection.securities),
+                    str(selection.start),
+                    str(selection.end),
+                    source=selection.source,
+                    mode=selection.mode,
+                    references=references,
+                )
+            )
+        )
         path = self.call(lambda owner: consume(release, selection, config, references))
         name = selection.name or f"Market {selection.start} to {selection.end}"
         dataset = self.jobs.import_data(path, name)

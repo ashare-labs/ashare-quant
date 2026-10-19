@@ -1,4 +1,5 @@
 """Public package works without private receipts or market data."""
+
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
@@ -7,8 +8,9 @@ from ashare_quant.providers.daily.owner_wire import source_pin
 
 def test_owner_identity_is_public_source_not_private_receipt():
     pin = source_pin()
-    assert pin["commit"] == "3f06a1df058328bbe4e19732f4709f18cef3bf13"
-    assert pin["version"] == "0.10.0.dev5"
+    assert len(pin["commit"]) == 40
+    assert pin["source_verification"] == "committed_candidate_content"
+    assert pin["version"] == "0.10.0.dev6"
     assert pin["portable_owner_version"] == "0.10.0.dev1"
     assert "wheel" not in pin and "review" not in pin
     assert pin["contract_review"]["scope"] == "data_production_contract_only"
@@ -25,6 +27,10 @@ def test_unconfigured_catalogue_is_explicit_and_creates_no_task(store, monkeypat
         value = response.json()
         assert value["contract_version"] == "m2-jobs.v6"
         assert value["configuration_error"] == "M2_JOB_NOT_CONFIGURED"
-        assert not value["configured"] and not value["windows"] and value["data_binding_sha256"] is None
+        assert (
+            not value["configured"]
+            and not value["windows"]
+            and value["data_binding_sha256"] is None
+        )
         assert client.get("/api/v1/tasks/daily/jobs").json() == {"items": []}
         assert client.get("/api/v1/runs").json() == []

@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+ashare_entry_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$ashare_entry_root/market-runtime/.venv/bin/python" -I -B -m ashare_quant.deployment.market_entry --root "$ashare_entry_root" "$@"

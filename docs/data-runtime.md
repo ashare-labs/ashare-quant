@@ -115,3 +115,29 @@ ASHARE_DATA_ROOT/deployment.json、$XDG_CONFIG_HOME/ashare/deployment.json。
 已有清单缺失、断链或无效时直接报错，不尝试其他库。发现配置不会初始化状态、启动服务或迁移账户。
 API、旧 CLI 和 AD 产品读取共用此选择；维护日线的显式 --root 仍优先。
 examples/local-entry/ 版本管理可复用的启动器和模板；部署实例里的数据、证据和账户不提交 Git。
+
+## 固定行情发布与保留账户运行时
+
+profile 可选择 `market_release: {asset, release_id, manifest_sha256}`，对应资产
+`kind: market_release`、`role: market`。AD 的 Parquet 文件清单、证券身份、日历和规则
+一起固定。产品日线、分钟和研究发布通过相同 owner 工厂读取；API 的 configuration_id
+同时绑定行情版本与默认分钟来源。运行中清单发生变更会拒绝继续使用旧配置，须重新打开。
+`default_minute_source: canonical` 使分钟 `auto` 使用主发布系列；没有记录时返回空结果，
+不会回退 TDX 或原始下载源。研究输入保存行情 release 回执，回测不依赖长期数据库事务。
+
+升级行情读者时，不要就地替换已结算账户的固定运行时。可在部署目录的
+`market-runtime/.venv` 安装新配对 wheel，并将统一启动器指向
+`python -I -B -m ashare_quant.deployment.market_entry --root <entry-root>`。
+旧 `.venv`、`entry.py`、`account_entry.py`、账户登记及账本完整保留。
+catalog 中新增 `account_reader`，含相对 `python`、`entry` 路径，以及
+`files: [{path, sha256}]` 固定旧入口与旧账户适配器。新 API 仅经子进程调用旧入口的
+`accounts` 和 `account <id>` 两个只读命令；不导入新引擎重放既有订单，不增加下一日授权。
+
+新增启动器模板为 [market-data](../examples/local-entry/market-data)。旧模板和旧运行环境
+保留其原有语义。上线前先验证新 wheel、固定 release、实际 CLI/API/UI、代表性回测，
+再合入清单和启动器变更。撤回时恢复原启动器与部署清单即可；不删除新旧行情对象。
+
+行情恢复使用 AD 的 `ashare_data.product.release_cli backup/restore`，只复制清单引用的
+正式对象、全部已提交祖先版本及元数据，支持失败续传。`apply --plan` 只替换受影响的完整
+证券分块，保留旧文件；变更证据、批次与来源版本必须固定。完整源库与账户备份仍有各自
+独立边界，行情恢复不声称包含外部 raw 原件或既有模拟账户。

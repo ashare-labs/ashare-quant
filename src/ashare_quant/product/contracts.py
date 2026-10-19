@@ -32,18 +32,23 @@ class ProductMinuteSelection(Contract):
     security: str = Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE)|BJ\.[0-9]{6})$")
     start: AwareDatetime
     end: AwareDatetime
-    source: str = Field(default="tdx", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    source: str = Field(default="auto", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
 
     @model_validator(mode="after")
     def bounds(self):
-        if (self.start > self.end or self.end - self.start > timedelta(days=60)
-                or any(value.second or value.microsecond for value in (self.start, self.end))):
+        if (
+            self.start > self.end
+            or self.end - self.start > timedelta(days=60)
+            or any(value.second or value.microsecond for value in (self.start, self.end))
+        ):
             raise ValueError("Choose ordered, whole-minute timestamps spanning at most 60 days")
         return self
 
 
 class ProductReleaseRequest(ProductCoverageRequest):
-    name: str | None = Field(default=None, min_length=1, max_length=80, pattern=r"^\S(?:[^\r\n]*\S)?$")
+    name: str | None = Field(
+        default=None, min_length=1, max_length=80, pattern=r"^\S(?:[^\r\n]*\S)?$"
+    )
     mode: Literal["covered_research", "price_only_no_limits"] = "covered_research"
 
 

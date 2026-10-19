@@ -15,8 +15,11 @@ from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
 
 P = "/api/v1/product"
-QUERY = {"security": "600000.XSHG", "start": "2026-06-03T09:30:00+08:00",
-         "end": "2026-06-03T09:30:00+08:00"}
+QUERY = {
+    "security": "600000.XSHG",
+    "start": "2026-06-03T09:30:00+08:00",
+    "end": "2026-06-03T09:30:00+08:00",
+}
 
 
 def write(path, value):
@@ -32,27 +35,65 @@ def case(tmp_path):
     from ashare_data.storage.local_daily import LocalDailyStore
 
     for name, value in (("a", "10"), ("b", "20"), ("same", "10")):
-        write(tmp_path / f"{name}.json", {"schema": "ad-tdx-minute-session.v1", "minute": [{
-            "security": QUERY["security"], "source_label": QUERY["start"], "open": value,
-            "evidence": "synthetic configuration snapshot fixture",
-        }]})
+        write(
+            tmp_path / f"{name}.json",
+            {
+                "schema": "ad-tdx-minute-session.v1",
+                "minute": [
+                    {
+                        "security": QUERY["security"],
+                        "source_label": QUERY["start"],
+                        "open": value,
+                        "evidence": "synthetic configuration snapshot fixture",
+                    }
+                ],
+            },
+        )
     (tmp_path / "selected.json").symlink_to(tmp_path / "a.json")
-    doc = {"schema": "ashare-deployment.v1", "data_root": ".", "assets": {
-        "main": {"kind": "local_daily", "path": "daily", "role": "market"},
-        "releases": {"kind": "store", "path": "releases", "role": "publication"},
-        "minute-tdx": {"kind": "reference", "path": "selected.json", "role": "bounded_research"},
-        "minute-hf-download": {"kind": "reference", "path": "unused-hf", "role": "bounded_research"},
-    }, "profiles": {"product": {"kind": "product", "daily_asset": "main",
-        "release_store_asset": "releases", "control_db": "state/control.sqlite3",
-        "paper_root": "state/paper", "minute_sources": {
-            "tdx": {"reader": "tdx-session", "asset": "minute-tdx",
-                    "content": {"sha256": sha(tmp_path / "a.json")},
-                    "coverage": "synthetic", "limits": []},
-            "neigezhu": {"reader": "neigezhu-native", "asset": "minute-hf-download",
-                         "manifest": {"path": "unused.csv", "sha256": "a" * 64},
-                         "review": {"path": "unused.json", "sha256": "b" * 64},
-                         "coverage": "synthetic unused registration", "limits": []},
-        }}}}
+    doc = {
+        "schema": "ashare-deployment.v1",
+        "data_root": ".",
+        "assets": {
+            "main": {"kind": "local_daily", "path": "daily", "role": "market"},
+            "releases": {"kind": "store", "path": "releases", "role": "publication"},
+            "minute-tdx": {
+                "kind": "reference",
+                "path": "selected.json",
+                "role": "bounded_research",
+            },
+            "minute-hf-download": {
+                "kind": "reference",
+                "path": "unused-hf",
+                "role": "bounded_research",
+            },
+        },
+        "profiles": {
+            "product": {
+                "kind": "product",
+                "daily_asset": "main",
+                "release_store_asset": "releases",
+                "control_db": "state/control.sqlite3",
+                "paper_root": "state/paper",
+                "minute_sources": {
+                    "tdx": {
+                        "reader": "tdx-session",
+                        "asset": "minute-tdx",
+                        "content": {"sha256": sha(tmp_path / "a.json")},
+                        "coverage": "synthetic",
+                        "limits": [],
+                    },
+                    "neigezhu": {
+                        "reader": "neigezhu-native",
+                        "asset": "minute-hf-download",
+                        "manifest": {"path": "unused.csv", "sha256": "a" * 64},
+                        "review": {"path": "unused.json", "sha256": "b" * 64},
+                        "coverage": "synthetic unused registration",
+                        "limits": [],
+                    },
+                },
+            }
+        },
+    }
     entry = tmp_path / "deployment.json"
     write(entry, doc)
     config = resolve(entry)
@@ -60,7 +101,9 @@ def case(tmp_path):
     initialize(config)
     other = copy.deepcopy(doc)
     other["assets"]["minute-tdx"]["path"] = "b.json"
-    other["profiles"]["product"]["minute_sources"]["tdx"]["content"]["sha256"] = sha(tmp_path / "b.json")
+    other["profiles"]["product"]["minute_sources"]["tdx"]["content"]["sha256"] = sha(
+        tmp_path / "b.json"
+    )
     return config, doc, other
 
 
@@ -73,8 +116,10 @@ def ready(client):
 
 
 def refused(client):
-    for response in (client.get(P + "/minute/sources"),
-                     client.post(P + "/minute/prices", json=QUERY)):
+    for response in (
+        client.get(P + "/minute/sources"),
+        client.post(P + "/minute/prices", json=QUERY),
+    ):
         assert response.status_code == 409, response.text
         assert response.json()["error"]["code"] == "PRODUCT_CONFIGURATION_CHANGED"
         assert response.json()["error"]["details"]["restart_required"] is True
@@ -85,8 +130,19 @@ def refused(client):
     return config
 
 
-@pytest.mark.parametrize("change", ["path_and_pin", "path_only", "content_pin", "manifest_pin",
-                                   "review_pin", "symlink", "missing", "malformed"])
+@pytest.mark.parametrize(
+    "change",
+    [
+        "path_and_pin",
+        "path_only",
+        "content_pin",
+        "manifest_pin",
+        "review_pin",
+        "symlink",
+        "missing",
+        "malformed",
+    ],
+)
 def test_live_changes_require_restart_and_cannot_mix_old_identity_with_new_data(case, change):
     config, original, other = case
     updated = copy.deepcopy(original)
@@ -130,8 +186,12 @@ def test_live_changes_require_restart_and_cannot_mix_old_identity_with_new_data(
                 assert response.json()["error"]["code"] == "PRODUCT_MINUTE_INTEGRITY"
             else:
                 assert response.status_code == 200, response.text
-                assert response.json()["rows"][0]["open"] == ("20" if change == "path_and_pin" else "10")
-                path = next(a["path"] for a in description["assets"] if a.get("name") == "minute-tdx")
+                assert response.json()["rows"][0]["open"] == (
+                    "20" if change == "path_and_pin" else "10"
+                )
+                path = next(
+                    a["path"] for a in description["assets"] if a.get("name") == "minute-tdx"
+                )
                 assert response.json()["binding"]["path"] == path
 
 
@@ -176,7 +236,10 @@ def test_fixed_config_formatting_and_source_failure_do_not_require_restart(case)
         config.deployment.write_text(json.dumps(original, indent=4, sort_keys=True))
         after, _ = ready(client)
         assert after["configuration_id"] == before["configuration_id"]
-        for source in ("auto", "neigezhu"):
+        assert (
+            client.post(P + "/minute/prices", json={**QUERY, "source": "auto"}).status_code == 200
+        )
+        for source in ("missing", "neigezhu"):
             response = client.post(P + "/minute/prices", json={**QUERY, "source": source})
             assert response.status_code == 422
             assert response.json()["error"]["code"] != "PRODUCT_CONFIGURATION_CHANGED"
