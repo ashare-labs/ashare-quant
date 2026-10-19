@@ -35,15 +35,15 @@ wheels = [
 
 [[package]]
 name = "ashare-data"
-version = "0.10.0.dev9"
-source = { path = "local-dependencies/ashare_data-0.10.0.dev9-py3-none-any.whl" }
+version = "0.10.0.dev10"
+source = { path = "local-dependencies/ashare_data-0.10.0.dev10-py3-none-any.whl" }
 dependencies = [
     { name = "duckdb" },
     { name = "numpy" },
     { name = "pandas" },
 ]
 wheels = [
-    { filename = "ashare_data-0.10.0.dev9-py3-none-any.whl", hash = "sha256:cdb953c950b1e3edb2e3f627084cdcac84a7ae6d71173317e9a60e5164adf22a" },
+    { filename = "ashare_data-0.10.0.dev10-py3-none-any.whl", hash = "sha256:c218d51aa00dc3fc693ddd849e60f89edcd8419ffdc75103977e9956bcc7b4d6" },
 ]
 
 [package.metadata]
@@ -60,7 +60,7 @@ provides-extras = ["local-data"]
 
 [[package]]
 name = "ashare-quant"
-version = "0.12.0.dev11"
+version = "0.12.0.dev12"
 source = { editable = "." }
 dependencies = [
     { name = "ashare-data" },
@@ -143,7 +143,7 @@ requires-dist = [
     { name = "annotated-doc", marker = "extra == 'native'", specifier = "==0.0.5" },
     { name = "annotated-types", marker = "extra == 'native'", specifier = "==0.8.0" },
     { name = "anyio", marker = "extra == 'native'", specifier = "==4.15.1" },
-    { name = "ashare-data", path = "local-dependencies/ashare_data-0.10.0.dev9-py3-none-any.whl" },
+    { name = "ashare-data", path = "local-dependencies/ashare_data-0.10.0.dev10-py3-none-any.whl" },
     { name = "certifi", marker = "extra == 'native'", specifier = "==2026.7.22" },
     { name = "charset-normalizer", marker = "extra == 'native'", specifier = "==3.5.2" },
     { name = "click", marker = "extra == 'native'", specifier = "==8.5.0" },
