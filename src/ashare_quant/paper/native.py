@@ -824,7 +824,9 @@ def main():
     from ashare_quant.paper.online_contracts import INTRADAY_MODELS
 
     declared = (
-        plan_for(session, decision).initial_inventory if session.model == REBALANCE_MODEL else None
+        plan_for(session, decision).initial_inventory
+        if session.model == REBALANCE_MODEL and "continuation" not in request
+        else None
     )
     runtime.update(
         declared_inventory={s: q for s, q in declared.quantities.items() if q}

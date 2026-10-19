@@ -17,11 +17,13 @@ from pydantic import AwareDatetime, Field, model_validator
 import ashare_quant.portfolio.signals as signals
 from ashare_quant.contracts import Contract
 from ashare_quant.paper.contracts import Sha
-from ashare_quant.paper.intraday_contracts import IntradayPlan
+from ashare_quant.paper.intraday_contracts import REBALANCE_MODEL, IntradayPlan
 from ashare_quant.paper.risk import require
+from ashare_quant.paper.settled_migration import Authorization, authorization_gate
 from ashare_quant.storage.artifacts import atomic, digest, lock, regular, sha
 
 SCHEMA = "paper-calendar-hold-successor.v2"
+V3_SCHEMA = "paper-declared-inventory-hold-successor.v1"
 RETIRED = {"continuation", "archived_continuation", "runtime_authorization", "calendar_successor"}
 
 
@@ -30,7 +32,9 @@ def now():
 
 
 class Successor(Contract):
-    schema_version: Literal["paper-calendar-hold-successor.v2"] = SCHEMA
+    schema_version: Literal[
+        "paper-calendar-hold-successor.v2", "paper-declared-inventory-hold-successor.v1"
+    ] = SCHEMA
     origin_identity: Sha
     origin_engine_pin: dict
     from_runtime_pin: dict
@@ -48,10 +52,16 @@ class Successor(Contract):
     hold_targets: dict[str, int] = Field(min_length=3, max_length=3)
     action_baseline_lineage: tuple[Sha, ...] = Field(min_length=1)
     original_files: dict[str, Sha]
+    runtime_upgrade: Authorization | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def bounded(self):
         a, b = self.origin_plan, self.plan
+        model = (
+            REBALANCE_MODEL
+            if self.schema_version == V3_SCHEMA
+            else "prior-close-intent-minute-partial-cancel.v2"
+        )
         mutable = {
             "day",
             "start_at",
@@ -62,7 +72,7 @@ class Successor(Contract):
             "action_baseline_sha256",
         }
         require(
-            a.model == b.model == "prior-close-intent-minute-partial-cancel.v2"
+            a.model == b.model == self.genesis_plan.model == model
             and b.day > a.day
             and self.bound_at < b.start_at
             and self.genesis_plan.day <= a.day
@@ -77,6 +87,13 @@ class Successor(Contract):
             and bool(self.original_files),
             "PAPER_SUCCESSOR_SCOPE",
         )
+        if self.runtime_upgrade is not None:
+            require(self.schema_version == V3_SCHEMA, "PAPER_SUCCESSOR_SCOPE")
+            authorization_gate(
+                self.runtime_upgrade, self.origin_identity, self.origin_engine_pin, self.runtime_pin
+            )
+            require(self.from_runtime_pin == self.runtime_pin, "PAPER_SUCCESSOR_RUNTIME_CHANGED")
+            return self
         for pin in (self.origin_engine_pin, self.from_runtime_pin, self.runtime_pin):
             require(
                 set(pin) == {"sources", "runtime", "rq"}
@@ -110,6 +127,11 @@ def manifest_gate(value, config, decision=None):
             and r.get("intraday_plan") == m.plan.model_dump(mode="json"),
             "PAPER_CONTINUATION_HOLD_ONLY",
         )
+        if m.schema_version == V3_SCHEMA:
+            require(
+                r.get("continuation_mode") == "hold_actual_positions",
+                "PAPER_CONTINUATION_HOLD_ONLY",
+            )
     return m
 
 
@@ -119,6 +141,8 @@ def current_authority(state):
     m = selected_continuation(state)
     if "runtime_authorization" in state:
         return state["runtime_authorization"]["to_runtime_pin"]
+    if m is None and "settled_runtime_authorization" in state:
+        return state["settled_runtime_authorization"]["to_runtime_pin"]
     return m["runtime_pin"] if m is not None else state["engine_pin"]
 
 
@@ -129,6 +153,10 @@ def verify_previous(root, state, config):
     pin = current_authority(state)
     if selected_continuation(state) is not None:
         verify(root, state, config, pin)
+    elif "settled_runtime_authorization" in state:
+        from ashare_quant.paper.settled_migration import verify_state
+
+        verify_state(root, state, config, pin)
     else:
         require(pin == state["engine_pin"], "PAPER_RUNTIME_CHANGED")
     return pin
@@ -154,6 +182,11 @@ def verify_state(root, state, config, current_pin):
     raw = regular(root / "successor-origins" / (m.origin_state_sha256 + ".json"))
     require(sha(raw) == m.origin_state_sha256, "PAPER_SUCCESSOR_ORIGIN_CHANGED")
     before = json.loads(raw)
+    require(
+        (m.runtime_upgrade.model_dump(mode="json") if m.runtime_upgrade else None)
+        == before.get("settled_runtime_authorization"),
+        "PAPER_SETTLED_AUTHORIZATION_CHANGED",
+    )
     require(
         verify_previous(root, before, config) == m.from_runtime_pin,
         "PAPER_SUCCESSOR_ORIGIN_CHANGED",
@@ -215,6 +248,14 @@ def verify_request(request, config, decision, current_pin):
     from ashare_quant.paper.intraday_continuation import verify_binding
 
     m = manifest_gate(request["continuation"], config, decision)
+    if m.runtime_upgrade:
+        from ashare_quant.paper.settled_migration import installed_owner
+
+        require(
+            (m.runtime_upgrade.owner_content_sha256, m.runtime_upgrade.owner_reader_sha256)
+            == installed_owner(),
+            "PAPER_SETTLED_OWNER_CHANGED",
+        )
     verify_binding(m, request.get("continuation_binding"))
     require(
         "runtime_authorization" not in request
@@ -332,7 +373,8 @@ def bind(
             "PAPER_CONTINUATION_OWNER_SCOPE",
         )
         require(
-            not signals.scheduled("equal-weight", str(plan.day), day, False),
+            config.model == REBALANCE_MODEL
+            or not signals.scheduled("equal-weight", str(plan.day), day, False),
             "PAPER_CONTINUATION_REBALANCE_REQUIRED",
         )
         account, n = previous["native"]["account"], previous["native"]
@@ -351,6 +393,7 @@ def bind(
         )
         first = state["days"][min(state["days"])]
         m = Successor(
+            schema_version=V3_SCHEMA if config.model == REBALANCE_MODEL else SCHEMA,
             origin_identity=state["identity"],
             origin_engine_pin=state["engine_pin"],
             from_runtime_pin=prior_pin,
@@ -368,6 +411,7 @@ def bind(
             hold_targets={s: account["positions"][s]["quantity"] for s in config.universe},
             action_baseline_lineage=owned.get("baseline_lineage", [plan.action_baseline_sha256]),
             original_files=frozen_files(service.root),
+            runtime_upgrade=state.get("settled_runtime_authorization"),
         )
         manifest_gate(m, config)
         archive = service.root / "successor-origins" / (sha(raw) + ".json")

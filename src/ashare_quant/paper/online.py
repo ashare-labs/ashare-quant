@@ -98,6 +98,10 @@ class OnlineService:
             from ashare_quant.paper.intraday_continuation import verify_state
 
             verify_state(self.root, state, config, engine_pin())
+        elif verify and "settled_runtime_authorization" in state:
+            from ashare_quant.paper.settled_migration import verify_state
+
+            verify_state(self.root, state, config, engine_pin())
         elif verify:
             require(state["engine_pin"] == engine_pin(), "PAPER_RUNTIME_CHANGED")
         if "calendar_plan" in state:
@@ -259,6 +263,11 @@ class OnlineService:
         day = decision.trading_date.isoformat()
         with lock(self.root / "writer.lock"):
             state, config = self._load()
+            require(
+                "settled_runtime_authorization" not in state
+                or selected_continuation(state) is not None,
+                "PAPER_MIGRATED_ACCOUNT_BINDING_REQUIRED",
+            )
             if selected_continuation(state) is not None:
                 require(
                     (decision.strategy_receipt or {}).get("continuation")
@@ -447,6 +456,10 @@ class OnlineService:
         require(bool(reason.strip()), "PAPER_RECOVERY_REASON")
         with lock(self.root / "writer.lock"):
             state, _ = self._load()
+            if "settled_runtime_authorization" in state and all(
+                row["status"] == "committed" for row in state["days"].values()
+            ):
+                return state
             for day, row in state["days"].items():
                 if row["status"] not in {"failed", "running"}:
                     continue
@@ -667,7 +680,7 @@ class OnlineService:
             ),
         )
         result["runtime_matches"] = state["engine_pin"] == engine_pin()
-        if selected_continuation(state) is not None:
+        if selected_continuation(state) is not None or "settled_runtime_authorization" in state:
             result["origin_runtime_matches"] = result["runtime_matches"]
             try:
                 self._load()

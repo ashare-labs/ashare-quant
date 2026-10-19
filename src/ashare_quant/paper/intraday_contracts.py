@@ -162,7 +162,7 @@ def plan_for(config, decision):
 
 def decision_gate(config, decision):
     p = plan_for(config, decision)
-    if p.model == REBALANCE_MODEL:
+    if p.model == REBALANCE_MODEL and (decision.strategy_receipt or {}).get("continuation") is None:
         from ashare_quant.storage.artifacts import digest
 
         require(
@@ -209,9 +209,14 @@ def execution_gate(config, decision, opening):
             "PAPER_INTRADAY_MINUTE_CAUSALITY",
         )
         delta = (
-            decision.targets[sid] - p.initial_inventory.quantities[sid]
+            0
             if p.model == REBALANCE_MODEL
-            else 1
+            and (decision.strategy_receipt or {}).get("continuation") is not None
+            else (
+                decision.targets[sid] - p.initial_inventory.quantities[sid]
+                if p.model == REBALANCE_MODEL
+                else 1
+            )
         )
         tick = Decimal(p.buy_slippage) * (1 if delta > 0 else -1 if delta < 0 else 0)
         require(

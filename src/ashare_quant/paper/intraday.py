@@ -127,13 +127,13 @@ def prepare(service, reader, plan, admission):
     )
     previous = service.report(state["last_day"], "closing") if successor else None
     account = previous["native"]["account"] if previous else None
-    rebalance = plan.model == REBALANCE_MODEL
+    rebalance = plan.model == REBALANCE_MODEL and not successor
     if rebalance:
         require(
             not successor and daily["signal_day"] == str(plan.initial_inventory.as_of),
             "PAPER_REBALANCE_SEED_DAY",
         )
-    scheduled = not rebalance and signals.scheduled(
+    scheduled = plan.model != REBALANCE_MODEL and signals.scheduled(
         "equal-weight", str(plan.day), daily["signal_day"], not successor
     )
     if successor:
@@ -180,6 +180,11 @@ def prepare(service, reader, plan, admission):
             equity=account["nav"],
             parent=state["head"],
         )
+        if plan.model == REBALANCE_MODEL:
+            receipt.update(
+                model="same v3 native account; explicit hold of actual positions",
+                continuation_mode="hold_actual_positions",
+            )
     rows = []
     for fact in facts["assessment"]["rows"]:
         sid = fact["security"]
@@ -259,7 +264,11 @@ def deliver(service, reader, plan, capture):
         sid = r["security"]
         e = dict(r["execution"])
         if plan.model == REBALANCE_MODEL:
-            delta = decision.targets[sid] - plan.initial_inventory.quantities[sid]
+            delta = (
+                0
+                if (decision.strategy_receipt or {}).get("continuation") is not None
+                else decision.targets[sid] - plan.initial_inventory.quantities[sid]
+            )
             tick = Decimal(plan.buy_slippage) * (1 if delta > 0 else -1 if delta < 0 else 0)
             e["match_price"] = str(Decimal(e["raw_close"]) + tick)
         review = r["action_scope"]["price_share_code_review"]

@@ -57,10 +57,10 @@ class Continuation(Contract):
 
 
 def manifest_gate(value, config, decision=None):
-    if (
-        isinstance(value, dict)
-        and value.get("schema_version") == "paper-calendar-hold-successor.v2"
-    ):
+    if isinstance(value, dict) and value.get("schema_version") in {
+        "paper-calendar-hold-successor.v2",
+        "paper-declared-inventory-hold-successor.v1",
+    }:
         from ashare_quant.paper.calendar_successor import manifest_gate as successor_gate
 
         return successor_gate(value, config, decision)
@@ -150,7 +150,10 @@ def verify_state(root, state, config, current_pin):
 
 
 def verify_request(request, config, decision, current_pin):
-    if request["continuation"].get("schema_version") == "paper-calendar-hold-successor.v2":
+    if request["continuation"].get("schema_version") in {
+        "paper-calendar-hold-successor.v2",
+        "paper-declared-inventory-hold-successor.v1",
+    }:
         from ashare_quant.paper.calendar_successor import verify_request as verify_successor_request
 
         return verify_successor_request(request, config, decision, current_pin)
