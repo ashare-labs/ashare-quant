@@ -1,18 +1,21 @@
 """General market selection, independent of the fixed daily evaluation protocol."""
 
 from datetime import date, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.backtests.daily.contracts import Sha
-from ashare_quant.contracts import Contract, ErrorBody, MarketSecurity
+from ashare_quant.contracts import Contract, ErrorBody
 from ashare_quant.tasks.portfolio.contracts import PortfolioDataset
 from ashare_quant.tasks.result_contracts import JSONObject
 
 
+ProductSecurity = Annotated[str, Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE)|BJ\.[0-9]{6})$")]
+
+
 class ProductSelection(Contract):
-    securities: tuple[MarketSecurity, ...] = Field(min_length=1)
+    securities: tuple[ProductSecurity, ...] = Field(min_length=1)
     start: date
     end: date
     source: str = Field(default="auto", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")

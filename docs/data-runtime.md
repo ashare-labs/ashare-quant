@@ -141,3 +141,18 @@ catalog 中新增 `account_reader`，含相对 `python`、`entry` 路径，以�
 正式对象、全部已提交祖先版本及元数据，支持失败续传。`apply --plan` 只替换受影响的完整
 证券分块，保留旧文件；变更证据、批次与来源版本必须固定。完整源库与账户备份仍有各自
 独立边界，行情恢复不声称包含外部 raw 原件或既有模拟账户。
+
+### Coverage repair readers
+
+The released research product accepts `BJ.832317` style Beijing identities alongside
+`600000.XSHG` and `000001.XSHE`; this does not broaden trading-engine admission.
+Canonical daily reads include evidenced historical observations and disjoint free-stockdb
+supplements. Canonical minute supplements use whole absent security days, never guessed
+intraday alignment. Explicit `free_stockdb` minute queries read the published supplement;
+explicit `neigezhu` queries retain frozen original observations and per-row restrictions.
+Explicit daily provider queries preserve the old provider-specific research scope.
+
+A retained runtime bundle fixes both owner and backend source hashes and dependency
+versions. Source pinning records the full commit and tree. Native audit manifests and
+reviews resolve inside the selected release after a restore; raw original source assets
+remain separate required dependencies for explicit original-observation queries.

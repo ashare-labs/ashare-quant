@@ -1,5 +1,7 @@
 """Public package works without private receipts or market data."""
 
+from importlib.metadata import version
+
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
@@ -10,7 +12,7 @@ def test_owner_identity_is_public_source_not_private_receipt():
     pin = source_pin()
     assert len(pin["commit"]) == 40
     assert pin["source_verification"] == "committed_candidate_content"
-    assert pin["version"] == "0.10.0.dev6"
+    assert pin["version"] == version("ashare-data")
     assert pin["portable_owner_version"] == "0.10.0.dev1"
     assert "wheel" not in pin and "review" not in pin
     assert pin["contract_review"]["scope"] == "data_production_contract_only"
