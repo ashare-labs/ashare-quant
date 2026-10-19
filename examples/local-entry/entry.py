@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import os
+import runpy
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -36,6 +37,9 @@ def main():
     sub.add_parser("list", help="列出全部数据资产、真实位置、状态和限制")
     show = sub.add_parser("show", help="显示一个资产的来源和使用方式")
     show.add_argument("id")
+    sub.add_parser("accounts", help="列出已登记并核验的模拟账户")
+    account = sub.add_parser("account", help="只读已登记账户的结算、委托、成交与持仓")
+    account.add_argument("id")
     library = sub.add_parser("library", help="搜索正式日线库证券")
     library.add_argument("--query", default="")
     library.add_argument("--limit", type=int, default=10)
@@ -76,6 +80,13 @@ def main():
     args = parser.parse_args()
     catalog = json.loads((ROOT / "catalog.json").read_text())
     assets = {item["id"]: item for item in catalog["datasets"]}
+    if args.command in ["accounts", "account", "api"]:
+        adapter = runpy.run_path(str(ROOT / "account_entry.py"))
+        if args.command == "api":
+            return adapter["run_api"](ROOT)
+        result = adapter["catalogue"](ROOT) if args.command == "accounts" else adapter["view"](ROOT, args.id)
+        emit(result)
+        return 0
     if args.command == "list":
         emit(
             {
@@ -94,6 +105,28 @@ def main():
         return 0
     if args.command == "show":
         emit(assets[args.id])
+        return 0
+    if args.command in ["doctor", "commands"]:
+        from ashare_quant.deployment import resolve
+        from ashare_quant.deployment.runtime import commands, doctor
+
+        config = resolve(ROOT / "deployment.json", "product")
+        if args.command == "commands":
+            result = commands(config)
+            result.update(api=[str(ROOT / "data"), "api"], accounts=[str(ROOT / "data"), "accounts"], account=[str(ROOT / "data"), "account", "<account_id>"])
+        else:
+            result = doctor(config)
+            if catalog.get("account_registry"):
+                adapter = runpy.run_path(str(ROOT / "account_entry.py"))
+                try:
+                    accounts = adapter["catalogue"](ROOT)
+                    result["registered_accounts"] = {"configured": True, "ready": True, **accounts}
+                except Exception as exc:
+                    result["ready"] = False
+                    result["registered_accounts"] = {"configured": True, "ready": False, "error": getattr(exc, "code", type(exc).__name__)}
+            else:
+                result["registered_accounts"] = {"configured": False, "accounts": []}
+        emit(result)
         return 0
     if args.command in ["doctor", "commands", "api", "worker"]:
         from ashare_quant.deployment.__main__ import main as deployment_main
@@ -253,10 +286,15 @@ def main():
 
 
 if __name__ == "__main__":
+    from ashare_quant.contracts import DomainError
+
     try:
         raise SystemExit(main())
     except DataError as error:
         emit({"error": error.as_dict()})
+        raise SystemExit(2)
+    except DomainError as error:
+        emit({"error": error.body()})
         raise SystemExit(2)
     except (ValueError, KeyError, OSError) as error:
         emit({"error": str(error)})
