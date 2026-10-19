@@ -16,13 +16,15 @@ from ashare_quant.tasks.openapi import document, portfolio_document
 
 
 @contextmanager
-def isolated_configuration():
+def isolated_configuration(config_home):
     """Contract generation cannot select a developer's live deployment or daily store."""
-    keys = ("ASHARE_DEPLOYMENT", "ASHARE_DATA_ROOT", "ASHARE_QUANT_DB", "ASHARE_QUANT_DAILY_STORE")
+    keys = ("ASHARE_DEPLOYMENT", "ASHARE_DATA_ROOT", "ASHARE_QUANT_DB", "ASHARE_QUANT_DAILY_STORE", "XDG_CONFIG_HOME")
     previous = {key: os.environ.pop(key) for key in keys if key in os.environ}
+    os.environ["XDG_CONFIG_HOME"] = str(config_home)
     try:
         yield
     finally:
+        os.environ.pop("XDG_CONFIG_HOME", None)
         os.environ.update(previous)
 
 
@@ -31,7 +33,7 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("docs/contracts"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    with isolated_configuration(), tempfile.TemporaryDirectory(prefix="aq-contracts-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="aq-contracts-") as temporary, isolated_configuration(Path(temporary) / "config"):
         root = Path(temporary)
         app = create_app(str(root / "control.sqlite3"), market_stores={}, diagnostics_configuration={})
         if getattr(app.state, "database_error", None):

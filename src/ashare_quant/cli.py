@@ -34,7 +34,9 @@ def selected_runtime(args):
     stateless = {"capabilities", "scenarios", "source-diagnostics-capabilities", "source-diagnostics"}
     if args.command in stateless or args.command.startswith("market-"):
         return None
-    selected = args.deployment or os.getenv("ASHARE_DEPLOYMENT") or os.getenv("ASHARE_DATA_ROOT")
+    from ashare_quant.deployment.configuration import deployment_path
+
+    selected = deployment_path(args.deployment)
     if selected:
         from ashare_quant.deployment import resolve
         from ashare_quant.deployment.runtime import require_initialized

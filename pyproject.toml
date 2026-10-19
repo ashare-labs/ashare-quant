@@ -95,6 +95,8 @@ dev = ["pytest==9.1.1", "httpx==0.28.1", "ruff==0.16.6", "packaging==26.3"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+tmp_path_retention_count = 0
+tmp_path_retention_policy = "none"
 
 [tool.ruff]
 target-version = "py312"

@@ -55,7 +55,9 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
                              422: {"model": ErrorResponse | ValidationResponse}})
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     try:
-        if product_configuration is None and (os.getenv("ASHARE_DEPLOYMENT") or os.getenv("ASHARE_DATA_ROOT")):
+        from ashare_quant.deployment.configuration import deployment_path
+
+        if product_configuration is None and deployment_path() is not None:
             from ashare_quant.product.service import environment_configuration
 
             product_configuration = environment_configuration()

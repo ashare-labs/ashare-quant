@@ -1,5 +1,5 @@
 {
-  "commit": "11cb47455e5e3f8ba77e3325a829d36f0f0d1999",
+  "commit": "3f06a1df058328bbe4e19732f4709f18cef3bf13",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -66,9 +66,9 @@
     "observations/intraday_refresh.py": "8ab1ede7b7c49d03406ea299dea7a1496885b46df5237c80db66ff99294fad78",
     "observations/phases.py": "b756757ade4bce0e84a908c38c60524a75ed721102f16f9d1823bee03d6358a8",
     "observations/response_replay.py": "426051222f234af62a2f4b3958b7a62759f8b9509ba7e952ae0cac9cbed094f1",
-    "product/__init__.py": "2dd5d142626fbe8a75f1ea351846f8f3f918d07c3bc2386a7bf46f543f86e5b3",
+    "product/__init__.py": "dd8503a22cea3bb2a3ecf2ec60b2b40202a05b128c3f606add4ca5873af99350",
     "product/__main__.py": "67978ed889b8f2079838cdb747e5dffacfc6042cf9390041beeb161479f359a6",
-    "product/configuration.py": "15e6d6e6d61198f2a908e8ec77b395a56b44ab5794a6a8d552a3bb69117d1623",
+    "product/configuration.py": "b28813ec71520c8356f8cf4da7e0a7f961ec9e2043b1a89d6b3f80e4dbe9b4d8",
     "product/daily.py": "6554276f6e0b1e2d7e8c94152fb017648878797f048904c899d79e52a6a4a1e9",
     "product/minute.py": "c135190c39703565bd22d9cc0f05b9470aa669877c89475a08734e33313a8b5e",
     "product/publication.py": "a626de783baf4498120286b4b6a0b2e79b2fa880094240cf61d869dcab7027d0",
@@ -136,14 +136,14 @@
     "research/snapshots.py": "eecca42a543961e0c5b631b241aba87c5a299918b1aa7a969adffe92cd92ea00",
     "storage/__init__.py": "478d5cd6162d6d82fcd67489e7e3befadd7cc953e42921965321bf393b1bab72",
     "storage/immutable.py": "5cdad651e1b491512ebc34ab84a436a503e3bae312d969e4b1fb932806730c32",
-    "storage/local_daily.py": "28db57c2e6d56dfdfb0b9c4a77b8b0e33e72f89784da100a5d9ef6a03370ace7"
+    "storage/local_daily.py": "6f1015a3e2b198e4c65b0c0d5f9624d2eaf880e47b300751ccb7ec51ecfc1928"
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "00be155e103aa5e2f0affa19b00868e33c4dbbaf0e6336a94ac76a3264eaf2dd",
+  "runtime_code_sha256": "8ebcc66eeec7305421e9987c0c4898a1c8263ecc90af40f533e9364570144863",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "8e9fa48d6c888dce727756c2c49932a45dfa346d",
+  "tree": "484ddbc39c6e1c55233ee149d34033f7f49be81c",
   "version": "0.10.0.dev5",
-  "wheel_sha256": "1610680f49586c48af21e9c163ced5692a220179d535400ee4b842b654ac08fa"
+  "wheel_sha256": "6e01f7ccc816977745a76fbcee53c0b8f2e2b7cd25078dc5a6df38fc0412f902"
 }

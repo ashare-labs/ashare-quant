@@ -104,3 +104,14 @@ python /delivery/runtime/rebuild_runtime.py /restore/venv --bundle /delivery/run
 ## 版本化统一入口模板
 
 [local-entry 模板](../examples/local-entry/README.md) 保存 `data`、`entry.py` 与可迁移的 deployment/catalog 示例，使用正常安装的配对 AD/AQ 包。真实数据、审计清单、质量覆盖文件和账户仍在仓库外。已有入口只增量合入分钟注册字段与对应 HF 条目，不整份覆盖现有目录登记、清理回执或运行配置；代码发布不自动部署或替换正在运行的冻结环境。
+
+
+### 用户默认清单
+
+AD/AQ 依次选择显式 --deployment、ASHARE_DEPLOYMENT、
+ASHARE_DATA_ROOT/deployment.json、$XDG_CONFIG_HOME/ashare/deployment.json。
+未设置 XDG_CONFIG_HOME 时使用 ~/.config/ashare/deployment.json；相对 XDG 路径不生效。
+用户配置可以是指向仓库外唯一部署清单的符号链接，不需要复制清单或原始数据。
+已有清单缺失、断链或无效时直接报错，不尝试其他库。发现配置不会初始化状态、启动服务或迁移账户。
+API、旧 CLI 和 AD 产品读取共用此选择；维护日线的显式 --root 仍优先。
+examples/local-entry/ 版本管理可复用的启动器和模板；部署实例里的数据、证据和账户不提交 Git。

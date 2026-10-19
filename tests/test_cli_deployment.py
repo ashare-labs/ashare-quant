@@ -164,3 +164,24 @@ def test_legacy_worker_runs_api_task_from_selected_deployment(deployment, tmp_pa
         assert result["audit"]["passed"] and result["trades"]
         assert result["receipt"]["corporate_entitlements"]["000651.XSHE"]
     assert not (tmp_path / ".state").exists()
+
+
+def test_user_config_unifies_cli_api_and_invalid_configuration(deployment, tmp_path, monkeypatch):
+    config_home = tmp_path / "user-config"
+    link = config_home / "ashare" / "deployment.json"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(deployment.deployment)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    assert resolve().control_db == deployment.control_db
+    run = legacy(tmp_path, ["tasks"], XDG_CONFIG_HOME=str(config_home))
+    assert run.returncode == 0, run.stdout + run.stderr
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/product/config")
+        assert response.status_code == 200 and response.json()["configured"]
+        assert response.json()["profile"] == "product"
+    link.unlink()
+    link.symlink_to(tmp_path / "missing.json")
+    run = legacy(tmp_path, ["tasks"], XDG_CONFIG_HOME=str(config_home))
+    assert run.returncode == 2
+    assert json.loads(run.stdout)["error"]["code"] == "DEPLOYMENT_INVALID"
+    assert not (tmp_path / ".state").exists()
