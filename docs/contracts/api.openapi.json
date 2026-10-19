@@ -6719,7 +6719,7 @@
                 "type": "null"
               }
             ],
-            "default": "2ccfe8709b443cfc6ee378a78986feeefa6da07f",
+            "default": "892e17e53d3d5ef6e9d004a9d0d2fcf22ce86242",
             "title": "Commit"
           },
           "name": {
@@ -6737,16 +6737,16 @@
                 "type": "null"
               }
             ],
-            "default": "15098441b7880477fba08f4a841e538baa1425eb",
+            "default": "b0905c268070601600ed16fd1d1eed8ebbc5c4fe",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev6",
+            "default": "0.10.0.dev7",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "ec822d0a7bd313ba0937697faef21c441628b70800f3067d856ad95a93118c9f",
+            "default": "e4d0755e1961b38183691df7638e3265bb6e365f25cd8ee055f4530481d179bb",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -6899,7 +6899,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev8",
+            "default": "0.12.0.dev9",
             "title": "Backend Version",
             "type": "string"
           },
@@ -7909,7 +7909,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev8"
+    "version": "0.12.0.dev9"
   },
   "openapi": "3.1.0",
   "paths": {

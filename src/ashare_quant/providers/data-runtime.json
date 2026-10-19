@@ -1,5 +1,5 @@
 {
-  "commit": "2ccfe8709b443cfc6ee378a78986feeefa6da07f",
+  "commit": "892e17e53d3d5ef6e9d004a9d0d2fcf22ce86242",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "2c9c03f02169ffddcc871d9e47485426cb1d7ee1c17c124efc50c6bd4c4e2e4e",
+    "__init__.py": "c89dfa02bd8bdab31dcfb08be40246fc3eb4a7c393c21f5a5b4a706a52b0e5ba",
     "cli/__init__.py": "3be5033eaf6ea9a1876a1690a355706cebeb4ea3c93d41b81a0edde99574a5f7",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/corporate_actions.py": "f3c7e7db677a12897594383897c19072a327cfb2874bcb2bc9669652ed655603",
@@ -74,7 +74,7 @@
     "product/minute.py": "545b1ef6ff1c881b420c4c33901ef0ea150c746609639c1caeb9cb4a5d48638b",
     "product/publication.py": "694646e418161f31da61092363a6be712b1d231dce5a4ce1e6460f4b9fc5c884",
     "product/references.py": "00bdf7e5a386e3412f0fe8a6baba27e9f97f38f721511d505c87a46238d1218a",
-    "product/release_cli.py": "5eda9c9995c2bba235c495e341c0f376b8523a61aca443dc3c4614bc0d48ad87",
+    "product/release_cli.py": "f926537e19c24d396c952159f75cf05642b30587041d90be3edddfad0a043f4d",
     "product/validation.py": "ff729ef7f37c6b5724be2009ece40659f78001e5ad5598ebf12b0e4e9fd4efef",
     "providers/__init__.py": "8b10b9a473601fac41f8c5831e2078b375c21edda014a8716c927808e5ce0240",
     "providers/baostock-sdk.json": "a7deb81f33010205f856583bcf2143a42aca3f415068ee6e61a7cc44534f7e27",
@@ -139,14 +139,15 @@
     "storage/__init__.py": "478d5cd6162d6d82fcd67489e7e3befadd7cc953e42921965321bf393b1bab72",
     "storage/immutable.py": "5cdad651e1b491512ebc34ab84a436a503e3bae312d969e4b1fb932806730c32",
     "storage/local_daily.py": "6f1015a3e2b198e4c65b0c0d5f9624d2eaf880e47b300751ccb7ec51ecfc1928",
+    "storage/market_coverage.py": "f2ddbe89bfdc0fbb7bad3263310679f2730eb2e11e9189c581695986a97cbe52",
     "storage/market_release.py": "e20e11cf62ae3e5b495b5e17a32d4fb2c48950000f3d14004d58a1ad0b309cd8"
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "8abdf303911680fda4b164bd583d26042facb24631e32248eacc05fdd9a1d2d1",
+  "runtime_code_sha256": "fca88fea1f70777ceea1de98ca763b91d20081625d1457aa7e674e8bcf285cba",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "15098441b7880477fba08f4a841e538baa1425eb",
-  "version": "0.10.0.dev6",
-  "wheel_sha256": "ec822d0a7bd313ba0937697faef21c441628b70800f3067d856ad95a93118c9f"
+  "tree": "b0905c268070601600ed16fd1d1eed8ebbc5c4fe",
+  "version": "0.10.0.dev7",
+  "wheel_sha256": "e4d0755e1961b38183691df7638e3265bb6e365f25cd8ee055f4530481d179bb"
 }
