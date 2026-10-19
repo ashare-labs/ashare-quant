@@ -46,6 +46,8 @@ class Source(DailySource):
         sid, at = instrument.order_book_id, dt.replace(tzinfo=SHANGHAI)
         require(at == self.host.at, "MINUTE_NATIVE_BAR_CLOCK")
         row = self.host.data.bars.get((sid, at))
+        if (sid, at) in self.host.data.gaps:
+            return None  # Native unavailable bar; no invented OHLC/volume.
         require(row is not None and row["_available"] <= at, "MINUTE_NATIVE_BAR_UNAVAILABLE")
         lower, upper = self.host.data.price_bounds(sid, str(at.date()), at=at)
         return {
@@ -127,6 +129,18 @@ class Matcher(DefaultBarMatcher):
         return super().match(account, order, open_auction)
 
     def _get_deal_price(self, order, instrument, open_auction=False):
+        reasons = self.host.data.execution_denial(order.order_book_id, self.host.at)
+        if reasons:
+            self.host.emit(
+                "quote_use_denied",
+                security=order.order_book_id,
+                order_id=str(order.order_id),
+                use="execution",
+                reasons=reasons,
+            )
+            raise OrderNotMatchable(
+                "Source-bound minute denial; order may continue at a later usable bar"
+            )
         row = self.host.data.bars.get((order.order_book_id, self.host.at))
         submitted = order.datetime.replace(tzinfo=SHANGHAI)
         if self.host.config["matching"] == "jq_current":
@@ -532,6 +546,11 @@ class Mod(AbstractMod):
                     avg_cost=float(pos.avg_price),
                     price=float(pos.last_price),
                     value=float(pos.market_value),
+                    **(
+                        {"valuation": self.data.valuation_mark(sid, self.at)}
+                        if self.data.generic_research
+                        else {}
+                    ),
                     **(
                         {"today_amount": int(pos.get_state()["non_closable"])}
                         if self.jq_lifecycle

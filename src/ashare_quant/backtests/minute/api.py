@@ -149,6 +149,11 @@ class Quote:
         return self._host.data.current(self._sid, self._host.at)
 
     @property
+    def valuation(self):
+        require(self._host.data.generic_research, "MINUTE_SOURCE_QUALITY_PROFILE_REQUIRED")
+        return self._host.data.valuation_mark(self._sid, self._host.at)
+
+    @property
     def paused(self):
         return self._state()["suspended"]
 

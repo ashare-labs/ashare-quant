@@ -1,0 +1,26 @@
+{
+  "schema": "ashare-local-catalog.v1",
+  "entry_root": ".",
+  "deployment": "deployment.json",
+  "code": {},
+  "datasets": [
+    {
+      "id": "minute-tdx",
+      "label": "Pinned TDX minute session",
+      "status": "requires_configuration",
+      "path": "assets/minute/tdx/session-source.json",
+      "access": "data minute --security 600000.XSHG --day YYYY-MM-DD",
+      "coverage": "Record actual source scope"
+    },
+    {
+      "id": "minute-hf-download",
+      "label": "HF neigezhu native minutes",
+      "status": "requires_configuration",
+      "path": "../ashare-data-local/minute/hf-neigezhu-1min-ohlcv",
+      "access": "data minute --source neigezhu --security 600000.XSHG --day YYYY-MM-DD",
+      "protected": true,
+      "strict_execution_admitted": false,
+      "historical_pit": false
+    }
+  ]
+}

@@ -6047,6 +6047,41 @@
         "title": "ProductCoverageRequest",
         "type": "object"
       },
+      "ProductMinuteSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "security": {
+            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+            "title": "Security",
+            "type": "string"
+          },
+          "source": {
+            "default": "tdx",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.-]+$",
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "security",
+          "start",
+          "end"
+        ],
+        "title": "ProductMinuteSelection",
+        "type": "object"
+      },
       "ProductRelease": {
         "additionalProperties": false,
         "properties": {
@@ -6684,7 +6719,7 @@
                 "type": "null"
               }
             ],
-            "default": "1591e6df219a0632dc4baa30ca32069cd97eb381",
+            "default": "11cb47455e5e3f8ba77e3325a829d36f0f0d1999",
             "title": "Commit"
           },
           "name": {
@@ -6702,7 +6737,7 @@
                 "type": "null"
               }
             ],
-            "default": "fcd0db0f465f8473d8fa6f4a3e08d3e4cede5d01",
+            "default": "8e9fa48d6c888dce727756c2c49932a45dfa346d",
             "title": "Tree"
           },
           "version": {
@@ -6711,7 +6746,7 @@
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "8675c3cee871f55eb2d6a8164f248501857c45a6a163a685eaf135afefff3ad3",
+            "default": "1610680f49586c48af21e9c163ced5692a220179d535400ee4b842b654ac08fa",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -10225,6 +10260,192 @@
           }
         },
         "summary": "Coverage"
+      }
+    },
+    "/api/v1/product/minute/prices": {
+      "post": {
+        "operationId": "minute_prices_api_v1_product_minute_prices_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductMinuteSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Minute Prices Api V1 Product Minute Prices Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Minute Prices Api V1 Product Minute Prices Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Minute Prices"
+      }
+    },
+    "/api/v1/product/minute/sources": {
+      "get": {
+        "operationId": "minute_sources_api_v1_product_minute_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Minute Sources Api V1 Product Minute Sources Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Minute Sources Api V1 Product Minute Sources Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Minute Sources"
       }
     },
     "/api/v1/product/prices": {

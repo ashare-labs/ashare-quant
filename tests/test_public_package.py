@@ -7,7 +7,7 @@ from ashare_quant.providers.daily.owner_wire import source_pin
 
 def test_owner_identity_is_public_source_not_private_receipt():
     pin = source_pin()
-    assert pin["commit"] == "1591e6df219a0632dc4baa30ca32069cd97eb381"
+    assert pin["commit"] == "11cb47455e5e3f8ba77e3325a829d36f0f0d1999"
     assert pin["version"] == "0.10.0.dev5"
     assert pin["portable_owner_version"] == "0.10.0.dev1"
     assert "wheel" not in pin and "review" not in pin

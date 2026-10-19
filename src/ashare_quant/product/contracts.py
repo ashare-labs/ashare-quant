@@ -1,9 +1,9 @@
 """General market selection, independent of the fixed daily evaluation protocol."""
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.backtests.daily.contracts import Sha
 from ashare_quant.contracts import Contract, ErrorBody, MarketSecurity
@@ -26,6 +26,20 @@ class ProductSelection(Contract):
 
 class ProductCoverageRequest(ProductSelection):
     reference_set: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+class ProductMinuteSelection(Contract):
+    security: str = Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE)|BJ\.[0-9]{6})$")
+    start: AwareDatetime
+    end: AwareDatetime
+    source: str = Field(default="tdx", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+
+    @model_validator(mode="after")
+    def bounds(self):
+        if (self.start > self.end or self.end - self.start > timedelta(days=60)
+                or any(value.second or value.microsecond for value in (self.start, self.end))):
+            raise ValueError("Choose ordered, whole-minute timestamps spanning at most 60 days")
+        return self
 
 
 class ProductReleaseRequest(ProductCoverageRequest):

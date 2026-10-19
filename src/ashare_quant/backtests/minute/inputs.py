@@ -53,7 +53,10 @@ class MinuteInputs:
         self.generic_research = doc["schema"] == generic.SCHEMA
         research = generic if self.generic_research else bounded
         self._research_policy = research
-        self.research = self.generic_research or doc["schema"] in {bounded.SCHEMA, bounded.SCHEMA_FULL}
+        self.research = self.generic_research or doc["schema"] in {
+            bounded.SCHEMA,
+            bounded.SCHEMA_FULL,
+        }
         self.full_session_input = doc["schema"] in {"ad-minute-backtest.v2", bounded.SCHEMA_FULL}
         require(
             self.research or doc["schema"] in {"ad-minute-backtest.v1", "ad-minute-backtest.v2"},
@@ -255,19 +258,23 @@ class MinuteInputs:
             volume = number(row["volume"], zero=True)
             require(volume == volume.to_integral_value(), "MINUTE_VOLUME_NOT_SHARES")
             amount = number(row["amount"], zero=True)
+            use_policy = None
             if self.research:
                 if self.generic_research:
-                    research.validate_bar_binding(row, doc)
+                    use_policy = research.validate_bar_binding(row, doc)
                 else:
                     require(
                         row["evidence"]["manifest_sha256"]
                         == doc["source_refs"]["tdx_manifest_sha256"][sid],
                         "MINUTE_RESEARCH_BAR_SOURCE_BINDING",
                     )
-                research.validate_activity(row, volume, amount, full=self.full_session_input)
-                research.check_price(self.states[sid, d], row["low"], row["high"])
+                if use_policy is None or use_policy["execution"] != "deny":
+                    research.validate_activity(row, volume, amount, full=self.full_session_input)
+                    research.check_price(self.states[sid, d], row["low"], row["high"])
             require(not self.states[sid, d]["suspended"], "MINUTE_SUSPENDED_BAR_CONFLICT")
             self.bars[key] = {**row, "_start": a, "_end": b, "_available": available}
+            if use_policy is not None:
+                self.bars[key]["_use_policy"] = use_policy
             self.by_security[sid].append(self.bars[key])
         expected = {
             (s, t)
@@ -276,7 +283,10 @@ class MinuteInputs:
             if not self.states[s, d]["suspended"]
             for t in self.ends[d]
         }
-        require(set(self.bars) == expected, "MINUTE_BAR_COVERAGE_GAP")
+        self.gaps = (
+            research.validate_gaps(doc, expected, set(self.bars)) if self.generic_research else {}
+        )
+        require(set(self.bars) | set(self.gaps) == expected, "MINUTE_BAR_COVERAGE_GAP")
         self.session_data = None
         if self.full_session_input:
             from ashare_quant.backtests.minute.session_data import SessionData
@@ -348,6 +358,8 @@ class MinuteInputs:
         return self.states[sid, day]
 
     def current(self, sid, at):
+        if self.generic_research:
+            return self.valuation_mark(sid, at)["price"]
         rows = self.visible(sid, at, count=1)
         today = [r for r in rows if r["_end"].date() == at.date()]
         state = self.state(sid, at.date().isoformat(), at=at)
@@ -356,6 +368,48 @@ class MinuteInputs:
             if opening["_available"] <= at:
                 return float(opening["price"])
         return float(today[-1]["close"] if today else state["previous_close"])
+
+    def execution_denial(self, sid, at):
+        if (sid, at) in self.gaps:
+            return ["no_quote_in_selected_snapshot"]
+        row = self.bars.get((sid, at))
+        policy = row.get("_use_policy", {}) if row else {}
+        return (
+            policy.get("reasons", ["explicit_denial"]) if policy.get("execution") == "deny" else []
+        )
+
+    def valuation_mark(self, sid, at):
+        """A stale account mark is never a new observation or a fill price."""
+        rows = self.visible(sid, at)
+        usable = [r for r in rows if r.get("_use_policy", {}).get("fresh_valuation") != "deny"]
+        last = usable[-1] if usable else None
+        current = self.bars.get((sid, at))
+        denied = (current or {}).get("_use_policy", {}).get("fresh_valuation") == "deny"
+        missing = (sid, at) in self.gaps
+        # Also retain the stale designation between the denied/missing label and
+        # the next usable observation, e.g. at after-close account snapshots.
+        latest_bad = max(
+            [t for s, t in self.gaps if s == sid and t <= at]
+            + [
+                r["_end"] for r in rows if r.get("_use_policy", {}).get("fresh_valuation") == "deny"
+            ],
+            default=None,
+        )
+        stale = (
+            denied
+            or missing
+            or (latest_bad is not None and (last is None or latest_bad > last["_end"]))
+        )
+        state = self.state(sid, str(at.date()), at=at)
+        return {
+            "price": float(last["close"] if last else state["previous_close"]),
+            "status": "stale"
+            if stale
+            else ("research_mark" if last else "previous_close_reference"),
+            "source_label": last["source_label"] if last else None,
+            "last_unavailable_label": latest_bad.isoformat() if stale and latest_bad else None,
+            "fresh_quote": bool(last is not None and last["_end"] == at and not stale),
+        }
 
     def valuation_price(self, sid, at):
         if self.session_data is not None:
@@ -429,6 +483,19 @@ class MinuteInputs:
                 }
                 result["valuation_basis"] = "last source label under declared research clock"
                 result["capabilities"] = self.document["research"]["capabilities"]
+                result["quote_use_policy"] = {
+                    "permission": "explicit_bounded_research_profile",
+                    "hard_denials_override_permission": True,
+                    "execution_denied_rows": sum(
+                        r["_use_policy"]["execution"] == "deny" for r in self.bars.values()
+                    ),
+                    "fresh_valuation_denied_rows": sum(
+                        r["_use_policy"]["fresh_valuation"] == "deny" for r in self.bars.values()
+                    ),
+                    "unavailable_slots": len(self.gaps),
+                    "missing_quote_is_missing_trade": False,
+                    "held_positions": "retain_quantity; last_usable_mark_explicitly_stale; never use stale mark for matching",
+                }
         if self.session_data is not None:
             result["session_observations"] = {
                 "schema": self.session_data.document["schema"],

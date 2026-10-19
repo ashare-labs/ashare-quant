@@ -13,7 +13,7 @@ from ashare_quant.backtests.minute.research import ASSUMPTIONS, MILESTONES, PROF
 ACCEPT = dict(accept_assumed=True, accept_state_replay=True, accept_research=True)
 
 
-def make_document(root, *, ids=("601234.XSHG", "000321.XSHE"), calendar=None):
+def make_document(root, *, ids=("601234.XSHG", "000321.XSHE"), calendar=None, edit=None):
     calendar = calendar or ["2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04"]
     days = calendar[1:-1]
     sessions = {d: [[d + "T09:30:00+08:00", d + "T09:34:00+08:00"]] for d in days}
@@ -161,7 +161,9 @@ def make_document(root, *, ids=("601234.XSHG", "000321.XSHE"), calendar=None):
                         historical_available_at=None,
                         intraday_halts_verified=False,
                         dependency_conflicts=[],
-                    source_quality=dict(execution_permission=False, limitations=["Synthetic fixture"]),
+                        source_quality=dict(
+                            execution_permission=False, limitations=["Synthetic fixture"]
+                        ),
                         previous_session=prior,
                         **{
                             k: dict(value=v, status="source_observed", source_refs=["fixture"])
@@ -181,17 +183,33 @@ def make_document(root, *, ids=("601234.XSHG", "000321.XSHE"), calendar=None):
                     ),
                 )
             )
+    if edit:
+        edit(bundle, metadata)
     with localcontext(Context(prec=28)):
         store = Store.init(root / "store")
         batch = store.import_bundle(bundle)
+        requirements = [
+            dict(symbols=list(ids), start=a, end=b)
+            for intervals in sessions.values()
+            for a, b in intervals
+        ]
+        if metadata.get("gap_policy") == "explicit_unavailable":
+            from datetime import datetime, timedelta
+
+            requirements = [
+                dict(
+                    symbols=[r["symbol"]],
+                    start=(
+                        datetime.fromisoformat(r["timestamp"]) - timedelta(minutes=1)
+                    ).isoformat(),
+                    end=r["timestamp"],
+                )
+                for r in bundle["bars"]
+            ]
         report = store.validate(
             [batch],
             policy="synthetic",
-            requirements=[
-                dict(symbols=list(ids), start=a, end=b)
-                for intervals in sessions.values()
-                for a, b in intervals
-            ],
+            requirements=requirements,
         )
         assert report["passed"]
         snapshot = store.publish(report["id"])
@@ -292,6 +310,7 @@ def test_zero_activity_needs_explicit_bound_phase_evidence(doc, tmp_path):
     row.update(volume="0", amount="0")
     row["evidence"]["ad_row"].update(volume="0", amount="0")
     row["evidence"]["row_sha256"] = digest(row["evidence"]["ad_row"])
+    row["use_policy"]["binding"]["row_sha256"] = row["evidence"]["row_sha256"]
     with pytest.raises(ValueError, match="ZERO_VOLUME_PHASE_EVIDENCE"):
         MinuteInputs(save(doc, tmp_path / "zero.json"), **ACCEPT)
 

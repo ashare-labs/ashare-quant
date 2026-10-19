@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+ashare_entry_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$ashare_entry_root/.venv/bin/python" -I -B "$ashare_entry_root/entry.py" "$@"

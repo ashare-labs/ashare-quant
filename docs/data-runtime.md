@@ -100,3 +100,7 @@ python /delivery/runtime/rebuild_runtime.py /restore/venv --bundle /delivery/run
 目标须为空目录。恢复先核对完整清单、文件 hash 和运行身份，再复制，并生成新的 `deployment.json` 与 `restore-receipt.json`。只改运行清单里的存储位置，原始清单保存在 `original-deployment.json`；任务输入、原始出处、native checkpoint 和回执不重写。状态包的正式主库路径仍是外部引用，缺失时 `doctor` 明确报告；已冻结任务仍可用恢复的状态运行。含源资产的包则把主库定位到恢复目录。
 
 用恢复后的配置启动 API/worker，核对原任务结果、资金、持仓和成交，再处理待执行任务。`verify` 和 `restore` 拒绝多余文件、缺失文件、路径越界、内容改变和非空目标；manifest 摘要须来自可信保存的回执。备份工具不会清理原目录，也不会修改旧服务。
+
+## 版本化统一入口模板
+
+[local-entry 模板](../examples/local-entry/README.md) 保存 `data`、`entry.py` 与可迁移的 deployment/catalog 示例，使用正常安装的配对 AD/AQ 包。真实数据、审计清单、质量覆盖文件和账户仍在仓库外。已有入口只增量合入分钟注册字段与对应 HF 条目，不整份覆盖现有目录登记、清理回执或运行配置；代码发布不自动部署或替换正在运行的冻结环境。

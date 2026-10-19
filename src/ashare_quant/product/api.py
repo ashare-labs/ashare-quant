@@ -9,6 +9,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.product.contracts import (
     ProductConfiguration,
     ProductCoverageRequest,
+    ProductMinuteSelection,
     ProductRelease,
     ProductReleaseRequest,
     ProductSelection,
@@ -73,6 +74,16 @@ def mount(app, store, configuration=None):
     def prices(body: ProductSelection, request: Request) -> dict:
         closed(request)
         return product.prices(body)
+
+    @app.get(prefix + "/minute/sources")
+    def minute_sources(request: Request) -> dict:
+        closed(request)
+        return product.minute_sources()
+
+    @app.post(prefix + "/minute/prices")
+    def minute_prices(body: ProductMinuteSelection, request: Request) -> dict:
+        closed(request)
+        return product.minute_prices(body)
 
     @app.post(prefix + "/releases", status_code=201)
     def publish(body: ProductReleaseRequest, request: Request) -> ProductRelease:

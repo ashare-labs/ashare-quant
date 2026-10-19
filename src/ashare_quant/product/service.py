@@ -1,6 +1,7 @@
 """Use the installed AD public API; never query or modify its source database."""
 
 import sqlite3
+from copy import deepcopy
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
@@ -31,8 +32,9 @@ def environment_configuration():
 class Product:
     def __init__(self, store, jobs, configuration=None):
         self.store, self.jobs = store, jobs
-        self.configuration = configuration
+        self.configuration = deepcopy(configuration)
         self.configuration_error = None
+        self.configuration_changed = False
         if configuration is None:
             try:
                 self.configuration = environment_configuration()
@@ -58,12 +60,46 @@ class Product:
             raise DomainError(
                 "PRODUCT_NOT_CONFIGURED", "Configure a daily asset and publication Store", 503
             )
+        self.require_configuration_snapshot(config)
         return config
 
-    def owner(self):
+    def require_configuration_snapshot(self, config):
+        """A running API never switches deployment bindings beneath its identity."""
+        if not self.configuration_changed:
+            from ashare_quant.deployment import resolve
+
+            try:
+                current = resolve(config.deployment, profile=config.profile)
+                if (
+                    current.document != config.document
+                    or current.data_root != config.data_root
+                    or {item.name: item for item in current.assets}
+                    != {item.name: item for item in config.assets}
+                ):
+                    self.configuration_changed = True
+            except DomainError:
+                self.configuration_changed = True
+        if self.configuration_changed:
+            raise DomainError(
+                "PRODUCT_CONFIGURATION_CHANGED",
+                "Deployment configuration changed or became unreadable; "
+                "restart the API with the selected deployment",
+                409, details={"deployment": str(config.deployment), "profile": config.profile,
+                              "restart_required": True},
+            )
+
+    def owner(self, *, minute=False):
         config = self.configured()
         verify_data_runtime()
         try:
+            if minute:
+                from ashare_data.product import LocalMinuteProduct
+
+                owner = LocalMinuteProduct(config.deployment, profile=config.profile)
+                if owner.document != config.document or owner.root != config.data_root:
+                    self.configuration_changed = True
+                    self.require_configuration_snapshot(config)
+                return owner
             from ashare_data.product import LocalDailyProduct
         except ImportError as exc:
             raise DomainError(
@@ -73,7 +109,7 @@ class Product:
             ) from exc
         return LocalDailyProduct(config.daily_root)
 
-    def call(self, operation):
+    def call(self, operation, *, minute=False):
         try:
             from ashare_data import DataError
         except ImportError as exc:
@@ -82,6 +118,13 @@ class Product:
             ) from exc
 
         try:
+            if minute:
+                config = self.configured()
+                try:
+                    return operation(self.owner(minute=True))
+                finally:
+                    # Also reject a deployment edit during source construction/read.
+                    self.require_configuration_snapshot(config)
             return operation(self.owner())
         except DataError as exc:
             raise DomainError(
@@ -115,6 +158,8 @@ class Product:
                 "profile": config.profile, "kind": config.kind, **paths,
                 "default_reference_set": config.default_reference_set,
                 "reference_sets": [item.references() for item in config.reference_sets],
+                "minute_sources": config.document["profiles"][config.profile].get("minute_sources", {}),
+                "asset_paths": {item.name: str(item.path) for item in config.assets},
             })
             assets = tuple({
                 "name": item.name, "kind": item.kind, "role": item.role,
@@ -137,6 +182,8 @@ class Product:
             capabilities={
                 "catalogue": error is None,
                 "prices": error is None,
+                "minute_sources": "/api/v1/product/minute/sources",
+                "minute_prices": "/api/v1/product/minute/prices",
                 "publish": error is None,
                 "portfolio": error is None,
                 "covered_research": error is None and bool(config and config.reference_sets),
@@ -165,6 +212,14 @@ class Product:
             list(selection.securities), str(selection.start), str(selection.end),
             source=selection.source,
         )))
+
+    def minute_sources(self):
+        return self.call(lambda owner: wire(owner.sources()), minute=True)
+
+    def minute_prices(self, selection):
+        return self.call(lambda owner: wire(owner.prices(
+            selection.security, selection.start, selection.end, source=selection.source,
+        )), minute=True)
 
     def coverage(self, selection):
         from ashare_quant.product.publication import check_coverage

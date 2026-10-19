@@ -206,6 +206,99 @@ def validate_bar_binding(row, doc):
     )
     if "phase_evidence" in row:
         refs(doc, row["phase_evidence"]["source_refs"])
+    # Recompute from the immutable AD row: accept_research cannot override a
+    # source denial, including in legacy exports lacking a top-level policy.
+    policy = source_use_policy(raw, source)
+    require(row.get("use_policy", policy) == policy, "MINUTE_RESEARCH_USE_POLICY_BINDING")
+    return policy
+
+
+def source_use_policy(raw, source):
+    """Consumer-side validation, including old exports with nested native facts."""
+    decision = {"execution": "not_granted", "fresh_valuation": "not_granted", "reasons": []}
+    obs = raw["source_fields"].get("native_observation")
+    require(
+        obs is not None or "audit_manifest_sha256" not in source,
+        "MINUTE_RESEARCH_USE_SOURCE_BINDING",
+    )
+    if obs is not None:
+        require(
+            obs["security"] == raw["symbol"]
+            and obs["source_label"] == raw["source_label"]
+            and obs["source_file_sha256"] == source.get("source_sha256")
+            and type(obs["source_row"]) is int
+            and obs["source_row"] >= 0
+            and isinstance(obs["source_path"], str)
+            and bool(obs["source_path"])
+            and obs["price_status"] in {"invalid", "conflict", "unverified"}
+            and all(
+                number(obs[k], zero=k in {"volume", "amount"})
+                == number(raw[k], zero=k in {"volume", "amount"})
+                for k in ("open", "high", "low", "close", "volume", "amount")
+            ),
+            "MINUTE_RESEARCH_USE_SOURCE_BINDING",
+        )
+        reasons = sorted(
+            set(obs.get("diagnostics", []))
+            & {
+                "nonfinite_volume",
+                "negative_volume",
+                "noninteger_volume",
+                "nonfinite_amount",
+                "negative_amount",
+                "null_volume",
+                "null_amount",
+            }
+        )
+        denied = obs["price_status"] in {"invalid", "conflict"}
+        if denied:
+            reasons.append("price_" + obs["price_status"])
+        decision = {
+            "execution": "deny" if denied or reasons else "not_granted",
+            "fresh_valuation": "deny" if denied else "not_granted",
+            "reasons": reasons,
+        }
+        require(obs.get("use_decision", decision) == decision, "MINUTE_RESEARCH_USE_POLICY_BINDING")
+    return {
+        "schema": "minute-row-use.v1",
+        **decision,
+        "binding": {
+            "source_id": raw["source_id"],
+            "source_contract_sha256": digest(source),
+            "row_sha256": digest(raw),
+        },
+    }
+
+
+def validate_gaps(doc, expected, present):
+    policy = doc.get("gap_policy", "reject")
+    require(policy in {"reject", "explicit_unavailable"}, "MINUTE_RESEARCH_GAP_POLICY")
+    declared = doc.get("unavailable_minutes", [])
+    require(policy == "explicit_unavailable" or not declared, "MINUTE_RESEARCH_GAP_POLICY")
+    gaps = {}
+    for gap in declared:
+        key = gap["security"], stamp(gap["source_label"])
+        proof = gap["evidence"]
+        coverage = proof["coverage"]
+        require(
+            key not in gaps
+            and key in expected
+            and key not in present
+            and gap["reason"] == "no_quote_in_selected_snapshot"
+            and gap["execution"] == gap["fresh_valuation"] == "deny"
+            and proof["snapshot_id"] == coverage["snapshot_id"] == doc["producer"]["snapshot_id"]
+            and proof["coverage_sha256"] == digest(coverage)
+            and not any(
+                coverage[k]
+                for k in ("unknown_calendar_dates", "unexpected", "excluded", "duplicate_keys")
+            )
+            and {"symbol": key[0], "bar_start": (key[1] - timedelta(minutes=1)).isoformat()}
+            in coverage["missing"],
+            "MINUTE_RESEARCH_GAP_BINDING",
+        )
+        gaps[key] = gap
+    require(present | set(gaps) == expected, "MINUTE_BAR_COVERAGE_GAP")
+    return gaps
 
 
 def validate_activity(row, volume, amount, *, full):

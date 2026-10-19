@@ -1,0 +1,77 @@
+{
+  "schema": "ashare-deployment.v1",
+  "data_root": ".",
+  "assets": {
+    "main": {
+      "kind": "local_daily",
+      "path": "../ashare-data-local",
+      "role": "market",
+      "retention": "preserve"
+    },
+    "releases": {
+      "kind": "store",
+      "path": "published",
+      "role": "publication",
+      "retention": "preserve"
+    },
+    "minute-tdx": {
+      "kind": "reference",
+      "path": "assets/minute/tdx/session-source.json",
+      "role": "bounded_research",
+      "retention": "preserve"
+    },
+    "minute-hf-download": {
+      "kind": "reference",
+      "path": "../ashare-data-local/minute/hf-neigezhu-1min-ohlcv",
+      "role": "native_retrospective_research",
+      "retention": "preserve",
+      "protected": true,
+      "backup": "exclude"
+    }
+  },
+  "profiles": {
+    "product": {
+      "kind": "product",
+      "daily_asset": "main",
+      "release_store_asset": "releases",
+      "control_db": "state/control.sqlite3",
+      "paper_root": "state/paper",
+      "api_port": 18839,
+      "paper_port": 18818,
+      "web_port": 41839,
+      "minute_sources": {
+        "tdx": {
+          "reader": "tdx-session",
+          "asset": "minute-tdx",
+          "content": {
+            "sha256": "REPLACE_WITH_REVIEWED_TDX_SHA256"
+          },
+          "coverage": "Record the actual bounded securities/days",
+          "limits": [
+            "Not historical PIT or strict execution certification"
+          ]
+        },
+        "neigezhu": {
+          "reader": "neigezhu-native",
+          "asset": "minute-hf-download",
+          "manifest": {
+            "path": "assets/minute/neigezhu/file_manifest.csv",
+            "sha256": "REPLACE_WITH_REVIEWED_MANIFEST_SHA256"
+          },
+          "review": {
+            "path": "assets/minute/neigezhu/quality_overlay.json",
+            "sha256": "REPLACE_WITH_REVIEWED_OVERLAY_SHA256"
+          },
+          "coverage": {
+            "basis": "Record the completed pinned audit scope",
+            "last_day_partial": true,
+            "every_security_day_complete": false
+          },
+          "limits": [
+            "Native retrospective read; row-specific diagnostics/denials retained; no reader execution grant"
+          ]
+        }
+      }
+    }
+  }
+}
