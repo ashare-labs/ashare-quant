@@ -1,6 +1,6 @@
 # 数据、启动与恢复
 
-所有正式入口选择同一份 `ashare-deployment.v1` 清单。优先级是 `--deployment`、`ASHARE_DEPLOYMENT`、`ASHARE_DATA_ROOT/deployment.json`。清单里的相对路径以 `data_root` 为准，`data_root` 又相对清单所在目录。正式行情、财务/因子、固定评测、AQ 任务账户、临时文件和受保护的外部环境分别登记为资产；登记不代表可以删除。
+所有正式入口选择同一份 `ashare-deployment.v1` 清单。优先级是 `--deployment`、`ASHARE_DEPLOYMENT`、`ASHARE_DATA_ROOT/deployment.json`、用户配置 `$XDG_CONFIG_HOME/ashare/deployment.json`（默认 `~/.config/ashare/deployment.json`）。清单里的相对路径以 `data_root` 为准，`data_root` 又相对清单所在目录。正式行情、财务/因子、固定评测、AQ 任务账户、临时文件和受保护的外部环境分别登记为资产；登记不代表可以删除。
 
 ## 使用已有正式数据
 
