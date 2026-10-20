@@ -10,7 +10,6 @@ from ashare_quant.contracts import Contract, ErrorBody
 from ashare_quant.tasks.portfolio.contracts import PortfolioDataset
 from ashare_quant.tasks.result_contracts import JSONObject
 
-
 ProductSecurity = Annotated[str, Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE)|BJ\.[0-9]{6})$")]
 
 

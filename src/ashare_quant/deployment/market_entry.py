@@ -86,7 +86,9 @@ def main(argv=None):
         from ashare_data.product.release_cli import main as release_main
 
         selected = owner_resolve(deployment)["market_release"]
-        return release_main(["--root", selected["root"], *remaining])
+        return release_main(
+            ["--root", selected["root"], "--release-id", str(selected["release_id"]), *remaining]
+        )
     if args.command in {"library", "daily"}:
         owner = LocalDailyProduct.from_deployment(deployment)
         p = argparse.ArgumentParser()
