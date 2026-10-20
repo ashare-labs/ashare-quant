@@ -9,8 +9,10 @@ import hashlib
 import json
 import re
 from datetime import date, timedelta
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 
-from ashare_quant.backtests.minute.bounded import check_price, envelope, interval
+from ashare_quant.backtests.minute.bounded import check_price as bounded_check_price
+from ashare_quant.backtests.minute.bounded import envelope, interval
 from ashare_quant.backtests.minute.inputs import number, require, stamp
 
 SCHEMA = "ad-minute-research.v1"
@@ -31,6 +33,41 @@ ASSUMPTIONS = [
     "no_ex_right_reference_change_within_the_selected_no_known_action_window",
     "source_precision_and_declared_derivations_preserved_without_repair",
 ]
+CORPORATE_PROFILE = "source-labelled-corporate-date-model.v1"
+LIMIT_MODEL = "daily-preclose-mainboard-5pct-10pct.v1"
+CORPORATE_ASSUMPTIONS = [
+    *ASSUMPTIONS[:4],
+    "source_scoped_cash_distribution_dates_and_gross_entitlements_not_all_action_types",
+    "daily_source_preclose_5pct_ST_10pct_mainboard_limits_are_models_not_exchange_certification",
+    ASSUMPTIONS[-1],
+]
+
+
+def is_corporate(doc):
+    return doc["research"]["profile"] == CORPORATE_PROFILE
+
+
+def daily_model_bounds(state):
+    raw = state["daily_limit_model"]["source_row"]
+    reference = number(raw["preclose"])
+    rate = Decimal("0.05") if state["is_st"] else Decimal("0.10")
+    with localcontext(prec=50):
+        return tuple(
+            (reference * multiplier).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            for multiplier in (1 - rate, 1 + rate)
+        )
+
+
+def check_price(state, low, high):
+    if "daily_limit_model" not in state:
+        return bounded_check_price(state, low, high)
+    lower, upper = daily_model_bounds(state)
+    # Preserve native binary64 observations; half a cent is an explicit
+    # consistency tolerance, not a rewritten quote or a relaxed order limit.
+    require(
+        number(low) >= lower - Decimal("0.005") and number(high) <= upper + Decimal("0.005"),
+        "MINUTE_DAILY_MODEL_PRICE_CONFLICT",
+    )
 
 
 def digest(value):
@@ -63,15 +100,17 @@ def validate_document(doc):
         "MINUTE_RESEARCH_CONTENT_IDENTITY",
     )
     model = doc["research"]
+    corporate = is_corporate(doc)
     require(
-        model["profile"] == PROFILE
+        model["profile"] in {PROFILE, CORPORATE_PROFILE}
         and model["purpose"] == "retrospective_research"
-        and model["assumptions"] == ASSUMPTIONS
+        and model["assumptions"] == (CORPORATE_ASSUMPTIONS if corporate else ASSUMPTIONS)
         and model["strict_execution_admitted"] is False
         and model["interval_verified"] is False
         and model["price_limit_verified"] is False
         and model["historical_pit"] is False
-        and model["envelope"] == "raw-previous-close-4pct-inward-cent.v1"
+        and model["envelope"]
+        == (LIMIT_MODEL if corporate else "raw-previous-close-4pct-inward-cent.v1")
         and model["capabilities"]
         == {
             "matching": "next_open",
@@ -79,6 +118,7 @@ def validate_document(doc):
             "capacity_policy": "strict_minute",
             "initial_positions": "flat",
             "terminal_positions": "flat",
+            **({"corporate_actions": "source_scoped_cash_dates"} if corporate else {}),
         },
         "MINUTE_RESEARCH_PROFILE_REQUIRED",
     )
@@ -114,7 +154,7 @@ def validate_document(doc):
         cal = calendars[exchange]
         refs(doc, cal["source_refs"])
         a, b = date.fromisoformat(doc["calendar"][0]), date.fromisoformat(doc["calendar"][-1])
-        require(0 < (b - a).days <= 366, "MINUTE_RESEARCH_CALENDAR_RANGE")
+        require(0 < (b - a).days <= (740 if corporate else 366), "MINUTE_RESEARCH_CALENDAR_RANGE")
         expected = [(a + timedelta(days=i)).isoformat() for i in range((b - a).days + 1)]
         require(
             set(cal["days"]) == set(expected)
@@ -124,7 +164,7 @@ def validate_document(doc):
         )
 
 
-def validate_state(state):
+def validate_state(state, *, corporate=False):
     observed = state["source_observation"]
     require(
         observed["security"] == state["security"]
@@ -158,11 +198,31 @@ def validate_state(state):
             field in state and state[field] is None and observed[field]["value"] is None,
             "MINUTE_RESEARCH_MUST_PRESERVE_UNKNOWN_LIMITS",
         )
+    require(("daily_limit_model" in state) == corporate, "MINUTE_LIMIT_MODEL_PROFILE")
+    if corporate:
+        model = state["daily_limit_model"]
+        raw = model["source_row"]
+        require(
+            model["schema"] == LIMIT_MODEL
+            and model["source_row_sha256"] == digest(raw)
+            and raw["date"] == state["date"]
+            and raw["symbol"]
+            == ("sh" if state["security"].endswith("XSHG") else "sz") + state["security"][:6]
+            and raw["tradestatus"] == ("0" if state["suspended"] else "1")
+            and raw["is_st"] == ("1" if state["is_st"] else "0")
+            and raw.get("source")
+            and raw.get("observed_at")
+            and model["exchange_limits_verified"] is False,
+            "MINUTE_DAILY_MODEL_SOURCE_BINDING",
+        )
+        number(raw["preclose"])
 
 
 def validate_state_binding(state, doc, previous):
     refs(doc, state["evidence"]["source_refs"])
     observed = state["source_observation"]
+    if is_corporate(doc):
+        refs(doc, state["daily_limit_model"]["source_refs"])
     for field in ("listed", "suspended", "is_st", "previous_close", "first_listing_date"):
         refs(doc, observed[field]["source_refs"])
     proof = state["previous_close_observation"]
@@ -301,11 +361,17 @@ def validate_gaps(doc, expected, present):
     return gaps
 
 
-def validate_activity(row, volume, amount, *, full):
+def validate_activity(row, volume, amount, *, full, corporate=False):
     if volume > 0:
         require(amount > 0, "MINUTE_INVALID_NUMBER")
         return
     require(amount == 0, "MINUTE_RESEARCH_ZERO_VOLUME_AMOUNT_CONFLICT")
+    if corporate:
+        # This profile retains source-bound zero activity at any session label.
+        # Native inactive/volume limits cancel a market attempt there. The price
+        # remains only an uncertified research observation; no market phase,
+        # suspension or availability fact is inferred from a zero quantity.
+        return
     phase = row.get("phase_evidence", {})
     require(
         row.get("session_phase") == "closing_auction"
@@ -320,6 +386,36 @@ def validate_activity(row, volume, amount, *, full):
 
 
 def validate_actions(doc):
+    if is_corporate(doc):
+        from ashare_quant.portfolio.corporate import schedule_rows
+
+        cov = doc["action_coverage"]
+        schedule = doc["corporate_schedule"]
+        require(
+            cov["status"] == "source_scoped_corporate_date_model"
+            and cov["complete"] is False
+            and cov["absence_proved"] is False
+            and cov["historical_pit"] is False
+            and cov["binding_sha256"] == schedule["binding_sha256"]
+            and cov["response_sha256"] == digest(schedule),
+            "MINUTE_CORPORATE_COVERAGE_BINDING",
+        )
+        refs(doc, cov["evidence"])
+        rows = schedule_rows(
+            doc,
+            doc["securities"],
+            {"start": doc["days"][0], "end": doc["days"][-1]},
+            doc["calendar"],
+        )
+        require(
+            rows is not None
+            and all(
+                Decimal(r["bonus_share_ratio"]) == Decimal(r["capitalization_share_ratio"]) == 0
+                for r in rows
+            ),
+            "MINUTE_CORPORATE_ONLY_CASH_DISTRIBUTIONS",
+        )
+        return rows
     cov = doc["action_coverage"]
     start = doc["calendar"][doc["calendar"].index(doc["days"][0]) - 1]
     end = doc["days"][-1]

@@ -113,7 +113,11 @@ class MinuteInputs:
             and self.days == self.calendar[first : last + 1],
             "MINUTE_PREVIOUS_SUCCESSOR_AND_CONTIGUOUS_DAYS_REQUIRED",
         )
-        require(len(self.days) <= 60, "MINUTE_WINDOW_TOO_LARGE")
+        self.corporate_research = self.generic_research and research.is_corporate(doc)
+        require(
+            len(self.days) <= (512 if self.corporate_research else 60),
+            "MINUTE_WINDOW_TOO_LARGE",
+        )
         self.previous = {d: self.calendar[self.calendar.index(d) - 1] for d in self.days}
         self.sessions, self.clocks, self.ends = {}, {}, {}
         for d in self.days:
@@ -208,7 +212,10 @@ class MinuteInputs:
                 require(available <= opening, "MINUTE_STATE_NOT_AVAILABLE_BEFORE_OPEN")
                 self.state_times[key] = available
             if self.research:
-                research.validate_state(state)
+                if self.generic_research:
+                    research.validate_state(state, corporate=self.corporate_research)
+                else:
+                    research.validate_state(state)
                 if self.generic_research:
                     research.validate_state_binding(state, doc, self.previous[key[1]])
                 else:
@@ -269,7 +276,13 @@ class MinuteInputs:
                         "MINUTE_RESEARCH_BAR_SOURCE_BINDING",
                     )
                 if use_policy is None or use_policy["execution"] != "deny":
-                    research.validate_activity(row, volume, amount, full=self.full_session_input)
+                    if self.generic_research:
+                        research.validate_activity(
+                            row, volume, amount,
+                            full=self.full_session_input, corporate=self.corporate_research,
+                        )
+                    else:
+                        research.validate_activity(row, volume, amount, full=self.full_session_input)
                     research.check_price(self.states[sid, d], row["low"], row["high"])
             require(not self.states[sid, d]["suspended"], "MINUTE_SUSPENDED_BAR_CONFLICT")
             self.bars[key] = {**row, "_start": a, "_end": b, "_available": available}
@@ -299,12 +312,16 @@ class MinuteInputs:
         for rows in self.by_security.values():
             rows.sort(key=lambda r: r["_end"])
         self.labels = {s: [r["_end"] for r in rows] for s, rows in self.by_security.items()}
-        # Corporate actions remain AD-owned; this first execution scope requires
-        # explicit no-action coverage, never an absent key interpreted as none.
+        self.day_gaps = {}
+        for sid, at in self.gaps:
+            self.day_gaps.setdefault((sid, at.date()), []).append(at)
+        # Corporate actions remain AD-owned. Only the explicitly declared date
+        # model consumes a schedule; older profiles still require no actions.
         require(doc["actions"] == [], "MINUTE_CORPORATE_ACTIONS_UNSUPPORTED")
         coverage = doc["action_coverage"]
+        self.corporate_actions = None
         if self.research:
-            research.validate_actions(doc)
+            self.corporate_actions = research.validate_actions(doc)
         else:
             require(
                 coverage["status"] in {"source_covered_no_actions", "synthetic_known_no_actions"}
@@ -318,6 +335,8 @@ class MinuteInputs:
 
     def price_bounds(self, sid, day, *, at):
         state = self.state(sid, day, at=at)
+        if self.corporate_research:
+            return self._research_policy.daily_model_bounds(state)
         if self.research:
             return self._research_policy.envelope(state["previous_close"])
         return number(state["lower_limit"]), number(state["upper_limit"])
@@ -383,7 +402,9 @@ class MinuteInputs:
         # The dated previous-close observation is the new session's opening
         # reference. An earlier session's bounded minute slice may stop before
         # its close; it must not override that newer daily observation.
-        rows = [r for r in self.visible(sid, at) if r["_end"].date() == at.date()]
+        start = at.replace(hour=0, minute=0, second=0, microsecond=0)
+        left, right = bisect_left(self.labels[sid], start), bisect_right(self.labels[sid], at)
+        rows = [r for r in self.by_security[sid][left:right] if r["_available"] <= at]
         usable = [r for r in rows if r.get("_use_policy", {}).get("fresh_valuation") != "deny"]
         last = usable[-1] if usable else None
         current = self.bars.get((sid, at))
@@ -392,7 +413,7 @@ class MinuteInputs:
         # Also retain the stale designation between the denied/missing label and
         # the next usable observation, e.g. at after-close account snapshots.
         latest_bad = max(
-            [t for s, t in self.gaps if s == sid and t.date() == at.date() and t <= at]
+            [t for t in self.day_gaps.get((sid, at.date()), ()) if t <= at]
             + [
                 r["_end"] for r in rows if r.get("_use_policy", {}).get("fresh_valuation") == "deny"
             ],
@@ -404,11 +425,14 @@ class MinuteInputs:
             or (latest_bad is not None and (last is None or latest_bad > last["_end"]))
         )
         state = self.state(sid, str(at.date()), at=at)
+        reference = state["previous_close"]
+        reference_status = "previous_close_reference"
+        if self.corporate_research and (at.hour, at.minute) >= (9, 30):
+            reference = state["daily_limit_model"]["source_row"]["preclose"]
+            reference_status = "daily_reference_model"
         return {
-            "price": float(last["close"] if last else state["previous_close"]),
-            "status": "stale"
-            if stale
-            else ("research_mark" if last else "previous_close_reference"),
+            "price": float(last["close"] if last else reference),
+            "status": "stale" if stale else ("research_mark" if last else reference_status),
             "source_label": last["source_label"] if last else None,
             "last_unavailable_label": latest_bad.isoformat() if stale and latest_bad else None,
             "fresh_quote": bool(last is not None and last["_end"] == at and not stale),
@@ -481,6 +505,18 @@ class MinuteInputs:
                 requires_flat_end=not self.full_session_input,
             )
             if self.generic_research:
+                if self.corporate_research:
+                    result["native_price_bounds"] = (
+                        "Explicit source daily-preclose 5%/10% model; exchange limits unknown"
+                    )
+                    result["corporate_schedule_sha256"] = digest(
+                        self.document["corporate_schedule"]
+                    )
+                    result["corporate_account_model"] = self.document["corporate_account_model"]
+                    result["zero_activity_policy"] = (
+                        "Bound source zero volume/amount retained; zero execution capacity; "
+                        "price is an uncertified research mark, not verified fresh trade data"
+                    )
                 result["valuation_cutoff"] = {
                     day: self.ends[day][-1].isoformat() for day in self.days
                 }

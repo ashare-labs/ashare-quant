@@ -19,7 +19,7 @@ AD 的 `export_minute_research` 输出 `ad-minute-research.v1`；AQ 使用
 事后逐日状态重放和研究条件。预检通过不代表严格执行、历史 PIT 或聚宽对齐。
 旧 `aq-tdx-minute-research.v1/v2` 保留原有固定案例规则。
 
-新 schema 按能力校验，不含日期、个股或供应商名单。目前支持 20 只以内沪深主板股票、
+新 schema 按能力校验，不含日期、个股或供应商名单。默认能力支持 20 只以内沪深主板股票、
 最多 60 个连续交易日，显式前一日及后一交易日。逐日 listed=true、suspended=false、
 is_st=false 与首次上市日期必须有来源观察；首次上市不足 30 个自然日不支持。停牌和未知
 状态明确拒绝，不能当作缺分钟补齐。全部分钟必须覆盖所声明的现金交易时段。
@@ -58,6 +58,35 @@ capacity_policy=strict_minute、initial_positions=flat、terminal_positions=flat
 可复验的完整合成构造和故障注入见 `tests/minute/test_research_contract.py`；真实源资料
 作为外部证据交付，不进入产品 wheel。接入新来源应在任务目录完成来源验收、量价/精度核对、
 状态与事件审查，再由 AD 公开导出；修改摘要或勾选开关不能替代这些审查。
+
+### 连续窗口与现金分红研究模型
+
+显式选择 `source-labelled-corporate-date-model.v1` 才可扩展到 512 个连续交易日
+（含前后继的自然日日历不超过 740 日）；原有 profile 的 60 日、4% 包络和无行动限制保持不变。
+仍要求已上市至少 30 日、非 ST、无日级停牌的主板股票，首尾空仓、next_open、
+closed_bars、strict_minute，以及全部三个研究开关。不能借此接受未知停牌状态或盘中权限。
+该 profile 使用 `CORPORATE_ASSUMPTIONS`，`envelope=daily-preclose-mainboard-5pct-10pct.v1`，
+capabilities 另声明 `corporate_actions=source_scoped_cash_dates`。
+
+每个 state 必须携带 `daily_limit_model`：schema 为上述限价模型名，source_row 保留
+同证券日原始日线 preclose、tradestatus、is_st、source、observed_at，绑定 source_row_sha256
+和 source_refs，并明确 exchange_limits_verified=false。模型按 preclose 的 5%/10%、
+分四舍五入构造研究阈值；目前准入仍仅非 ST，实际使用 10%。真实 reference_price、
+upper_limit、lower_limit 仍为 null。源 OHLC 与模型的半分一致性容差只处理存储精度，
+不会修改源价格或放宽订单阈值。新日 09:00 使用原始前收维持权益转移基础；09:30 起若无
+当日分钟观察，使用显式源 preclose 模型，估值状态为 daily_reference_model。
+
+`corporate_schedule` 保留 AD 的完整来源范围响应，`corporate_account_model` 为现有
+`aq.corporate-date-model.v1`。action_coverage 声明 source_scoped_corporate_date_model，
+绑定 binding_sha256、response_sha256 和 evidence，complete/absence_proved/historical_pit
+均为 false。复用日线原生 CorporateStockPosition：登记日收盘数量确定权益，除息日调整
+成本与应收，支付日开盘前到账；清仓后仍保留未到账权益。仅支持现金分红，送转股明确拒绝；
+窗口前登记且初始空仓的行动不产生本账户权益。结果保留权益基数、金额和各记账阶段日期。
+
+来源绑定的 volume=amount=0 分钟可保留在任意声明时段，原生成交容量为零，市价尝试取消；
+零量本身不证明停牌、交易阶段或报价新鲜度。保留的价格只作非认证研究估值。
+负量、量额冲突、未知状态及来源明确禁用仍受原规则限制。长窗口估值按当日索引查询，
+不在每次账户观察时重扫全部历史。合成边界验证见 `tests/minute/test_corporate_research.py`。
 
 冻结午休成交容量案例的复验入口是 `python -m tests.fixtures.minute_reference.audit_capacity_regression --help`。它核对外部案例、策略、输入和原生结果哈希，在新目录重跑并审计分钟容量、现金差额及成交变化。该入口限定既有 `R09-lunch-participation` 案例；历史 ID、`aq-minute-r09-capacity-fix.v1` schema 和证据哈希保留，名称不表示支持任意案例。所需历史输入不随包发布；案例和基线只读，结果只写显式指定的新目录。
 

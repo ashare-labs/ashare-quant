@@ -304,6 +304,10 @@ class BarData(Mapping):
 class Mod(AbstractMod):
     def start_up(self, env, config):
         self.env, self.data, self.config = env, runtime["data"], runtime["config"]
+        if self.data.corporate_actions is not None:
+            from ashare_quant.portfolio.corporate_native import install
+
+            install(self)
         runtime["mod"] = self
         self.jq_lifecycle = self.config["lifecycle"] == "jq_minute"
         self.jq_capacity = self.config["capacity_policy"] == "jq_daily_initial"
@@ -344,6 +348,10 @@ class Mod(AbstractMod):
         env.event_bus.add_listener(EVENT.POST_AFTER_TRADING, self.close_day)
         env.event_bus.add_listener(EVENT.POST_STRATEGY_RUN, self.finish)
         block_rqdata_apis()
+
+    @property
+    def day(self):
+        return str(self.at.date())
 
     def ready(self, event):
         self.env.broker.register_matcher(
@@ -538,7 +546,8 @@ class Mod(AbstractMod):
         positions = {}
         for sid in self.data.ids:
             pos = p.get_position(sid, POSITION_DIRECTION.LONG)
-            if pos.quantity:
+            corporate = self.data.corporate_actions is not None
+            if pos.quantity or (corporate and pos.dividend_receivable):
                 positions[sid] = SimpleNamespace(
                     security=sid,
                     total_amount=int(pos.quantity),
@@ -546,6 +555,9 @@ class Mod(AbstractMod):
                     avg_cost=float(pos.avg_price),
                     price=float(pos.last_price),
                     value=float(pos.market_value),
+                    **(
+                        {"dividend_receivable": float(pos.dividend_receivable)} if corporate else {}
+                    ),
                     **(
                         {"valuation": self.data.valuation_mark(sid, self.at)}
                         if self.data.generic_research
@@ -582,6 +594,11 @@ class Mod(AbstractMod):
 
     def close_day(self, event):
         self.refresh_valuation()
+        for action in self.data.corporate_actions or []:
+            if action["record_date"] == self.day:
+                self.env.portfolio.stock_account._get_or_create_pos(
+                    action["security"], POSITION_DIRECTION.LONG
+                ).record(action)
         self.accounts.append({"at": self.at.isoformat(), **self.account()})
 
     def finish(self, event):
@@ -667,6 +684,20 @@ class Mod(AbstractMod):
             "total_pnl": float(p.total_value) - self.config["initial_cash"],
             "total_return": float(p.total_value) / self.config["initial_cash"] - 1,
             "preflight": self.data.preflight(),
+            **(
+                {
+                    "corporate_account_model": self.data.document["corporate_account_model"],
+                    "corporate_schedule_sha256": self.data.preflight()["corporate_schedule_sha256"],
+                    "corporate_entitlements": {
+                        sid: self.env.portfolio.get_position(
+                            sid, POSITION_DIRECTION.LONG
+                        ).entitlements
+                        for sid in self.data.ids
+                    },
+                }
+                if self.data.corporate_actions is not None
+                else {}
+            ),
         }
 
     def tear_down(self, code, exception=None):
