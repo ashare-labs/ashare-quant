@@ -1,5 +1,5 @@
 {
-  "commit": "af7f656b7cb6cba4f5c0072ac3bb43102746a7f6",
+  "commit": "214a4a5e316ad081aa8901b02daa147947ef93a2",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "9b9d08b0e0a7eef3a0ba95b823c4c9eb6bac2bc6dbf9a75e830a23e5688ee8be",
+    "__init__.py": "30e628c8c39c93d16af811769173c4055dac5f9473b8720222b31ac5336a588a",
     "cli/__init__.py": "3be5033eaf6ea9a1876a1690a355706cebeb4ea3c93d41b81a0edde99574a5f7",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/corporate_actions.py": "f3c7e7db677a12897594383897c19072a327cfb2874bcb2bc9669652ed655603",
@@ -64,6 +64,7 @@
     "financials/tushare_gaps.py": "373097da86b3470aad9c653e94f0b7c66b46098d5cc022c2d98677b020d6fb28",
     "financials/tushare_keychain.py": "92b9b51b4d67100b8ebc07fdeeeb6bc1da523771e98f986e2d5a48a6f724c7c0",
     "financials/tushare_reference.py": "1604b246ed72cec2d1b338dd5e6adc1ea69e05366b0791e79a6baaff53c18bea",
+    "financials/unit_resolution.py": "467afce8a2ecc02b5b0cd9d0ed3dfd09a22cee995394ad14b4066dd274e053c4",
     "financials/validation.py": "da552febe5b4b87d857724d2532236e126f2a9c66d40b471816653d7424f9094",
     "market/__init__.py": "537535f57ae5f30883ee8dc96126e48da273157dfe7921ee2097bab987931f98",
     "market/alias.py": "dc1bf3ac5a9c28fb758a357248f78c2107096d0bce575d73e6e13a60abdf09a6",
@@ -92,7 +93,7 @@
     "product/__main__.py": "fbbdea96c092f994a0969df076858d9d25eab9b2b7be7efb43e98f89ef4f1ba1",
     "product/configuration.py": "0206f414dbbbd99f93ed8f505f1dc7aa522edbbd6a83c3119c8af08e44fe1e7d",
     "product/daily.py": "78ed1dc8a98de7493dd9790a8761851154dc223c4970b22080052be5eb1e9e17",
-    "product/financial_release.py": "8cde5ce21687cd22cf705d6c200c49d84c9c096f4906521f147fa75cd1c7ff24",
+    "product/financial_release.py": "2695476d888749df0ea45181c1b772ff1d8ef688e5462ea6b2f6c58c8ee04f25",
     "product/market_release.py": "085280f86b8b041897a297575a8e5b40c1aa98bf82d618b60461ce387d817f7e",
     "product/minute.py": "0be7d71a1edd884081471eff163e0a140f492b233ddd7b5f88d4c4e521b59ff1",
     "product/publication.py": "694646e418161f31da61092363a6be712b1d231dce5a4ce1e6460f4b9fc5c884",
@@ -160,19 +161,21 @@
     "research/preflight.py": "49b6b6f84fa5aae324f06a4ef2009adbd950fa6f272b1bfb89ad194aa71bba7a",
     "research/snapshots.py": "eecca42a543961e0c5b631b241aba87c5a299918b1aa7a969adffe92cd92ea00",
     "storage/__init__.py": "478d5cd6162d6d82fcd67489e7e3befadd7cc953e42921965321bf393b1bab72",
+    "storage/calendar_release.py": "da70eab7ec28bf4796342da06ab1d45e6240bb7dd24ea1ef4c4d76bae28f2d3a",
     "storage/financial_release.py": "abcccaec768e20acb5006f18c7eca0d4b50dbb1c2fbac9017e47eaf7771a6804",
     "storage/immutable.py": "5cdad651e1b491512ebc34ab84a436a503e3bae312d969e4b1fb932806730c32",
     "storage/local_daily.py": "6f1015a3e2b198e4c65b0c0d5f9624d2eaf880e47b300751ccb7ec51ecfc1928",
     "storage/market_coverage.py": "52fb05ab4766cefdf8e832d265fd6cbcb13d717e994e68fa6b6c22c7c65b393f",
-    "storage/market_release.py": "8c34425588e3b9bfdc3fa29d446c0aec49ad6fc33b814296892efb0e6565511b",
-    "storage/source_observations.py": "ba001b7d7e0dba080a02e723c7c5c49734b2a47d54f37056922c06cd5cca19f2"
+    "storage/market_release.py": "e984e9a764615981a5c64b008f46d7798caf7dbdfe35d8ac4af49cfae251b3d3",
+    "storage/source_observations.py": "ba001b7d7e0dba080a02e723c7c5c49734b2a47d54f37056922c06cd5cca19f2",
+    "storage/unit_publication.py": "b6045edf189871c39e71cccdcec02430cb2ccecddfb002e63abc010a384f1c65"
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "23dc0ab12eaa0e11f107ade7c5658eb162e163ef74b64e62e1c9707736c5596a",
+  "runtime_code_sha256": "9eeb48e5f46af3a968454b0a1b19f60303ed08c66d62c5141d4322a28d840573",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "1061008a03455ec253ed3eac0c82fb582de2e655",
-  "version": "0.10.0.dev13",
-  "wheel_sha256": "34366d295f4988baf58b0a5c557bc767d8db6cd7e0caa960ae00556e0a8b70a8"
+  "tree": "35453f7996f88e7920ba0c65afc36056323926f7",
+  "version": "0.10.0.dev14",
+  "wheel_sha256": "6473bce726138d039a37187b0dde3ea3b87c4b6184bd44ca7d4e039683794353"
 }
