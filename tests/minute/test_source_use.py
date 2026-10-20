@@ -1,6 +1,7 @@
 """Public AD Store/export -> native account regression for denied quotes."""
 
 from copy import deepcopy
+from datetime import datetime
 
 import pytest
 from test_research_contract import ACCEPT, make_document, save
@@ -123,3 +124,51 @@ def test_public_export_rejects_stripping_audited_native_observation(tmp_path):
 
     with pytest.raises(DataError, match="retain each native observation"):
         make_document(tmp_path, ids=("601234.XSHG",), edit=edit)
+
+
+@pytest.mark.parametrize("previous_gap", [False, True])
+def test_new_session_uses_newer_daily_close_before_first_minute(tmp_path, previous_gap):
+    """A bounded prior slice must not override the separately observed close."""
+    sid = "601234.XSHG"
+
+    def edit(bundle, metadata):
+        last = bundle["bars"][3]
+        last.update({k: "10.2" for k in ("open", "high", "low", "close")})
+        if previous_gap:
+            bundle["bars"].remove(last)
+            metadata["gap_policy"] = "explicit_unavailable"
+        state = metadata["states"][1]
+        state["previous_close"] = "10.3"
+        state["source_observation"]["previous_close"]["value"] = "10.3"
+        state["previous_close_observation"]["close"] = "10.3"
+
+    doc = make_document(tmp_path, ids=(sid,), edit=edit)
+    path = save(doc, tmp_path / "input.json")
+    data = MinuteInputs(path, **ACCEPT)
+    mark = data.valuation_mark(sid, datetime.fromisoformat("2025-07-03T09:30:00+08:00"))
+    assert mark == {
+        "price": 10.3,
+        "status": "previous_close_reference",
+        "source_label": None,
+        "last_unavailable_label": None,
+        "fresh_quote": False,
+    }
+    strategy = tmp_path / "strategy.py"
+    strategy.write_text(
+        """from jqdata import g, order, run_daily
+def initialize(context):
+    g.day = 0
+    run_daily(trade, "09:31")
+def before_trading_start(context):
+    g.day += 1
+    if g.day == 2:
+        # Cash 100000 - 100*10 - 5; newly observed prior close 10.3.
+        assert abs(context.portfolio.total_value - 100025) < 1e-7
+def trade(context):
+    order("601234.XSHG", 100 if g.day == 1 else -100)
+"""
+    )
+    result = run_backtest(strategy, path, tmp_path / "run", **ACCEPT)["result"]
+    assert len(result["trades"]) == 2
+    assert result["final_account"]["available_cash"] == pytest.approx(99989)
+    assert result["final_account"]["positions"] == {}

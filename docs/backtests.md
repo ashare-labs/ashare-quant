@@ -6,6 +6,11 @@ examples/minute/make_fixture.py 生成明确合成的最小分钟输入；equal_
 
 分钟运行保留原生撮合、T+1、费用、共享现金与预算预留。预算在 execution.reservation，根据未成交量及已发生费用冻结资金，不重复实现成交账本。检查点、隔离和 RQAlpha 内容验证在 execution.rqalpha。
 
+所有分钟策略回调在独立的 50 位 Decimal 精度上下文内执行，避免上游首次导入降低
+全局精度后使相等均线产生假信号；读取原生运行身份也不改变调用方的小数上下文。
+新交易日的首根可用分钟柱出现前，账户使用该日已声明的前收盘观察估值，不沿用前一日
+截断分钟窗口的末柱。该前收盘仍是估值参考，不是新鲜报价或成交价格。
+
 ## 通用有界分钟研究
 
 AD 的 `export_minute_research` 输出 `ad-minute-research.v1`；AQ 使用

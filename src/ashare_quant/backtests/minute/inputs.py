@@ -380,7 +380,10 @@ class MinuteInputs:
 
     def valuation_mark(self, sid, at):
         """A stale account mark is never a new observation or a fill price."""
-        rows = self.visible(sid, at)
+        # The dated previous-close observation is the new session's opening
+        # reference. An earlier session's bounded minute slice may stop before
+        # its close; it must not override that newer daily observation.
+        rows = [r for r in self.visible(sid, at) if r["_end"].date() == at.date()]
         usable = [r for r in rows if r.get("_use_policy", {}).get("fresh_valuation") != "deny"]
         last = usable[-1] if usable else None
         current = self.bars.get((sid, at))
@@ -389,7 +392,7 @@ class MinuteInputs:
         # Also retain the stale designation between the denied/missing label and
         # the next usable observation, e.g. at after-close account snapshots.
         latest_bad = max(
-            [t for s, t in self.gaps if s == sid and t <= at]
+            [t for s, t in self.gaps if s == sid and t.date() == at.date() and t <= at]
             + [
                 r["_end"] for r in rows if r.get("_use_policy", {}).get("fresh_valuation") == "deny"
             ],

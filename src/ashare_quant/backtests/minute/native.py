@@ -454,11 +454,11 @@ class Mod(AbstractMod):
         validate_callback(callback)
         name = callback_name(callback)
         self.emit("callback_start", name=name, phase=self.phase)
-        if self.jq_capacity:
-            with localcontext() as context:
-                context.prec = 50
-                result = callback(self.api.context, *args)
-        else:
+        # Upstream imports lower the worker's global Decimal precision to 10.
+        # All callback modes need the same stable arithmetic: equal moving
+        # averages can otherwise become unequal and submit a spurious order.
+        with localcontext() as context:
+            context.prec = 50
             result = callback(self.api.context, *args)
         if inspect.isawaitable(result) or inspect.isgenerator(result) or inspect.isasyncgen(result):
             if inspect.iscoroutine(result):

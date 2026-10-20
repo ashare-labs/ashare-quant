@@ -1,5 +1,8 @@
 import copy
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -9,6 +12,40 @@ from ashare_quant.backtests.minute.runner import MinuteRunError
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples/minute"
 ZERO_COST = {"commission_rate": 0, "sell_tax": 0, "min_commission": 0}
+
+
+def test_first_native_identity_read_preserves_caller_decimal_context():
+    import ashare_quant
+
+    env = dict(os.environ, PYTHONPATH=str(Path(ashare_quant.__file__).parents[1]))
+    code = """
+from decimal import Decimal, getcontext, ROUND_DOWN
+from ashare_quant.execution.rqalpha.runtime import runtime_identity
+ctx = getcontext()
+ctx.prec = 35
+ctx.rounding = ROUND_DOWN
+expected = Decimal(1) / Decimal(7)
+before = str(ctx)
+runtime_identity()
+assert str(getcontext()) == before, (before, str(getcontext()))
+assert Decimal(1) / Decimal(7) == expected
+"""
+    subprocess.run([sys.executable, "-B", "-c", code], env=env, check=True)
+
+
+def test_equal_decimal_moving_averages_do_not_create_a_trade(run_minute):
+    source = """from decimal import Decimal
+from jqdata import order, run_daily
+def initialize(context):
+    run_daily(decide, "09:31")
+def decide(context):
+    prices = [Decimal("1700.000001")] * 20
+    if sum(prices[-5:]) / 5 > sum(prices) / 20:
+        order("600000.XSHG", 100)
+"""
+    result, _, _ = run_minute(source)
+    assert result["trades"] == []
+    assert result["final_account"]["available_cash"] == 100000
 
 
 def test_full_sessions_real_python_lifecycle_and_native_ledger(run_minute):

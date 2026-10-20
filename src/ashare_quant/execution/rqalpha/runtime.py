@@ -1,6 +1,7 @@
 """Fixed upstream content verification and canonical checkpoint identity."""
 import hashlib
 import json
+from decimal import localcontext
 from pathlib import Path
 from importlib import metadata
 
@@ -9,7 +10,10 @@ def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def runtime_identity():
-    import rqalpha
+    # The first upstream import sets Decimal precision process-wide. Reading a
+    # runtime identity must not change arithmetic in the caller's next job.
+    with localcontext():
+        import rqalpha
     root = Path(rqalpha.__file__).parent
     expected = json.loads(Path(__file__).with_name('upstream-sha256.json').read_text())
     mismatches = [name for name,sha in expected.items() if not (root/name).is_file() or digest(root/name)!=sha]
