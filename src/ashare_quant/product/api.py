@@ -1,5 +1,6 @@
 """Local production market endpoints over AD and the shared portfolio queue."""
 
+from datetime import date
 from urllib.parse import urlsplit
 
 from fastapi import Query, Request
@@ -9,6 +10,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.product.contracts import (
     ProductConfiguration,
     ProductCoverageRequest,
+    ProductFinancialPoint,
     ProductMinuteSelection,
     ProductRelease,
     ProductReleaseRequest,
@@ -94,3 +96,15 @@ def mount(app, store, configuration=None):
     def coverage(body: ProductCoverageRequest, request: Request) -> dict:
         closed(request)
         return product.coverage(body)
+
+    @app.post(prefix + '/financial/point')
+    def financial_point(body: ProductFinancialPoint, request: Request) -> dict:
+        closed(request)
+        return product.financial_point(body)
+
+    @app.get(prefix + '/financial/coverage')
+    def financial_coverage(request: Request,
+        security: str | None = Query(default=None, pattern=r'^[0-9]{6}\.(?:XSHG|XSHE)$'),
+        day: date | None = None) -> dict:
+        closed(request, ('security', 'day'))
+        return product.financial_coverage(security, day)

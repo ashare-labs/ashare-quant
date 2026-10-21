@@ -73,3 +73,20 @@ class ProductConfiguration(Contract):
 class ProductRelease(Contract):
     release: JSONObject
     dataset: PortfolioDataset
+
+
+class ProductFinancialPoint(Contract):
+    security: ProductSecurity
+    field: str = Field(min_length=1, max_length=100)
+    period: date
+    source: str = Field(min_length=1, max_length=64)
+    as_of: AwareDatetime
+    mode: Literal['official_daily', 'historical_pit', 'source_research'] = 'official_daily'
+    statement: str | None = Field(default=None, max_length=80)
+    title: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode='after')
+    def native_scope(self):
+        if (self.statement is None) != (self.title is None):
+            raise ValueError('Native source fields require both statement and title')
+        return self

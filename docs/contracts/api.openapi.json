@@ -6047,6 +6047,81 @@
         "title": "ProductCoverageRequest",
         "type": "object"
       },
+      "ProductFinancialPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "field": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Field",
+            "type": "string"
+          },
+          "mode": {
+            "default": "official_daily",
+            "enum": [
+              "official_daily",
+              "historical_pit",
+              "source_research"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "period": {
+            "format": "date",
+            "title": "Period",
+            "type": "string"
+          },
+          "security": {
+            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+            "title": "Security",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "security",
+          "field",
+          "period",
+          "source",
+          "as_of"
+        ],
+        "title": "ProductFinancialPoint",
+        "type": "object"
+      },
       "ProductMinuteSelection": {
         "additionalProperties": false,
         "properties": {
@@ -6719,7 +6794,7 @@
                 "type": "null"
               }
             ],
-            "default": "214a4a5e316ad081aa8901b02daa147947ef93a2",
+            "default": "a4b7fa0e760fad01c9ca61fe76cca753a572ea36",
             "title": "Commit"
           },
           "name": {
@@ -6737,16 +6812,16 @@
                 "type": "null"
               }
             ],
-            "default": "35453f7996f88e7920ba0c65afc36056323926f7",
+            "default": "5829d57669fad3c8359a5f0ce1a745636970dac8",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev14",
+            "default": "0.10.0.dev17",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "6473bce726138d039a37187b0dde3ea3b87c4b6184bd44ca7d4e039683794353",
+            "default": "70337a03528347c7f5da3b8f7f875e3181cbd571377798be87fbb10d62c978b0",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -6899,7 +6974,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev18",
+            "default": "0.12.0.dev19",
             "title": "Backend Version",
             "type": "string"
           },
@@ -7909,7 +7984,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev18"
+    "version": "0.12.0.dev19"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10260,6 +10335,228 @@
           }
         },
         "summary": "Coverage"
+      }
+    },
+    "/api/v1/product/financial/coverage": {
+      "get": {
+        "operationId": "financial_coverage_api_v1_product_financial_coverage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "security",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9]{6}\\.(?:XSHG|XSHE)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Security"
+            }
+          },
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Financial Coverage Api V1 Product Financial Coverage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Financial Coverage Api V1 Product Financial Coverage Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Financial Coverage"
+      }
+    },
+    "/api/v1/product/financial/point": {
+      "post": {
+        "operationId": "financial_point_api_v1_product_financial_point_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductFinancialPoint"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Financial Point Api V1 Product Financial Point Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Financial Point Api V1 Product Financial Point Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Financial Point"
       }
     },
     "/api/v1/product/minute/prices": {

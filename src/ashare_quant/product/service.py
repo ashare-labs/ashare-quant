@@ -139,6 +139,25 @@ class Product:
                 details={"failure": type(exc).__name__},
             ) from exc
 
+    def financial_owner(self, owner):
+        release = getattr(owner, 'release', None)
+        if release is None:
+            raise DomainError('PRODUCT_FINANCIAL_RELEASE_REQUIRED', 'Select a frozen financial release', 422)
+        return release.financial()
+
+    def financial_point(self, request):
+        def query(owner):
+            reader = self.financial_owner(owner)
+            extra = dict(statement=request.statement, title=request.title) if request.statement else {}
+            method = reader.source_point if request.statement else reader.point
+            return wire(method(request.security, request.field, request.period.isoformat(),
+                source=request.source, as_of=request.as_of.isoformat(), mode=request.mode, **extra))
+        return self.call(query)
+
+    def financial_coverage(self, security=None, day=None):
+        return self.call(lambda owner: wire(self.financial_owner(owner).reference_coverage(
+            security=security, day=day.isoformat() if day else None)))
+
     def describe(self):
         config = self.configuration
         error = None
