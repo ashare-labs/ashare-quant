@@ -75,7 +75,7 @@ def _validate(db, path):
             backend = manifest.get("service_identity", {}).get("backend_version")
             if isinstance(backend, str):
                 backends.add(backend)
-    if detected - {EXPECTED_MANIFEST, "portfolio-job-manifest.v1"}:
+    if detected - {EXPECTED_MANIFEST, "portfolio-job-manifest.v1", "python-minute-job.v1"}:
         raise DatabaseCompatibilityError(
             "M2_DATABASE_VERSION_INCOMPATIBLE",
             "此任务库包含旧版或不支持的任务清单，不能用于当前 v6 服务。"

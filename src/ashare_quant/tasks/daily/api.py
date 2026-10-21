@@ -34,7 +34,7 @@ def mount(app, store, configuration=None, *, jobs=None):
 
     @app.middleware("http")
     async def task_no_store(request, call_next):
-        if request.url.path.startswith(("/api/v1/tasks/daily/", "/api/v1/portfolio/")) and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if request.url.path.startswith(("/api/v1/tasks/daily/", "/api/v1/portfolio/", "/api/v1/python/")) and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             origin = request.headers.get("origin")
             try:
                 parsed = urlsplit(origin) if origin else None
@@ -55,7 +55,7 @@ def mount(app, store, configuration=None, *, jobs=None):
         response = await call_next(request)
         if response.status_code in {429, 503}:
             response.headers["Retry-After"] = "2"
-        if request.url.path.startswith(("/api/v1/tasks/daily/", "/api/v1/portfolio/")):
+        if request.url.path.startswith(("/api/v1/tasks/daily/", "/api/v1/portfolio/", "/api/v1/python/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 

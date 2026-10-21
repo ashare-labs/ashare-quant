@@ -101,6 +101,8 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     mount_portfolio_jobs(app, store, daily_tasks_configuration)
     from ashare_quant.product.api import mount as mount_product
     mount_product(app, store, product_configuration)
+    from ashare_quant.tasks.minute.api import mount as mount_python
+    mount_python(app, store, daily_tasks_configuration)
     from ashare_quant.diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
     roots = dict(market_stores) if market_stores is not None else json.loads(os.getenv("ASHARE_QUANT_MARKET_STORES", "{}"))

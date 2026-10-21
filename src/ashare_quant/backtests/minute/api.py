@@ -123,6 +123,15 @@ class Context:
         return self._host.at.replace(tzinfo=None)
 
     @property
+    def parameters(self):
+        from copy import deepcopy
+        return deepcopy(self._host.parameters)
+
+    @property
+    def securities(self):
+        return tuple(self._host.data.ids)
+
+    @property
     def previous_date(self):
         return datetime.fromisoformat(self._host.data.previous[str(self.current_dt.date())]).date()
 

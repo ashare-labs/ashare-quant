@@ -314,6 +314,7 @@ class Mod(AbstractMod):
         self.at = stamp(
             self.data.days[0] + ("T00:00:00+08:00" if self.jq_lifecycle else "T09:00:00+08:00")
         )
+        self.parameters = runtime.get("parameters", {})
         self.phase = "initialize"
         self.orders, self.trades, self.accounts = {}, [], []
         self.order_origin_cost = {}
@@ -708,7 +709,7 @@ def load_mod():
     return Mod()
 
 
-def run_native(root, data, source, config, identity):
+def run_native(root, data, source, config, identity, *, parameters=None):
     import logbook
     import rqalpha.main as native
     import rqalpha.utils.config as config_module
@@ -732,7 +733,7 @@ def run_native(root, data, source, config, identity):
             for i, (kind, at) in enumerate(events)
         )
     runtime.update(
-        root=root, data=data, source=source, config=config, identity=identity, records=records
+        root=root, data=data, source=source, config=config, identity=identity, records=records, parameters=parameters or {}
     )
     requested = {
         "base": {

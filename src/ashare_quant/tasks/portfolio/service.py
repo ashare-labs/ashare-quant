@@ -43,7 +43,7 @@ class PortfolioJobs(TaskService):
         if json.loads(row["manifest"]).get("schema_version") == "portfolio-job-manifest.v1":
             return self
         from ashare_quant.tasks.daily.service import Jobs
-        return Jobs(self.repo.store, self.config)
+        return Jobs(self.repo.store, self.config).for_job(row)
 
     def register_strategy(self, definition):
         self.guard()

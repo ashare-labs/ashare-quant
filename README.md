@@ -4,7 +4,7 @@
 
 A宽是本地 A 股策略、回测与模拟后端。A数达负责数据，RQAlpha 负责原生撮合和账户。支持日频 JSON 规则和可信 Python 策略、多证券组合、分钟研究、持久任务及 paper 模拟；数据覆盖与可用运行模式以本次目录、预检和冻结回执为准。
 
-当前候选版本 `0.12.0.dev7` 使用功能目录和同一份新版 A数达运行时。源码身份随实际文件内容计算，当前候选不继承历史独立验收结论。
+当前候选版本 `0.12.0.dev20` 使用功能目录和同一份新版 A数达运行时。源码身份随实际文件内容计算，当前候选不继承历史独立验收结论。
 
 ## 安装指南
 
@@ -46,6 +46,7 @@ ashare-quant --db .state/tasks/control.sqlite3 task-worker --once
 
 ## 使用指南
 
+- [Python 策略工作台](docs/python-workbench.md)：自动准备正式数据、运行自定义分钟 Python、查看与取消任务。
 - [日频任务与策略](docs/tasks.md)：绑定、参数、可信代码、队列、结果及恢复。
 - [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份与空目录恢复。
 - [组合和公司行动](docs/portfolio.md)：多证券导入、预检、原生组合和权益到账。
@@ -53,7 +54,7 @@ ashare-quant --db .state/tasks/control.sqlite3 task-worker --once
 - [paper 模拟](docs/paper.md)：新账户、观察输入、连续状态及恢复身份。
 - [数据与诊断](docs/providers.md)、[开发与契约](docs/development.md)、[迁移说明](docs/migration.md)。
 
-统一入口的 API 默认端口为 `18839`、paper 为 `18818`、web 为 `41839`。正式数据前缀 `/api/v1/product`，日频评测 `/api/v1/tasks/daily`，组合 `/api/v1/portfolio`，已发布研究行情 `/api/v1/market`。paper 使用独立状态根。生成契约位于 [docs/contracts](docs/contracts)。
+统一入口的 API 默认端口为 `18839`、paper 为 `18818`、web 为 `41839`。Python 工作台前缀 `/api/v1/python`，正式数据前缀 `/api/v1/product`，日频评测 `/api/v1/tasks/daily`，组合 `/api/v1/portfolio`，已发布研究行情 `/api/v1/market`。paper 使用独立状态根。生成契约位于 [docs/contracts](docs/contracts)。
 
 ## 限制与说明
 

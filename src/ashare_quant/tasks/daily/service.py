@@ -46,6 +46,9 @@ class Jobs(TaskService):
             portfolio = json.loads(row["manifest"]).get("schema_version") == "portfolio-job-manifest.v1"
         except (ValueError, TypeError, AttributeError) as exc:
             raise DomainError("M2_JOB_IDENTITY_CONFLICT", "Stored task identity is malformed", 409) from exc
+        if json.loads(row["manifest"]).get("schema_version") == "python-minute-job.v1":
+            from ashare_quant.tasks.minute.service import PythonJobs
+            return PythonJobs(self.repo.store, self.config)
         if portfolio:
             from ashare_quant.tasks.portfolio.service import PortfolioJobs
 
@@ -355,7 +358,7 @@ class Jobs(TaskService):
 
     def list(self):
         return JobList(items=tuple(self.view(row) for row in self.repo.rows()
-            if json.loads(row["manifest"]).get("schema_version") != "portfolio-job-manifest.v1"))
+            if json.loads(row["manifest"]).get("schema_version") not in {"portfolio-job-manifest.v1", "python-minute-job.v1"}))
 
 
     def result(self, job_id):
