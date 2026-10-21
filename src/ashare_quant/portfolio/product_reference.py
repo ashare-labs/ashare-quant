@@ -18,6 +18,9 @@ def require(condition, field):
 def source_bindings(references):
     if references is None:
         return {}
+    if references.get("kind") == "market_release":
+        return {role: {"kind": "market_release", "binding_sha256": references["release"]["manifest_sha256"]}
+                for role in ("market", "corporate")}
     kinds = {"research": "daily_research", "execution": "daily_execution",
              "market": "historical_market", "corporate": "corporate_history"}
     return {role: {"kind": kinds[role], "binding_sha256": value["binding_sha256"]}
@@ -46,10 +49,12 @@ def _validate(document):
     ref, bindings, scope = (evidence[k] for k in ("reference_set", "source_bindings", "scope"))
     require(isinstance(ref["name"], str) and bool(ref["name"]), "reference_set.name")
     roles = ({"research", "execution", "corporate"} if ref["kind"] == "daily_execution"
-             else {"market", "corporate"} if ref["kind"] == "historical_market" else set())
+             else {"market", "corporate"} if ref["kind"] in {"historical_market", "market_release"} else set())
     require(roles and set(bindings) == roles, "source_bindings")
     kinds = {"research": "daily_research", "execution": "daily_execution",
              "market": "historical_market", "corporate": "corporate_history"}
+    if ref["kind"] == "market_release":
+        kinds = {"market": "market_release", "corporate": "market_release"}
     for role, binding in bindings.items():
         require(binding["kind"] == kinds[role] and isinstance(binding["binding_sha256"], str)
                 and re.fullmatch(r"[0-9a-f]{64}", binding["binding_sha256"]), "binding." + role)
@@ -86,8 +91,12 @@ def _validate(document):
                 and market["descriptor"]["execution_permission"] is False, "market.descriptor")
         require({(r["security"], r["date"], r["side"]) for r in admissions} == requests,
                 "market.requests")
-        require(market["accepted_assumptions"]
-                == {"accept_daily_replay": True, "accept_limit_model": True}, "market.assumptions")
+        expected_assumptions = ({"accept_daily_replay": True, "accept_source_observed_limits": True}
+                                if ref["kind"] == "market_release"
+                                else {"accept_daily_replay": True, "accept_limit_model": True})
+        require(market["accepted_assumptions"] == expected_assumptions, "market.assumptions")
+        if ref["kind"] == "market_release":
+            _released(document, market, bindings)
         for entry in admissions:
             require(entry["state_sha256"] == owner_digest(rows[entry["security"], entry["date"]]),
                     "market.state_binding")
@@ -141,3 +150,17 @@ def _validate(document):
                 and provenance["portfolio_input_semantic_sha256"]
                 == document["corporate_source_replacement"]["original_document_sha256"],
                 "release_semantic_identity")
+
+
+def _released(document, market, bindings):
+    pin = market["descriptor"]["release"]
+    require(pin["manifest_sha256"] == bindings["market"]["binding_sha256"]
+            == bindings["corporate"]["binding_sha256"], "released.pins")
+    prices = [r["receipt"].get("release") for r in document["owner_api_reads"]
+              if r["operation"] == "prices"]
+    require(prices == [pin], "released.price_snapshot")
+    for row in market["rows"]:
+        for field in ("suspended", "is_st", "reference_price", "upper_limit", "lower_limit"):
+            for fact in row[field]["source_refs"]:
+                require(fact["manifest_sha256"] == pin["manifest_sha256"]
+                        and fact["release_id"] == pin["release_id"], "released.fact_snapshot")

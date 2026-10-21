@@ -156,3 +156,9 @@ A retained runtime bundle fixes both owner and backend source hashes and depende
 versions. Source pinning records the full commit and tree. Native audit manifests and
 reviews resolve inside the selected release after a restore; raw original source assets
 remain separate required dependencies for explicit original-observation queries.
+
+正式发布参考组可直接声明 `"released-reference": {"kind": "market_release"}`，并将其设为
+`default_reference_set`。它使用同一 profile 的 `market_release` 资产、ID 和 manifest hash，
+覆盖逐日状态/来源限价与公司行动，不再绑定静态样本窗口。该组不得指定另一套行情版本。
+旧参考组保留为显式选项；已发布输入和已完成任务从冻结文件读取，不随默认组改变。
+更新代码、配对 AD 指纹和部署配置是独立的部署步骤，修改隔离候选不会更新正在运行的服务。

@@ -90,3 +90,30 @@ def test_invalid_reference_configuration_is_closed_without_files(tmp_path, chang
         resolve(path)
     assert refused.value.code == "DEPLOYMENT_INVALID"
     assert {p.name for p in tmp_path.iterdir()} == {"deployment.json"}
+
+
+def test_released_references_follow_price_pin_and_keep_legacy_selection(tmp_path):
+    from ashare_data.product.configuration import resolve as owner_resolve
+
+    from ashare_quant.portfolio.product_reference import source_bindings
+
+    value = document()
+    value["assets"]["released"] = {"kind": "market_release", "path": "formal", "role": "market"}
+    profile = value["profiles"]["product"]
+    profile["market_release"] = {"asset": "released", "release_id": 10, "manifest_sha256": "f" * 64}
+    profile["reference_sets"]["formal"] = {"kind": "market_release"}
+    profile["default_reference_set"] = "formal"
+    path = tmp_path / "deployment.json"
+    path.write_text(json.dumps(value))
+    config = resolve(path)
+    owner = owner_resolve(path)
+    assert config.references() == owner["references"]
+    assert config.references()["release"] == owner["market_release"]
+    assert source_bindings(config.references()) == config.reference_sets[-1].source_bindings()
+    assert config.references("daily")["kind"] == "daily_execution"
+    assert {p.name for p in tmp_path.iterdir()} == {"deployment.json"}
+    # Separate reference roots/releases are not accepted beneath a price release.
+    profile["reference_sets"]["formal"]["release_id"] = 9
+    path.write_text(json.dumps(value))
+    with pytest.raises(DomainError, match="profile price release"):
+        resolve(path)

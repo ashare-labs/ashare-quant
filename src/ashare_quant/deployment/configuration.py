@@ -39,12 +39,15 @@ class Binding:
 class ReferenceSet:
     name: str
     kind: str
-    corporate: Binding
+    corporate: Binding | None = None
     research: Binding | None = None
     execution: Binding | None = None
     market: Binding | None = None
+    release: dict | None = None
 
     def references(self):
+        if self.kind == "market_release":
+            return {"name": self.name, "kind": self.kind, "release": dict(self.release)}
         return {
             "name": self.name,
             "kind": self.kind,
@@ -56,6 +59,9 @@ class ReferenceSet:
         }
 
     def source_bindings(self):
+        if self.kind == "market_release":
+            return {role: {"kind": "market_release", "binding_sha256": self.release["manifest_sha256"]}
+                    for role in ("market", "corporate")}
         return {
             role: {"kind": binding.kind, "binding_sha256": binding.binding_sha256}
             for role in ("research", "execution", "market", "corporate")
@@ -146,6 +152,16 @@ def _references(entry, by_name):
         if not isinstance(name, str) or not name.strip() or len(name) > 80:
             raise ValueError("Reference set names must be nonempty strings up to 80 characters")
         kind = item["kind"]
+        if kind == "market_release":
+            market = entry.get("market_release")
+            if set(item) != {"kind"} or not isinstance(market, dict):
+                raise ValueError("Released references use the profile price release")
+            asset = by_name[market["asset"]]
+            if asset.kind != "market_release" or type(market["release_id"]) is not int or market["release_id"] < 1:
+                raise ValueError("Released references require a committed market release")
+            result.append(ReferenceSet(name, kind, release=dict(root=str(asset.path),
+                          release_id=market["release_id"], manifest_sha256=_sha(market["manifest_sha256"]))))
+            continue
         corporate = binding(item["corporate_history_asset"], "corporate_history")
         if kind == "daily_execution":
             if set(item) != {
