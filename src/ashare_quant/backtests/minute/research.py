@@ -340,11 +340,35 @@ def validate_gaps(doc, expected, present):
         key = gap["security"], stamp(gap["source_label"])
         proof = gap["evidence"]
         coverage = proof["coverage"]
+        known = [
+            r
+            for r in coverage.get("unavailable_quotes", [])
+            if r["security"] == key[0] and stamp(r["source_label"]) == key[1]
+        ]
+        require(len(known) <= 1, "MINUTE_RESEARCH_GAP_BINDING")
+        reason = "no_quote_in_selected_snapshot"
+        if known:
+            quote = known[0]
+            sources = {
+                b["source"]["id"]: b["source"] for b in doc["source_refs"]["ad_lineage"]["batches"]
+            }
+            require(
+                quote.get("price_status") == "invalid"
+                and quote.get("missing_reason") == "confirmed_invalid_price"
+                and set(quote.get("missing_fields", []))
+                == {"open", "high", "low", "close", "volume", "amount"}
+                and all(quote.get(k) is None for k in quote["missing_fields"])
+                and quote.get("use_decision", {}).get("execution") == "deny"
+                and quote.get("use_decision", {}).get("fresh_valuation") == "deny"
+                and quote["source_contract_sha256"] == digest(sources[quote["source_id"]]),
+                "MINUTE_RESEARCH_GAP_BINDING",
+            )
+            reason = quote["missing_reason"]
         require(
             key not in gaps
             and key in expected
             and key not in present
-            and gap["reason"] == "no_quote_in_selected_snapshot"
+            and gap["reason"] == reason
             and gap["execution"] == gap["fresh_valuation"] == "deny"
             and proof["snapshot_id"] == coverage["snapshot_id"] == doc["producer"]["snapshot_id"]
             and proof["coverage_sha256"] == digest(coverage)

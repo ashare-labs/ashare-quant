@@ -307,9 +307,19 @@ class API:
         )
         cutoff = self.host.at if end is None else end
         rows = self.host.data.visible(
-            sid, self.host.at, end=cutoff, include_now=include_now, count=count
+            sid,
+            self.host.at,
+            end=cutoff,
+            include_now=include_now,
+            count=count,
+            preserve_missing=True,
         )
         require(len(rows) == count, f"JQ_INSUFFICIENT_VISIBLE_HISTORY:{sid}:{count}:{len(rows)}")
+        unavailable = [
+            {"security": sid, "source_label": r["source_label"], "reason": r["missing_reason"]}
+            for r in rows
+            if r.get("missing_reason")
+        ]
         self.host.emit(
             "history_read",
             security=sid,
@@ -319,13 +329,24 @@ class API:
             include_now=include_now,
             last_end=rows[-1]["bar_end"],
             fields=fields,
+            unavailable_minutes=unavailable,
         )
         import pandas as pd
 
-        return pd.DataFrame(
-            [{f: float(r["amount" if f == "money" else f]) for f in fields} for r in rows],
+        frame = pd.DataFrame(
+            [
+                {
+                    f: float(r["amount" if f == "money" else f])
+                    if not r.get("missing_reason")
+                    else float("nan")
+                    for f in fields
+                }
+                for r in rows
+            ],
             index=pd.DatetimeIndex([r["_end"].replace(tzinfo=None) for r in rows]),
         )
+        frame.attrs["unavailable_minutes"] = unavailable
+        return frame
 
     def attribute_history(
         self,
@@ -374,6 +395,9 @@ class API:
         indexes = [f.index for f in frames.values()]
         require(all(indexes[0].equals(i) for i in indexes), "JQ_HISTORY_UNALIGNED_SECURITIES")
         frame = pd.DataFrame({s: f[field] for s, f in frames.items()})
+        frame.attrs["unavailable_minutes"] = [
+            gap for f in frames.values() for gap in f.attrs["unavailable_minutes"]
+        ]
         return frame if df else {s: frame[s].to_numpy() for s in ids}
 
     def get_bars(
@@ -445,10 +469,14 @@ class API:
             return frames[security]
         import pandas as pd
 
-        return pd.concat(
+        frame = pd.concat(
             [f.rename_axis("time").reset_index().assign(code=s) for s, f in frames.items()],
             ignore_index=True,
         ).sort_values(["time", "code"])
+        frame.attrs["unavailable_minutes"] = [
+            gap for f in frames.values() for gap in f.attrs["unavailable_minutes"]
+        ]
+        return frame
 
     def _daily_price(self, security, start, end, fields, count):
         require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")

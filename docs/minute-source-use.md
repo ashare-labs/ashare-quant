@@ -26,6 +26,21 @@ describe missing quotes in the selected materialization, not proved lost trades,
 halts, listing status, or an authoritative historical universe. Unknown calendar
 and unresolved source selection cannot be hidden under this policy.
 
+Strategy minute history (`attribute_history`, `history`, `get_bars`, minute
+`get_price`) counts these declared missing slots in its requested window. It
+returns `NaN` at the original index instead of fetching an older quote to replace
+the missing position. A source-bound `price_invalid` denial similarly makes the
+whole quote unavailable to strategy history. A `price_conflict` denial alone
+retains its observed values and its existing execution/valuation restrictions.
+No interpolation, zero fill or forward fill is performed. DataFrame
+`attrs["unavailable_minutes"]` and the `history_read` event preserve security,
+source label and reason; array outputs retain the positions/NaNs and their
+history event. `include_now` and past end-time bounds still apply to labels.
+
+These history placeholders are never added to the matcher's bar collection.
+The AD local product JSON and this source-bound research input remain separate
+contracts; this change does not introduce an automatic conversion between them.
+
 During a denied/missing minute, the matcher refuses the quote before determining
 a deal price or capacity. An outstanding order can match at a later usable bar
 under the existing order lifetime, price, cash, capacity and T+1 rules. The

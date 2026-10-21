@@ -34,7 +34,16 @@ class IndexedQueries(ReleasedQueries):
     def __init__(self, receipt, bundles):
         super().__init__(receipt, bundles)
         self.by_symbol = {}
+        self.unavailable = {}
         for b in bundles:
+            for row in b.get("unavailable", []):
+                key = row["security"], row["source_label"]
+                assert key not in self.unavailable
+                self.unavailable[key] = {
+                    **row,
+                    "source_id": b["source"]["id"],
+                    "source_contract_sha256": digest(b["source"]),
+                }
             for row in b["bars"]:
                 self.by_symbol.setdefault(row["symbol"], []).append(
                     (row["timestamp"], row, b["source"])
@@ -76,13 +85,32 @@ class IndexedQueries(ReleasedQueries):
         }
         keys = [(r["symbol"], r["bar_start"]) for r in rows]
         present = set(keys)
+        missing = sorted(expected - present)
+        known = []
+        unknown = []
+        for sid, bar_start in missing:
+            label = (datetime.fromisoformat(bar_start) + timedelta(minutes=1)).isoformat()
+            quote = self.unavailable.get((sid, label))
+            (known if quote else unknown).append(quote or {"symbol": sid, "bar_start": bar_start})
+        # Only AD-confirmed unavailable quotes are admitted by this preparer.
+        # A missing source window is not silently expanded into synthetic bars.
+        if unknown:
+            from ashare_quant.contracts import DomainError
+
+            raise DomainError(
+                "PYTHON_MINUTE_GAPS",
+                "Minute observations are missing",
+                422,
+                details={"missing": unknown[:50], "count": len(unknown)},
+            )
         coverage = {
             "snapshot_id": self.snapshot_id,
             "unknown_calendar_dates": [],
             "excluded": [],
             "unexpected": [{"symbol": s, "bar_start": d} for s, d in sorted(present - expected)],
             "duplicate_keys": len(keys) - len(present),
-            "missing": [{"symbol": s, "bar_start": d} for s, d in sorted(expected - present)],
+            "missing": [{"symbol": s, "bar_start": d} for s, d in missing],
+            "unavailable_quotes": known,
         }
         if strict and coverage["missing"]:
             raise ValueError("RELEASE_MINUTE_GAPS:" + str(coverage["missing"][:5]))

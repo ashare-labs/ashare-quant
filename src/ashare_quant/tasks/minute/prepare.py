@@ -164,6 +164,7 @@ def prepare(pin, request, root):
             limitations=["Daily source states replayed at 09:00; availability unknown"],
         ),
         source_refs={"evidence": refs},
+        gap_policy="explicit_unavailable",
         states=[],
         actions=[],
         research=dict(
@@ -279,7 +280,7 @@ def prepare(pin, request, root):
                 )
             )
     bundles, reads = [], []
-    excluded = []
+    excluded, unavailable = [], []
     annotations = {}
     for sid in ids:
         for offset in range(0, len(days), 50):
@@ -306,7 +307,7 @@ def prepare(pin, request, root):
                 unit_evidence="Unmodified release values and quality denials",
                 source_sha256=sha,
             )
-            rows = []
+            rows, missing = [], []
             for index, original in enumerate(response["rows"]):
                 r = dict(original)
                 r["release_label_at"] = r["source_label"]
@@ -325,6 +326,24 @@ def prepare(pin, request, root):
                             "reason": "outside_declared_closed_bar_sessions",
                         }
                     )
+                    continue
+                if r.get("missing_fields"):
+                    require(
+                        r.get("missing_reason") == "confirmed_invalid_price"
+                        and set(r["missing_fields"])
+                        == {"open", "high", "low", "close", "volume", "amount"}
+                        and all(r[k] is None for k in r["missing_fields"]),
+                        "PYTHON_PARTIAL_MINUTE_UNAVAILABLE",
+                        "This minute has missing activity fields; the current engine cannot accept a partial bar",
+                        {
+                            "security": sid,
+                            "source_label": r["source_label"],
+                            "missing_fields": r["missing_fields"],
+                            "reason": r.get("missing_reason"),
+                        },
+                    )
+                    missing.append(r)
+                    unavailable.append(r)
                     continue
                 native = dict(
                     r,
@@ -357,12 +376,13 @@ def prepare(pin, request, root):
                             source_refs=["market"],
                         ),
                     )
-            bundles.append(dict(source=source, bars=rows))
+            bundles.append(dict(source=source, bars=rows, unavailable=missing))
             reads.append(
                 dict(
                     security=sid,
                     response_sha256=sha,
                     rows=len(rows),
+                    unavailable_rows=len(missing),
                     binding=response["binding"],
                 )
             )
@@ -376,6 +396,8 @@ def prepare(pin, request, root):
         "securities": ids,
         "trading_dates": days,
         "minute_rows": len(document["minute"]),
+        "unavailable_minutes": unavailable,
+        "unavailable_rows": len(unavailable),
         "excluded_model_labels": excluded,
         "reads": reads,
         "input_sha256": digest(document),

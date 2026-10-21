@@ -10,7 +10,7 @@ from ashare_quant.backtests.minute import MinuteInputs, run_backtest
 from ashare_quant.backtests.minute.research import digest
 
 
-def scoped_rows(bundle, metadata, *, gaps=True):
+def scoped_rows(bundle, metadata, *, gaps=True, price_status="conflict"):
     bundle["source"]["source_sha256"] = "a" * 64
     bundle["source"]["audit_manifest_sha256"] = "c" * 64
     for i, row in enumerate(bundle["bars"]):
@@ -23,7 +23,7 @@ def scoped_rows(bundle, metadata, *, gaps=True):
             "source_file_sha256": "a" * 64,
             "source_path": "synthetic/fixture.parquet",
             "source_row": i,
-            "price_status": "conflict" if conflict else "unverified",
+            "price_status": price_status if conflict else "unverified",
             "diagnostics": ["test_injected_conflict"]
             if conflict
             else ["vwap_beyond_storage_envelope"],
@@ -38,8 +38,13 @@ def scoped_rows(bundle, metadata, *, gaps=True):
         metadata["gap_policy"] = "explicit_unavailable"
 
 
-def test_conflict_and_gap_keep_holdings_stale_then_recover(tmp_path):
-    doc = make_document(tmp_path, ids=("601234.XSHG",), edit=scoped_rows)
+@pytest.mark.parametrize("price_status", ["conflict", "invalid"])
+def test_conflict_and_gap_keep_holdings_stale_then_recover(tmp_path, price_status):
+    doc = make_document(
+        tmp_path,
+        ids=("601234.XSHG",),
+        edit=lambda b, m: scoped_rows(b, m, price_status=price_status),
+    )
     path = save(doc, tmp_path / "input.json")
     data = MinuteInputs(path, **ACCEPT)
     assert len(data.bars) == 7 and len(data.gaps) == 1

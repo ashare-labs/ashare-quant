@@ -312,6 +312,38 @@ class MinuteInputs:
         for rows in self.by_security.values():
             rows.sort(key=lambda r: r["_end"])
         self.labels = {s: [r["_end"] for r in rows] for s, rows in self.by_security.items()}
+        # Strategy windows count declared time positions, including unavailable
+        # quotes. Matching/valuation keep their existing, separately denied bars.
+        self.history_by_security = {
+            sid: [
+                {
+                    **row,
+                    **dict.fromkeys(("open", "high", "low", "close", "volume", "amount")),
+                    "missing_reason": "confirmed_invalid_price",
+                }
+                if "price_invalid" in row.get("_use_policy", {}).get("reasons", [])
+                else row
+                for row in rows
+            ]
+            for sid, rows in self.by_security.items()
+        }
+        for (sid, at), gap in self.gaps.items():
+            self.history_by_security[sid].append(
+                {
+                    "security": sid,
+                    "source_label": gap["source_label"],
+                    "bar_end": at.isoformat(),
+                    "_end": at,
+                    "_available": at,
+                    "missing_reason": gap["reason"],
+                    **dict.fromkeys(("open", "high", "low", "close", "volume", "amount")),
+                }
+            )
+        for rows in self.history_by_security.values():
+            rows.sort(key=lambda r: r["_end"])
+        self.history_labels = {
+            s: [r["_end"] for r in rows] for s, rows in self.history_by_security.items()
+        }
         self.day_gaps = {}
         for sid, at in self.gaps:
             self.day_gaps.setdefault((sid, at.date()), []).append(at)
@@ -349,18 +381,18 @@ class MinuteInputs:
         if self.generic_research:
             self._research_policy.validate_execution(settings)
 
-    def visible(self, sid, at, *, include_now=True, count=None, end=None):
+    def visible(self, sid, at, *, include_now=True, count=None, end=None, preserve_missing=False):
         require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
         cutoff = at if end is None else end
         require(cutoff <= at, "JQ_FUTURE_DATA_REQUEST")
         # end bounds bar labels; at is the knowledge clock. include_now excludes
         # only the bar ending at the current clock, not an inclusive past end.
-        index = (bisect_left if not include_now and cutoff == at else bisect_right)(
-            self.labels[sid], cutoff
-        )
+        labels = self.history_labels[sid] if preserve_missing else self.labels[sid]
+        rows = self.history_by_security[sid] if preserve_missing else self.by_security[sid]
+        index = (bisect_left if not include_now and cutoff == at else bisect_right)(labels, cutoff)
         result = []
         for i in range(index - 1, -1, -1):
-            row = self.by_security[sid][i]
+            row = rows[i]
             if row["_available"] <= at:
                 result.append(row)
                 if count is not None and len(result) >= count:
