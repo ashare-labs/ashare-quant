@@ -6864,6 +6864,15 @@
             "title": "Environment Id",
             "type": "string"
           },
+          "frequency": {
+            "default": "1m",
+            "enum": [
+              "1m",
+              "1d"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
           "idempotency_key": {
             "maxLength": 96,
             "minLength": 1,
@@ -6916,6 +6925,13 @@
             "const": true,
             "title": "Trusted Local Code",
             "type": "boolean"
+          },
+          "warmup_sessions": {
+            "default": 20,
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Warmup Sessions",
+            "type": "integer"
           }
         },
         "required": [

@@ -62,3 +62,5 @@ ashare-quant --db .state/tasks/control.sqlite3 task-worker --once
 这是本地可信策略环境，不是任意代码沙箱或实盘券商。历史来源、PIT、分钟完整性、价限与公司行动的未知项必须保留；合成数据不能代表真实市场验收。金额保持十进制字符串，股数和成交由原生账本决定。
 
 新版使用新数据库、新任务和新账户。旧回执、恢复状态、封存源码及历史审阅摘要不改写；既有运行包继续绑定原环境。
+
+Agent 研究入口见 [Research MCP](docs/research-mcp.md)，复用同一研究 API 和队列。
