@@ -17,7 +17,8 @@ def main():
     root = Path(tempfile.mkdtemp(prefix="ashare-tests-"))
     environment = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"),
                        TMPDIR=str(root), TMP=str(root), TEMP=str(root), PYTHONDONTWRITEBYTECODE="1")
-    for key in ("ASHARE_DEPLOYMENT", "ASHARE_DATA_ROOT", "ASHARE_QUANT_DB"):
+    for key in ("ASHARE_DEPLOYMENT", "ASHARE_DATA_ROOT", "ASHARE_QUANT_DB",
+                "ASHARE_QUANT_PYTHON_HISTORY_FACTORS"):
         environment.pop(key, None)
     try:
         return subprocess.call([sys.executable, "-B", "-m", "pytest",

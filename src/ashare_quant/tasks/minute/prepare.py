@@ -31,7 +31,7 @@ def require(condition, code, message, details=None):
         raise DomainError(code, message, 422, details=details)
 
 
-def scope(pin, ids, start, end):
+def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20):
     release = MarketRelease(
         pin["root"], pin["release_id"], expected_manifest_sha256=pin["manifest_sha256"]
     )
@@ -43,6 +43,16 @@ def scope(pin, ids, start, end):
         "PYTHON_CALENDAR_GAP",
         "Requested dates need trading days, a previous and a following session",
     )
+    if frequency == "1d":
+        require(len(days) <= 126, "PYTHON_SCOPE_LIMIT", "Use at most 126 daily sessions")
+        require(
+            calendar.index(days[0]) >= warmup_sessions,
+            "PYTHON_WARMUP_GAP",
+            "The release has insufficient requested daily warmup sessions",
+        )
+        return days, calendar[
+            calendar.index(days[0]) - warmup_sessions : calendar.index(days[-1]) + 2
+        ]
     require(
         len(days) <= 23 and len(days) * len(ids) * 240 <= 20000,
         "PYTHON_SCOPE_LIMIT",
@@ -51,15 +61,23 @@ def scope(pin, ids, start, end):
     return days, calendar[calendar.index(days[0]) - 1 : calendar.index(days[-1]) + 2]
 
 
-def prepare(pin, request, root):
+def prepare_market(pin, request):
+    """Shared source observations for both Python frequencies; no execution or collection."""
     ids = list(request.securities)
-    days, cal = scope(pin, ids, str(request.start_date), str(request.end_date))
+    days, cal = scope(
+        pin,
+        ids,
+        str(request.start_date),
+        str(request.end_date),
+        request.frequency,
+        request.warmup_sessions,
+    )
     calendar = cal
     cfg = {"market_release": pin}
     owner = ReleasedDailyProduct(cfg)
     release = owner.release
     daily = owner.prices(ids, cal[0], days[-1])
-    bykey = {(r["security"], r["date"]): r for r in daily["rows"]}
+    bykey = {(r["security"], r["date"]): dict(r) for r in daily["rows"]}
     missing = [
         {"security": sid, "date": day} for sid in ids for day in cal[:-1] if (sid, day) not in bykey
     ]
@@ -97,10 +115,11 @@ def prepare(pin, request, root):
         row["suspended"] = row["tradestatus"] == "0"
     reader = ReleasedReferences(pin, pin)
     try:
-        view = ReleasedCorporateView(reader, ids, cal[0], days[-1])
+        corporate_start = days[0] if request.frequency == "1d" else cal[0]
+        view = ReleasedCorporateView(reader, ids, corporate_start, days[-1])
         corp = view.export_aq(
             ids,
-            start=cal[0],
+            start=corporate_start,
             end=days[-1],
             tax_model="gross_cash_no_tax",
             accept_source_scoped_coverage=True,
@@ -279,6 +298,18 @@ def prepare(pin, request, root):
                     ),
                 )
             )
+    return metadata, daily, release
+
+
+def prepare(pin, request, root, history_factors=None):
+    metadata, daily, release = prepare_market(pin, request)
+    if request.frequency == "1d":
+        from ashare_quant.backtests.daily.python_inputs import prepare_daily
+
+        return prepare_daily(metadata, daily, release, request, root, history_factors)
+    ids, days, sessions = metadata["securities"], metadata["days"], metadata["sessions"]
+    bykey = {(r["security"], r["date"]): r for r in daily["rows"]}
+    cfg = {"market_release": pin}
     bundles, reads = [], []
     excluded, unavailable = [], []
     annotations = {}

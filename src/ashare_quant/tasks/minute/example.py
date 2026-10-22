@@ -38,3 +38,20 @@ def exit_positions(context):
         for security in g.securities:
             order_target(security, 0)
 """
+
+DAILY_SOURCE = '''from jqdata import *
+
+def initialize(context):
+    set_universe(context.securities)
+    run_daily(rebalance, time="open")
+
+def rebalance(context):
+    lookback = int(context.parameters.get("lookback", 20))
+    shares = int(context.parameters.get("shares", 100))
+    for security in context.securities:
+        prices = attribute_history(security, lookback, "1d", ["close"], fq=None)
+        target = shares if prices.close.iloc[-1] > prices.close.mean() else 0
+        order_target(security, target)
+        log.info(security, "上一交易日", str(prices.index[-1].date()), "目标股数", target)
+        record(close=float(prices.close.iloc[-1]), average=float(prices.close.mean()))
+'''

@@ -219,23 +219,25 @@ class Board(AbstractPriceBoard):
 
 
 class Matcher(DefaultBarMatcher):
+    execution_phase = "EXECUTE"
+
     def __init__(self, host, config):
         self.host = host
         super().__init__(host.env, config, partial_fill_on_insufficient_cash=False)
 
     def _get_deal_price(self, order, instrument, open_auction=False):
-        require(self.host.phase == "EXECUTE" and not open_auction, "DAILY_OPEN_MATCH_PHASE")
+        require(self.host.phase == self.execution_phase and not open_auction, "DAILY_OPEN_MATCH_PHASE")
         return float(self.host.data.row(order.order_book_id, self.host.day)["open"])
 
     def _get_liquidity_limited_fill(self, order, instrument, open_auction=False):
         native_fill = super()._get_liquidity_limited_fill(order, instrument, open_auction)
         if not self._volume_limit:
             return native_fill
-        require(not open_auction and self.host.phase == "EXECUTE", "DAILY_VOLUME_MATCH_PHASE")
+        require(not open_auction and self.host.phase == self.execution_phase, "DAILY_VOLUME_MATCH_PHASE")
         # Keep the independently supplied decimal share volume, not its float bar copy.
         cap = strict_lot_capacity(
             self.host.data.row(order.order_book_id, self.host.day)["volume"],
-            runtime["manifest"]["execution"]["volume_ratio"],
+            self.volume_ratio(),
             instrument.round_lot,
             self._turnover[order.order_book_id],
         )
@@ -244,6 +246,9 @@ class Matcher(DefaultBarMatcher):
                 raise OrderCancelled("Strict whole-lot participation budget exhausted")
             raise OrderNotMatchable("Strict whole-lot participation budget exhausted")
         return min(native_fill, cap)
+
+    def volume_ratio(self):
+        return runtime["manifest"]["execution"]["volume_ratio"]
 
 
 class Helper(StrictHelper):

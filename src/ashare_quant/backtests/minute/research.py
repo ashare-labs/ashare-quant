@@ -164,7 +164,7 @@ def validate_document(doc):
         )
 
 
-def validate_state(state, *, corporate=False):
+def validate_state(state, *, corporate=False, ordinary_only=True):
     observed = state["source_observation"]
     require(
         observed["security"] == state["security"]
@@ -185,7 +185,9 @@ def validate_state(state, *, corporate=False):
             "MINUTE_RESEARCH_STATE_PROJECTION",
         )
     require(
-        state["listed"] is True and state["suspended"] is False and state["is_st"] is False,
+        state["listed"] is True
+        and type(state["suspended"]) is bool and type(state["is_st"]) is bool
+        and (not ordinary_only or (not state["suspended"] and not state["is_st"])),
         "MINUTE_RESEARCH_ONLY_OBSERVED_ORDINARY_TRADABLE_STOCKS",
     )
     require(

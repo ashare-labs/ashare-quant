@@ -309,6 +309,14 @@ class Mod(AbstractMod):
 
             install(self)
         runtime["mod"] = self
+        self.daily = getattr(self.data, "frequency", "1m") == "1d"
+        api_class, source_class, board_class = API, Source, Board
+        self.matcher_class = Matcher
+        if self.daily:
+            from ashare_quant.backtests.daily import python_native
+            from ashare_quant.backtests.daily.python_api import DailyAPI
+            api_class, source_class = DailyAPI, python_native.Source
+            self.matcher_class = python_native.Matcher
         self.jq_lifecycle = self.config["lifecycle"] == "jq_minute"
         self.jq_capacity = self.config["capacity_policy"] == "jq_daily_initial"
         self.at = stamp(
@@ -319,7 +327,7 @@ class Mod(AbstractMod):
         self.orders, self.trades, self.accounts = {}, [], []
         self.order_origin_cost = {}
         self.seq = 0
-        self.api = API(self)
+        self.api = api_class(self)
         self.namespace = self.api.namespace()
         env.set_event_source(
             JQEventSource(self.data)
@@ -333,8 +341,8 @@ class Mod(AbstractMod):
         if self.jq_lifecycle:
             self.handle_times = {d: set(handle_clocks(d)) for d in self.data.days}
             env.event_bus.add_listener(EVENT.USER, self.user_clock)
-        env.set_data_source(Source(self))
-        env.set_price_board(Board(self))
+        env.set_data_source(source_class(self))
+        env.set_price_board(board_class(self))
         env.event_bus.add_listener(EVENT.POST_SYSTEM_INIT, self.ready)
         env.event_bus.add_listener(EVENT.TRADE, self.trade)
         for kind in (
@@ -356,7 +364,7 @@ class Mod(AbstractMod):
 
     def ready(self, event):
         self.env.broker.register_matcher(
-            INSTRUMENT_TYPE.CS, Matcher(self, self.env.config.mod.sys_simulation)
+            INSTRUMENT_TYPE.CS, self.matcher_class(self, self.env.config.mod.sys_simulation)
         )
         for kind in (EVENT.PRE_BEFORE_TRADING, EVENT.PRE_BAR, EVENT.PRE_AFTER_TRADING):
             self.env.event_bus.prepend_listener(kind, self.clock)
@@ -604,6 +612,9 @@ class Mod(AbstractMod):
 
     def finish(self, event):
         self.refresh_valuation()
+        if self.daily and "on_strategy_end" in self.namespace:
+            self.phase = "end"
+            self.invoke(self.namespace["on_strategy_end"])
         p = self.env.portfolio
         if self.data.research and not self.data.full_session_input:
             require(
@@ -700,6 +711,20 @@ class Mod(AbstractMod):
                 else {}
             ),
         }
+        if self.daily:
+            self.result.update(
+                schema="aq-python-daily-result.v1",
+                model="previous-session-history-daily-open.v1",
+                execution_policy={
+                    "frequency": "1d", "matching": "daily_open",
+                    "history_visibility": "completed_daily_only; previous_session_at_open",
+                    "capacity": "exact-whole-lot-per-day-shared.v1",
+                    "retrospective_daily_denominator": True,
+                    "cash_policy": self.config["cash_policy"],
+                    "lifecycle": "daily", "terminal_positions": "marked_at_final_close",
+                    "price_limits": "declared_daily_preclose_model_not_certified",
+                },
+            )
 
     def tear_down(self, code, exception=None):
         return getattr(self, "result", None)
@@ -739,7 +764,7 @@ def run_native(root, data, source, config, identity, *, parameters=None):
         "base": {
             "start_date": data.days[0],
             "end_date": data.days[-1],
-            "frequency": "1m",
+            "frequency": getattr(data, "frequency", "1m"),
             "accounts": {"stock": config["initial_cash"]},
             "run_type": "b",
             "rqdatac_uri": "disabled",

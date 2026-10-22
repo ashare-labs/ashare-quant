@@ -11,7 +11,7 @@ from ashare_quant.tasks.minute.contracts import (
     PythonJobView,
     PythonResult,
 )
-from ashare_quant.tasks.minute.example import SOURCE
+from ashare_quant.tasks.minute.example import DAILY_SOURCE, SOURCE
 from ashare_quant.tasks.minute.service import PythonJobs
 
 
@@ -27,10 +27,22 @@ def mount(app, store, configuration=None):
     @app.get(prefix + "/catalogue")
     def catalogue(request: Request) -> dict:
         closed(request)
+        factors = jobs.history_factors
         return {
             "environment_id": jobs.environment(),
             "example": SOURCE,
             "frequency": "1m",
+            "frequencies": ["1m", "1d"],
+            "daily": {
+                "example": DAILY_SOURCE,
+                "parameters": {"lookback": 20, "shares": 100},
+                "max_sessions": 126,
+                "max_calendar_days": 186,
+                "warmup_sessions": 20,
+                "max_warmup_sessions": 120,
+                "terminal_positions": "marked_at_final_close",
+                "history_factors": factors["description"] if factors else None,
+            },
             "max_securities": 8,
             "max_sessions": 23,
             "max_stock_minutes": 20000,

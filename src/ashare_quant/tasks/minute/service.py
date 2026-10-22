@@ -21,10 +21,13 @@ from ashare_quant.tasks.minute.repository import Repository
 
 class PythonJobs(TaskService):
     def __init__(self, store, configuration=None, product=None):
+        from ashare_quant.providers.daily.history import configured_factors
+
         super().__init__(store, configuration)
         self.repo = Repository(store, self.repo.policy)
         self.executor = Executor(self.root, self.config, self.repo.policy)
         self.product = product
+        self.history_factors = configured_factors()
 
     def for_job(self, row):
         if json.loads(row["manifest"]).get("schema_version") == "python-minute-job.v1":
@@ -47,6 +50,7 @@ class PythonJobs(TaskService):
                 "configuration": config.document,
                 "data_root": str(config.data_root),
                 "control": str(self.repo.store.path),
+                "history_factors": self.history_factors,
             }
         )
 
@@ -121,11 +125,19 @@ class PythonJobs(TaskService):
             pin = self.product.call(pin_release)
             from ashare_quant.tasks.minute.prepare import scope
 
-            days, _ = scope(pin, request.securities, str(request.start_date), str(request.end_date))
+            days, _ = scope(
+                pin,
+                request.securities,
+                str(request.start_date),
+                str(request.end_date),
+                request.frequency,
+                request.warmup_sessions,
+            )
             self.executor.package()
             job_id = "m2job-" + uuid.uuid4().hex
             root = self.directory(job_id)
             root.mkdir(mode=0o700)
+            from ashare_quant.providers.daily.history import freeze_factors
             from ashare_quant.providers.runtime import pin as owner_pin
             from ashare_quant.runtime import runtime_fingerprint
 
@@ -136,6 +148,9 @@ class PythonJobs(TaskService):
                 "release": pin,
                 "request_sha256": digest(request),
                 "execution": "fresh_process_no_python_resume",
+                "history_factors": freeze_factors(self.history_factors, root)
+                if request.frequency == "1d"
+                else None,
             }
             files = {
                 "submission.json": canonical(request),
@@ -149,7 +164,9 @@ class PythonJobs(TaskService):
                 request=request,
                 source_sha256=self.source,
                 service_identity={"source_sha256": self.source, "backend_version": __version__},
-                execution_scope=PythonScope(securities=request.securities, trading_dates=days),
+                execution_scope=PythonScope(
+                    securities=request.securities, trading_dates=days, frequency=request.frequency
+                ),
                 release=pin,
                 session=session,
                 session_sha256=digest(session),

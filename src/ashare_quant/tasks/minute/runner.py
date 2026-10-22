@@ -47,11 +47,20 @@ def run(args):
         require(digest(request) == session["request_sha256"], "PYTHON_REQUEST_CHANGED")
         atomic(root / "phase.json", {"phase": "preparing"})
         print("Preparing frozen market data", flush=True)
-        prepare(session["release"], request, root)
-        data = MinuteInputs(
-            root / "input.json", accept_assumed=True, accept_state_replay=True, accept_research=True
-        )
+        prepare(session["release"], request, root, session.get("history_factors"))
         config = {**DEFAULTS, "initial_cash": request.initial_cash}
+        if request.frequency == "1d":
+            from ashare_quant.backtests.daily.python_inputs import DailyPythonInputs
+
+            data = DailyPythonInputs(root / "input.json")
+            config.update(matching="daily_open", lifecycle="daily", capacity_policy="daily")
+        else:
+            data = MinuteInputs(
+                root / "input.json",
+                accept_assumed=True,
+                accept_state_replay=True,
+                accept_research=True,
+            )
         data.validate_execution(config)
         atomic(root / "phase.json", {"phase": "executing"})
         print("Running Python strategy", flush=True)
@@ -100,11 +109,16 @@ if __name__ == "__main__":
             (f for f in reversed(frames) if Path(f.filename) == Path(args["root"]) / "strategy.py"),
             None,
         )
-        message = (f"strategy.py 第 {location.lineno} 行：" if location else "") + str(underlying)
+        cause_code = getattr(underlying, "code", None)
+        message = f"strategy.py 第 {location.lineno} 行：" if location else ""
+        message += (f"{cause_code}: " if cause_code else "") + str(underlying)
         atomic(
             Path(args["root"]) / (args["invocation"] + ".runner-error.json"),
             {
-                "code": "PYTHON_RUN_FAILED",
+                "code": cause_code
+                if str(cause_code).startswith("PYTHON_")
+                else "PYTHON_RUN_FAILED",
+                "cause_code": cause_code,
                 "message": message[:2000],
                 "details": getattr(underlying, "details", None),
                 "source_line": location.lineno if location else None,

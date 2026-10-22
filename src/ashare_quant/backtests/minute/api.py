@@ -143,7 +143,7 @@ class Context:
     def run_params(self):
         return SimpleNamespace(
             type="full_backtest" if self._host.jq_lifecycle else "backtest",
-            frequency="minute",
+            frequency="daily" if getattr(self._host.data, "frequency", "1m") == "1d" else "minute",
             start_date=datetime.fromisoformat(self._host.data.days[0]).date(),
             end_date=datetime.fromisoformat(self._host.data.days[-1]).date(),
         )
@@ -533,12 +533,7 @@ class API:
             ignore_index=True,
         ).sort_values(["time", "code"])
 
-    def _order(self, api_name, security, value, style, side, pindex, close_today):
-        self.securities(security)
-        require(
-            side == "long" and pindex == 0 and close_today is False,
-            "JQ_ONLY_LONG_SINGLE_STOCK_ACCOUNT",
-        )
+    def validate_order_clock(self, security):
         at, day = self.host.at, str(self.host.at.date())
         if self.host.jq_lifecycle:
             clock = at.strftime("%H:%M")
@@ -563,6 +558,15 @@ class API:
                     row is not None and row["_available"] <= at,
                     "JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
                 )
+
+    def _order(self, api_name, security, value, style, side, pindex, close_today):
+        self.securities(security)
+        require(
+            side == "long" and pindex == 0 and close_today is False,
+            "JQ_ONLY_LONG_SINGLE_STOCK_ACCOUNT",
+        )
+        self.validate_order_clock(security)
+        at = self.host.at
         require(type(value) in (int, float) and math.isfinite(value), "JQ_ORDER_FINITE_AMOUNT")
         if api_name in {"order_shares", "order_to"}:
             require(float(value).is_integer(), "JQ_ORDER_INTEGER_SHARES")
