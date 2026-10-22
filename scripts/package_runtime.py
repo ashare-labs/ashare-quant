@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--owner-wheel", type=Path, required=True)
     parser.add_argument("--backend-wheel", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--extra", action="append", choices=["factor-evaluation"], default=[])
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
     pin = verify()
@@ -29,7 +30,8 @@ def main():
     shutil.copy2(args.owner_wheel, root / "local-dependencies" / args.owner_wheel.name)
     shutil.copy2(args.backend_wheel, root / "wheels" / args.backend_wheel.name)
     subprocess.run(["uv", "export", "--offline", "--locked", "--no-dev", "--extra", "native",
-                    "--no-emit-project", "--output-file", str(root / "runtime-native.txt")],
+                    "--no-emit-project", "--output-file", str(root / "runtime-native.txt"),
+                    *[part for extra in args.extra for part in ("--extra", extra)]],
                    cwd=project, check=True, stdout=subprocess.DEVNULL)
     for name in ("uv.lock", "pyproject.toml", ".python-version"):
         shutil.copy2(project / name, root / name)
@@ -37,6 +39,7 @@ def main():
     members = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                for p in sorted(root.rglob("*")) if p.is_file()}
     manifest = {"schema": "ashare-runtime-bundle.v1", "python": platform.python_version(),
+                "extras": ["native", *args.extra],
                 "backend_source_sha256": source_sha256(),
                 "owner_runtime_code_sha256": pin["runtime_code_sha256"],
                 "backend_wheel": "wheels/" + args.backend_wheel.name,

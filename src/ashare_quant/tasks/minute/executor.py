@@ -12,6 +12,9 @@ from ashare_quant.tasks.daily.executor import Executor as TaskExecutor
 
 
 class Executor(TaskExecutor):
+    def runner(self):
+        return Path(__file__).with_name("runner.py")
+
     def command(
         self,
         action,
@@ -24,7 +27,7 @@ class Executor(TaskExecutor):
         control=None,
     ):
         package = self.package()
-        runner = Path(__file__).with_name("runner.py")
+        runner = self.runner()
         args = dict(
             action=action,
             root=str(job_dir),

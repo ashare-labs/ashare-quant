@@ -42,6 +42,9 @@ class Jobs(TaskService):
         return JobServiceIdentity(backend_version=__version__, source_sha256=self.source)
 
     def for_job(self, row):
+        if json.loads(row["manifest"]).get("schema_version") == "factor-job.v1":
+            from ashare_quant.tasks.factors.service import FactorJobs
+            return FactorJobs(self.repo.store, self.config, sources={})
         try:
             portfolio = json.loads(row["manifest"]).get("schema_version") == "portfolio-job-manifest.v1"
         except (ValueError, TypeError, AttributeError) as exc:
@@ -358,7 +361,7 @@ class Jobs(TaskService):
 
     def list(self):
         return JobList(items=tuple(self.view(row) for row in self.repo.rows()
-            if json.loads(row["manifest"]).get("schema_version") not in {"portfolio-job-manifest.v1", "python-minute-job.v1"}))
+            if json.loads(row["manifest"]).get("schema_version") not in {"portfolio-job-manifest.v1", "python-minute-job.v1", "factor-job.v1"}))
 
 
     def result(self, job_id):

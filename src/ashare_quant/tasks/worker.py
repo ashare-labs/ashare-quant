@@ -145,7 +145,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                 error_path = root / error_name
                 if error_path.exists():
                     reported = json.loads(regular(error_path))
-                    if str(reported.get("code", "")).startswith(("PYTHON_", "PORTFOLIO_")) or reported.get("code") in {
+                    if str(reported.get("code", "")).startswith(("PYTHON_", "PORTFOLIO_", "FACTOR_")) or reported.get("code") in {
                         "M2_JOB_RESOURCE_LIMIT", "M2_JOB_PARENT_LOST",
                     }:
                         error = {**reported, "returncode": process.returncode}

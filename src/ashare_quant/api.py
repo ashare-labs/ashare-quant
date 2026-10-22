@@ -46,7 +46,7 @@ from ashare_quant.storage.store import Store
 from ashare_quant.tasks.synthetic.service import Service
 
 
-def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None) -> FastAPI:
+def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None, factor_sources=None) -> FastAPI:
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
                   responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse},
@@ -103,6 +103,8 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     mount_product(app, store, product_configuration)
     from ashare_quant.tasks.minute.api import mount as mount_python
     mount_python(app, store, daily_tasks_configuration)
+    from ashare_quant.tasks.factors.api import mount as mount_factors
+    mount_factors(app, store, daily_tasks_configuration, factor_sources)
     from ashare_quant.diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
     roots = dict(market_stores) if market_stores is not None else json.loads(os.getenv("ASHARE_QUANT_MARKET_STORES", "{}"))

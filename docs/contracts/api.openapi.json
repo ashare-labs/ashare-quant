@@ -1257,6 +1257,75 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "EvaluationOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_bps": {
+            "default": [
+              0,
+              5,
+              10,
+              20
+            ],
+            "items": {
+              "type": "number"
+            },
+            "title": "Cost Bps",
+            "type": "array"
+          },
+          "direction": {
+            "default": 1,
+            "enum": [
+              -1,
+              1
+            ],
+            "title": "Direction",
+            "type": "integer"
+          },
+          "horizons": {
+            "default": [
+              1,
+              5,
+              10
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Horizons",
+            "type": "array"
+          },
+          "lag": {
+            "default": 1,
+            "maximum": 252.0,
+            "minimum": 1.0,
+            "title": "Lag",
+            "type": "integer"
+          },
+          "min_assets": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "Min Assets",
+            "type": "integer"
+          },
+          "quantiles": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 2.0,
+            "title": "Quantiles",
+            "type": "integer"
+          },
+          "rolling_window": {
+            "default": 20,
+            "maximum": 2520.0,
+            "minimum": 2.0,
+            "title": "Rolling Window",
+            "type": "integer"
+          }
+        },
+        "title": "EvaluationOptions",
+        "type": "object"
+      },
       "EventPage": {
         "additionalProperties": false,
         "properties": {
@@ -1491,6 +1560,404 @@
           "recovery"
         ],
         "title": "ExecutionStatus",
+        "type": "object"
+      },
+      "FactorCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Definition",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "environment_id": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Environment Id",
+            "type": "string"
+          },
+          "evaluation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvaluationOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "factor_id": {
+            "pattern": "^(joinquant|alpha191):[A-Za-z0-9_]+$",
+            "title": "Factor Id",
+            "type": "string"
+          },
+          "history_start": {
+            "format": "date",
+            "title": "History Start",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "label_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label End"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Parameters",
+            "type": "object"
+          },
+          "rank_policy": {
+            "default": "strict",
+            "enum": [
+              "strict",
+              "available"
+            ],
+            "title": "Rank Policy",
+            "type": "string"
+          },
+          "securities": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Securities",
+            "type": "array"
+          },
+          "source_id": {
+            "pattern": "^[A-Za-z0-9_-]{1,80}$",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment_id",
+          "idempotency_key",
+          "name",
+          "factor_id",
+          "definition",
+          "source_id",
+          "securities",
+          "history_start",
+          "start_date",
+          "end_date"
+        ],
+        "title": "FactorCreate",
+        "type": "object"
+      },
+      "FactorJobList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FactorJobView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FactorJobList",
+        "type": "object"
+      },
+      "FactorJobView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "can_resume": {
+            "title": "Can Resume",
+            "type": "boolean"
+          },
+          "cancellation_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Requested At"
+          },
+          "checkpoint_complete": {
+            "title": "Checkpoint Complete",
+            "type": "boolean"
+          },
+          "committed_cursor": {
+            "title": "Committed Cursor",
+            "type": "integer"
+          },
+          "contract_version": {
+            "const": "factor-jobs.v1",
+            "default": "factor-jobs.v1",
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "recovery_required": {
+            "title": "Recovery Required",
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/FactorCreate"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResultReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Session Sha256",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "cancelling",
+              "cancelled",
+              "failed",
+              "succeeded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_cursors": {
+            "title": "Total Cursors",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "request",
+          "status",
+          "account_id",
+          "manifest_sha256",
+          "session_sha256",
+          "created_at",
+          "updated_at",
+          "attempt_count",
+          "committed_cursor",
+          "total_cursors",
+          "checkpoint_complete",
+          "cancellation_requested_at",
+          "recovery_required",
+          "can_resume",
+          "result",
+          "error"
+        ],
+        "title": "FactorJobView",
+        "type": "object"
+      },
+      "FactorResult": {
+        "additionalProperties": false,
+        "properties": {
+          "evaluation": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation"
+          },
+          "factor": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Factor",
+            "type": "object"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Provenance",
+            "type": "object"
+          },
+          "request": {
+            "$ref": "#/components/schemas/FactorCreate"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/FactorRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "aq.factor-exploration.v1",
+            "default": "aq.factor-exploration.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Summary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job_id",
+          "request",
+          "factor",
+          "provenance",
+          "rows",
+          "summary"
+        ],
+        "title": "FactorResult",
+        "type": "object"
+      },
+      "FactorRow": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "security": {
+            "title": "Security",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Text"
+          }
+        },
+        "required": [
+          "date",
+          "security",
+          "value",
+          "status"
+        ],
+        "title": "FactorRow",
         "type": "object"
       },
       "Fill": {
@@ -7109,7 +7576,7 @@
                 "type": "null"
               }
             ],
-            "default": "d34d1b46f116f6b990e9184ef1ad5b98e1e950af",
+            "default": "d787254ffdd96e4869db7b5572b72403a637b13f",
             "title": "Commit"
           },
           "name": {
@@ -7127,16 +7594,16 @@
                 "type": "null"
               }
             ],
-            "default": "c2aa86d195610bf78b36e8be1d753bb14a20cb4d",
+            "default": "f7a36e7c55735a14e8cb04e5a226291259171017",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev18",
+            "default": "0.10.0.dev19",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "b65dad85577cc0e558eb55a4de2b99a74e9976e96238fcf1a43f454405bb7096",
+            "default": "05ed569f6fb9f77bb2e9510055ea5b9295886dd92cb933869e27a5ff84ebe8cf",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -8483,6 +8950,776 @@
           }
         },
         "summary": "Admission"
+      }
+    },
+    "/api/v1/factors/catalogue": {
+      "get": {
+        "operationId": "catalogue_api_v1_factors_catalogue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "default": "gtja191.explicit.v1",
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Catalogue Api V1 Factors Catalogue Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Catalogue Api V1 Factors Catalogue Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Catalogue"
+      }
+    },
+    "/api/v1/factors/jobs": {
+      "get": {
+        "operationId": "listing_api_v1_factors_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorJobList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Listing Api V1 Factors Jobs Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Listing"
+      },
+      "post": {
+        "operationId": "create_api_v1_factors_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactorCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorJobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Create Api V1 Factors Jobs Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create"
+      }
+    },
+    "/api/v1/factors/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_api_v1_factors_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorJobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Get Api V1 Factors Jobs  Job Id  Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get"
+      }
+    },
+    "/api/v1/factors/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_api_v1_factors_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorJobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Cancel Api V1 Factors Jobs  Job Id  Cancel Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Cancel"
+      }
+    },
+    "/api/v1/factors/jobs/{job_id}/logs": {
+      "get": {
+        "operationId": "logs_api_v1_factors_jobs__job_id__logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobLogs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Logs Api V1 Factors Jobs  Job Id  Logs Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Logs"
+      }
+    },
+    "/api/v1/factors/jobs/{job_id}/result": {
+      "get": {
+        "operationId": "result_api_v1_factors_jobs__job_id__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Result Api V1 Factors Jobs  Job Id  Result Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Result"
+      }
+    },
+    "/api/v1/factors/sources": {
+      "get": {
+        "operationId": "source_list_api_v1_factors_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Source List Api V1 Factors Sources Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Source List Api V1 Factors Sources Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Source List"
       }
     },
     "/api/v1/health": {

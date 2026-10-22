@@ -46,6 +46,7 @@ ashare-quant --db .state/tasks/control.sqlite3 task-worker --once
 
 ## 使用指南
 
+- [因子看板与评价](docs/factors.md)：已有两来源库、冻结输入、真实数值与同页统计诊断。
 - [Python 策略工作台](docs/python-workbench.md)：自动准备正式数据、运行自定义分钟 Python、查看与取消任务。
 - [日频任务与策略](docs/tasks.md)：绑定、参数、可信代码、队列、结果及恢复。
 - [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份与空目录恢复。

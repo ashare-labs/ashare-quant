@@ -11,11 +11,12 @@ license-files = ["docs/licensing.md", "docs/rqalpha/RQAlpha-LICENSE.txt"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi==0.141.1", "pydantic==2.13.5", "uvicorn==0.52.4",
-  "ashare-data==0.10.0.dev18", "numpy==2.5.3",
+  "ashare-data==0.10.0.dev19", "numpy==2.5.3",
   "jsonpickle==4.1.3", "simplejson==4.2.0", "logbook==1.10.1",
 ]
 
 [project.optional-dependencies]
+factor-evaluation = ["ashare-data[factor-evaluation]==0.10.0.dev19"]
 # Read docs/licensing.md before installing. Data must be supplied through A数达.
 native = [
   "annotated-doc==0.0.5",
@@ -114,4 +115,4 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.uv.sources]
 # Build this artifact from the fixed public source with scripts/stage_owner.py before sync.
-ashare-data = { path = "local-dependencies/ashare_data-0.10.0.dev18-py3-none-any.whl" }
+ashare-data = { path = "local-dependencies/ashare_data-0.10.0.dev19-py3-none-any.whl" }

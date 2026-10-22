@@ -28,6 +28,8 @@ def main():
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--extra", action="append", choices=["factor-evaluation"], default=[])
+    parser.add_argument("--test", action="append", default=[], help="Additional installed-wheel test paths")
     parser.add_argument("--daily-components", type=Path)
     parser.add_argument("--paper-intraday-only", action="store_true",
                         help="Run only the synthetic owner/native paper behavior regressions")
@@ -48,6 +50,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="aq-wheel-") as temporary:
         root = Path(temporary)
+        env["XDG_CONFIG_HOME"] = str(root / "config")
         if not args.cache:
             env["UV_CACHE_DIR"] = str(root / "cache")
         python = root / "venv/bin/python"
@@ -63,7 +66,8 @@ def main():
         requirements = root / "requirements.txt"
         # Lint runs in the source check; the installed-runtime exercise needs no linter binary.
         run("export", ["uv", "export", "--locked", "--extra", "native", "--no-emit-project",
-                       "--no-emit-package", "ruff", "--no-config", "--output-file", str(requirements)])
+                       "--no-emit-package", "ruff", "--no-config", "--output-file", str(requirements),
+                       *[part for extra in args.extra for part in ("--extra", extra)]])
         run("venv", ["uv", "venv", "--no-config", "--python", sys.executable, str(root / "venv")])
         run("install-dependencies", ["uv", "pip", "install", "--no-config", "--python", str(python),
                                      "--require-hashes", "-r", str(requirements)])
@@ -96,6 +100,7 @@ def main():
         paper_intraday = ["tests/paper/test_intraday.py", "tests/paper/test_intraday_partial.py",
                           "tests/paper/test_late_close.py", "tests/paper/test_legacy_close_replay.py"]
         tests = paper_intraday if args.paper_intraday_only else tests + paper_intraday
+        tests += args.test
         test_output = run("tests", [str(python), "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider",
                                    "--basetemp", str(root / "test-output"),
                                    "--junitxml", str(output / "tests.xml"), *tests], validation)
@@ -106,6 +111,7 @@ def main():
                   "excluded_development_tools": ["ruff"], "offline": args.offline,
                   "daily_real_components": bool(args.daily_components),
                   "paper_intraday_only": args.paper_intraday_only,
+                  "extras": args.extra,
                   "tests": tests, "test_summary": test_output.strip().splitlines()[-1]}
         (output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result, indent=2))
