@@ -91,3 +91,8 @@ upper_limit、lower_limit 仍为 null。源 OHLC 与模型的半分一致性容�
 冻结午休成交容量案例的复验入口是 `python -m tests.fixtures.minute_reference.audit_capacity_regression --help`。它核对外部案例、策略、输入和原生结果哈希，在新目录重跑并审计分钟容量、现金差额及成交变化。该入口限定既有 `R09-lunch-participation` 案例；历史 ID、`aq-minute-r09-capacity-fix.v1` schema 和证据哈希保留，名称不表示支持任意案例。所需历史输入不随包发布；案例和基线只读，结果只写显式指定的新目录。
 
 `ashare-quant demo --engine fixture-replay-v1` 是确定性合成演示；native extra 可选 `--engine rqalpha`。这些场景验证控制层和原生约束，不代表真实行情回测。输出必须写新目录。
+
+## 性能复验
+
+确定性多证券长窗口基准、加载与引擎分层计时、完整事件一致性比较及当前测量见
+[分钟回测性能基准](backtest-performance.md)。生成输入和运行产物写独立新目录，不随源码发布。
