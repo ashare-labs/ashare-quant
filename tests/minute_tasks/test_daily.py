@@ -25,7 +25,15 @@ IDS = ["600000.XSHG", "000001.XSHE"]
 
 
 @pytest.fixture
-def fixed_release(tmp_path):
+def fixed_release(tmp_path, request):
+    omissions = getattr(request, "param", {})
+
+    def observed(value, field, index):
+        absent = (index < 20 and field in omissions.get("warmup_fields", ())) or (
+            index == 20 and field in omissions.get("execution_fields", ())
+        )
+        return None if absent else value
+
     days = [
         (date(2024, 1, 1) + timedelta(days=i)).isoformat()
         for i in range(130)
@@ -83,9 +91,9 @@ def fixed_release(tmp_path):
                     f"{sid}:{d}",
                     None,
                     "2025-01-01T00:00:00+00:00",
-                    str(prices[max(0, i - 1)]),
-                    "1",
-                    "0",
+                    observed(str(prices[max(0, i - 1)]), "preclose", i),
+                    observed("1", "tradestatus", i),
+                    observed("0", "is_st", i),
                 )
                 for i, d in enumerate(days[:-1])
             ]
@@ -333,6 +341,54 @@ def test_daily_callback_error_location_and_queued_cancellation(daily_jobs):
             "/api/v1/python/jobs/" + queued["job_id"] + "/cancel", json={}
         ).json()
         assert cancelled["status"] == "cancelled" and not cancelled["can_resume"]
+
+
+@pytest.mark.parametrize("fixed_release,skip_paused", [
+    ({"warmup_fields": ["preclose", "is_st"]}, True),
+    ({"warmup_fields": ["preclose", "is_st", "tradestatus"]}, False),
+], indirect=["fixed_release"])
+def test_daily_warmup_only_requires_fields_used_by_history(daily_jobs, skip_paused):
+    app, jobs, body = daily_jobs
+    body["source"] = f'''from jqdata import *
+def initialize(context): pass
+def handle_data(context, data):
+    for sid in context.securities:
+        values = attribute_history(sid, 5, fields=['close'], skip_paused={skip_paused}, fq=None)
+        assert len(values) == 5
+        order_target(sid, 100)
+def after_trading_end(context):
+    # A one-day pause-filtered query must not inspect older, unused warmup status.
+    assert len(attribute_history(context.securities[0], 1, fq=None)) == 1
+'''
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "succeeded", job.get("error")
+        result = client.get(job["result"]["href"]).json()
+        assert result["summary"]["trade_count"] == 2
+
+
+@pytest.mark.parametrize("fixed_release", [{"warmup_fields": ["tradestatus"]}], indirect=True)
+def test_daily_pause_filter_refuses_unknown_warmup_status(daily_jobs):
+    app, jobs, body = daily_jobs
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "failed"
+        assert job["error"]["code"] == "PYTHON_DAILY_HISTORY_STATE_GAP"
+        assert job["error"]["details"]["field"] == "tradestatus"
+        assert job["error"]["source_line"] is not None
+
+
+@pytest.mark.parametrize("fixed_release", [
+    {"execution_fields": ["tradestatus"]}, {"execution_fields": ["is_st"]},
+    {"execution_fields": ["preclose"]},
+], indirect=True)
+def test_daily_execution_fields_remain_required(daily_jobs):
+    app, jobs, body = daily_jobs
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "failed"
+        assert job["error"]["code"] in {"PYTHON_STATE_GAP", "PYTHON_DAILY_VALUE_GAP"}
+        assert client.get('/api/v1/python/jobs/' + job["job_id"] + '/result').status_code == 409
 
 
 def test_custom_daily_history_shapes_close_visibility_and_end_callback(daily_jobs):

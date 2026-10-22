@@ -78,8 +78,14 @@ class DailyAPI(API):
         if start is not None:
             rows = [r for r in rows if r["date"] >= start]
         if skip_paused:
-            rows = [r for r in rows if r["tradestatus"] == "1"]
-        if count is not None:
+            selected = []
+            for row in reversed(rows):
+                if not self.host.data.is_paused(sid, row["date"]):
+                    selected.append(row)
+                if count is not None and len(selected) == count:
+                    break
+            rows = list(reversed(selected))
+        elif count is not None:
             rows = rows[-count:]
         require(
             rows and (count is None or len(rows) == count),

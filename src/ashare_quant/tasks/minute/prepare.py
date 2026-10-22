@@ -106,11 +106,14 @@ def prepare_market(pin, request):
             )
             listings[sid] = rows[0]
     for (sid, day), row in bykey.items():
+        if request.frequency == "1d" and day not in days:
+            continue  # Warmup prices need status only when a history query filters pauses.
         require(
             row.get("tradestatus") in {"0", "1"} and row.get("is_st") in {"0", "1"},
             "PYTHON_STATE_GAP",
             "Missing dated trading/ST status",
-            {"security": sid, "date": day},
+            {"security": sid, "date": day,
+             "fields": [f for f in ("tradestatus", "is_st") if row.get(f) not in {"0", "1"}]},
         )
         row["suspended"] = row["tradestatus"] == "0"
     reader = ReleasedReferences(pin, pin)

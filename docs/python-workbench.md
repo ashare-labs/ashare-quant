@@ -6,7 +6,9 @@
 
 日频提交 `frequency="1d"` 和 `warmup_sessions`（默认 20，1—120）。最多 8 股、126 个交易日、186 个自然日；预热只供查询，不生成交易。日频只支持沪深普通主板，上市至少 30 个自然日。`run_daily` 支持 before_open/09:00、open/09:30、after_close/15:30、every_bar；`handle_data` 每交易日开盘执行一次，传入的完整 bar 截止上一交易日。开盘只允许提交原生订单并按当日开盘成交，`get_current_data().day_open` 在开盘后可见；当日完整 OHLC/量额到 15:00 才进入历史。`get_price` 支持 count 或 start/end 日期，`attribute_history` 可跳过有明确停牌标记的源行，未观测缺口不填充。收盘记录原生权益，允许期末持仓；当日总成交量 25% 是明确的回溯容量模型。`on_strategy_end` 可读取结果并记录日志，不再下单。
 
-日频与分钟共享数据准备、来源冻结、Python 回调、订单接口、日志、队列和结果发布；日频适配复用既有日线 Source / Matcher、原生账户和公司行动组件。CMES 只在 A数达解析，不在策略引擎复制。日频 `attribute_history/history/get_price` 的 `fq=None/pre/post` 通过同一 owner 价格接口投影，`get_bars(fq_ref_date=日期)` 支持显式前复权基准。默认基准为本次查询最后一个已可见交易日，避免用回测结束日因子处理较早决策；显式基准不得在当前时钟之后。复权只影响信号查询的 OHLC，量额、源 preclose、撮合与账户仍为原价。未配置固定因子版本时请求复权会明确报错。公司行动、上市日期、停牌/ST、preclose 或日历缺失均阻断准备，复权因子不替代公司行动到账证据，因此本功能不代表纯 CMES 完整切换。
+日频与分钟共享数据准备、来源冻结、Python 回调、订单接口、日志、队列和结果发布；日频适配复用既有日线 Source / Matcher、原生账户和公司行动组件。CMES 只在 A数达解析，不在策略引擎复制。日频 `attribute_history/history/get_price` 的 `fq=None/pre/post` 通过同一 owner 价格接口投影，`get_bars(fq_ref_date=日期)` 支持显式前复权基准。默认基准为本次查询最后一个已可见交易日，避免用回测结束日因子处理较早决策；显式基准不得在当前时钟之后。复权只影响信号查询的 OHLC，量额、源 preclose、撮合与账户仍为原价。未配置固定因子版本时请求复权会明确报错。公司行动、上市日期、执行日停牌/ST、执行日 preclose 或日历缺失均阻断准备，复权因子不替代公司行动到账证据，因此本功能不代表纯 CMES 完整切换。
+
+日频预热的 OHLC/量额完整性仍校验，但不要求只用于撮合价限的 `is_st` / `preclose`。预热的 `tradestatus` 在查询 `skip_paused=True` 时按实际读取范围校验；缺失返回 `PYTHON_DAILY_HISTORY_STATE_GAP`，附证券、日期、字段和策略行号。使用 `skip_paused=False` 可读取原始历史行，不推断其停牌状态。执行日期的交易状态、ST 和前收盘要求保持不变。
 
 联调实例可在启动前显式设置 `ASHARE_QUANT_PYTHON_HISTORY_FACTORS=/path/to/binding.json`，文件为 `{"root":"/path/to/factor-store","dataset_id":"完整 SHA256"}`；相对 root 以绑定文件目录为准，不允许 latest。服务载入配置后将其纳入 environment_id；任务接受时复制并验证因子快照到独立任务目录，输入与准备报告记录版本、截止日、源摘要和限制，执行时不再读取可变选择器。此配置不改正式行情、默认数据或公司行动来源。候选 AD 依赖组合导入 81313c1 与因子 310e468，固定集成提交 c90839fa588103de53c1e3bb6da135c5d5df10b8。
 

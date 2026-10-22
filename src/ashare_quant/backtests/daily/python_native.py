@@ -7,8 +7,7 @@ from ashare_quant.portfolio.native import Source as PortfolioSource
 class Source(PortfolioSource):
     def is_suspended(self, sid, dates):
         return [
-            self.host.data.row(sid, str(d.date() if hasattr(d, "date") else d))["tradestatus"]
-            == "0"
+            self.host.data.is_paused(sid, str(d.date() if hasattr(d, "date") else d))
             for d in dates
         ]
 

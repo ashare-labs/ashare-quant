@@ -116,7 +116,10 @@ class DailyPythonInputs:
                 key not in self.rows and key[0] in self.ids and key[1] in self.calendar[:-1],
                 "PYTHON_DAILY_ROW_SCOPE",
             )
-            for field in ("open", "high", "low", "close", "volume", "amount", "preclose"):
+            fields = ("open", "high", "low", "close", "volume", "amount")
+            if key[1] in self.days:
+                fields += ("preclose",)
+            for field in fields:
                 try:
                     number(row.get(field), zero=field in {"volume", "amount"})
                 except (ValueError, ArithmeticError) as exc:
@@ -129,7 +132,8 @@ class DailyPythonInputs:
             op, hi, lo, cl = (number(row[f]) for f in ("open", "high", "low", "close"))
             require(lo <= min(op, cl) <= max(op, cl) <= hi, "PYTHON_DAILY_OHLC")
             require(
-                row["tradestatus"] in {"0", "1"} and row["is_st"] in {"0", "1"},
+                key[1] not in self.days
+                or (row.get("tradestatus") in {"0", "1"} and row.get("is_st") in {"0", "1"}),
                 "PYTHON_DAILY_STATE_REQUIRED",
             )
             self.rows[key] = row
@@ -219,6 +223,17 @@ class DailyPythonInputs:
         return history_prices(
             raw, self.document["daily_receipt"], self.factors, adjustment, basis_date
         )
+
+    def is_paused(self, sid, day):
+        value = self.rows[sid, day].get("tradestatus")
+        if value not in {"0", "1"}:
+            raise DomainError(
+                "PYTHON_DAILY_HISTORY_STATE_GAP",
+                "Pause filtering requires observed trading status; use skip_paused=False for raw rows",
+                422,
+                details={"security": sid, "date": day, "field": "tradestatus"},
+            )
+        return value == "0"
 
     valuation_price = current
 
