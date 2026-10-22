@@ -46,6 +46,8 @@ ashare-quant --db .state/tasks/control.sqlite3 task-worker --once
 
 ## 使用指南
 
+Agent 研究入口见 [MCP 使用指南](docs/research-mcp.md)：可选安装、数据发现、自定义分钟 Python 回测、任务管理和有界结果读取。
+
 - [Python 策略工作台](docs/python-workbench.md)：自动准备正式数据、运行自定义分钟 Python、查看与取消任务。
 - [日频任务与策略](docs/tasks.md)：绑定、参数、可信代码、队列、结果及恢复。
 - [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份与空目录恢复。

@@ -16,6 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Agent adapter only; the research engine remains an independently run backend.
+mcp = ["mcp==2.3.0", "httpx==0.28.1"]
 # Read docs/licensing.md before installing. Data must be supplied through A数达.
 native = [
   "annotated-doc==0.0.5",
@@ -88,6 +90,7 @@ include = [
 
 [project.scripts]
 ashare-quant = "ashare_quant.cli:main"
+ashare-quant-mcp = "ashare_quant.mcp.server:main"
 
 [dependency-groups]
 dev = ["pytest==9.1.1", "httpx==0.28.1", "ruff==0.16.6", "packaging==26.3"]

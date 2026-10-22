@@ -1,0 +1,638 @@
+{
+  "schema": "research-mcp.tools.v1",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Discover real backend availability, environment identities and research limits.",
+      "inputSchema": {
+        "properties": {},
+        "title": "research_capabilitiesArguments",
+        "type": "object"
+      },
+      "name": "research_capabilities",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "research_capabilitiesDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Search the configured published instrument catalogue and list minute data sources.",
+      "inputSchema": {
+        "properties": {
+          "configuration_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Configuration Id",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "query": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "configuration_id"
+        ],
+        "title": "discover_dataArguments",
+        "type": "object"
+      },
+      "name": "discover_data",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "discover_dataDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Check coverage and fetch a bounded daily price page; gaps never become invented prices.",
+      "inputSchema": {
+        "$defs": {
+          "DailySelection": {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "format": "date",
+                "title": "End",
+                "type": "string"
+              },
+              "reference_set": {
+                "anyOf": [
+                  {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Reference Set"
+              },
+              "securities": {
+                "items": {
+                  "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+                  "type": "string"
+                },
+                "minItems": 1,
+                "title": "Securities",
+                "type": "array"
+              },
+              "source": {
+                "default": "auto",
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_.-]+$",
+                "title": "Source",
+                "type": "string"
+              },
+              "start": {
+                "format": "date",
+                "title": "Start",
+                "type": "string"
+              }
+            },
+            "required": [
+              "securities",
+              "start",
+              "end"
+            ],
+            "title": "DailySelection",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "configuration_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Configuration Id",
+            "type": "string"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "selection": {
+            "$ref": "#/$defs/DailySelection"
+          }
+        },
+        "required": [
+          "configuration_id",
+          "selection"
+        ],
+        "title": "inspect_dataArguments",
+        "type": "object"
+      },
+      "name": "inspect_data",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "inspect_dataDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Read published minute observations in pages; at most one security and three days.",
+      "inputSchema": {
+        "$defs": {
+          "MinuteSelection": {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "format": "date-time",
+                "title": "End",
+                "type": "string"
+              },
+              "security": {
+                "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+                "title": "Security",
+                "type": "string"
+              },
+              "source": {
+                "default": "auto",
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_.-]+$",
+                "title": "Source",
+                "type": "string"
+              },
+              "start": {
+                "format": "date-time",
+                "title": "Start",
+                "type": "string"
+              }
+            },
+            "required": [
+              "security",
+              "start",
+              "end"
+            ],
+            "title": "MinuteSelection",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "configuration_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Configuration Id",
+            "type": "string"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "selection": {
+            "$ref": "#/$defs/MinuteSelection"
+          }
+        },
+        "required": [
+          "configuration_id",
+          "selection"
+        ],
+        "title": "read_minute_pricesArguments",
+        "type": "object"
+      },
+      "name": "read_minute_prices",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "read_minute_pricesDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Submit trusted custom minute Python and return job_id immediately, without waiting.\n\n        User must explicitly accept trusted_local_code and accept_research_model. Both are\n        required, never defaulted. Reuse this exact body/key after uncertain network outcomes.\n        Limits: 8 stocks, 23 sessions, 20000 stock-minutes; no Python checkpoint resume.\n        ",
+      "inputSchema": {
+        "$defs": {
+          "JsonValue": {},
+          "StrategySubmission": {
+            "additionalProperties": false,
+            "description": "Consent fields remain required Literal[True]; never inferred by this adapter.",
+            "properties": {
+              "accept_research_model": {
+                "const": true,
+                "title": "Accept Research Model",
+                "type": "boolean"
+              },
+              "end_date": {
+                "format": "date",
+                "title": "End Date",
+                "type": "string"
+              },
+              "environment_id": {
+                "pattern": "^[a-f0-9]{64}$",
+                "title": "Environment Id",
+                "type": "string"
+              },
+              "idempotency_key": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Idempotency Key",
+                "type": "string"
+              },
+              "initial_cash": {
+                "default": 100000,
+                "exclusiveMinimum": 0,
+                "maximum": 100000000,
+                "title": "Initial Cash",
+                "type": "number"
+              },
+              "name": {
+                "maxLength": 80,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "parameters": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Parameters",
+                "type": "object"
+              },
+              "securities": {
+                "items": {
+                  "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+                  "type": "string"
+                },
+                "maxItems": 8,
+                "minItems": 1,
+                "title": "Securities",
+                "type": "array"
+              },
+              "source": {
+                "maxLength": 262144,
+                "minLength": 1,
+                "title": "Source",
+                "type": "string"
+              },
+              "start_date": {
+                "format": "date",
+                "title": "Start Date",
+                "type": "string"
+              },
+              "trusted_local_code": {
+                "const": true,
+                "title": "Trusted Local Code",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "environment_id",
+              "name",
+              "idempotency_key",
+              "source",
+              "securities",
+              "start_date",
+              "end_date",
+              "accept_research_model",
+              "trusted_local_code"
+            ],
+            "title": "StrategySubmission",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "submission": {
+            "$ref": "#/$defs/StrategySubmission"
+          }
+        },
+        "required": [
+          "submission"
+        ],
+        "title": "submit_strategyArguments",
+        "type": "object"
+      },
+      "name": "submit_strategy",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "submit_strategyDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Recover a lost submission response using its original idempotency key.",
+      "inputSchema": {
+        "properties": {
+          "family": {
+            "enum": [
+              "python_minute",
+              "portfolio",
+              "daily"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "idempotency_key"
+        ],
+        "title": "find_research_jobArguments",
+        "type": "object"
+      },
+      "name": "find_research_job",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "find_research_jobDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Read authoritative queue/worker status, cancellation state and actionable failure.",
+      "inputSchema": {
+        "properties": {
+          "family": {
+            "enum": [
+              "python_minute",
+              "portfolio",
+              "daily"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "job_id"
+        ],
+        "title": "research_jobArguments",
+        "type": "object"
+      },
+      "name": "research_job",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "research_jobDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Request backend cancellation; running jobs may remain cancelling until acknowledged.",
+      "inputSchema": {
+        "properties": {
+          "family": {
+            "enum": [
+              "python_minute",
+              "portfolio",
+              "daily"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "job_id"
+        ],
+        "title": "cancel_research_jobArguments",
+        "type": "object"
+      },
+      "name": "cancel_research_job",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "cancel_research_jobDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Read a bounded log page. If logs changed, restart pagination from the first page.",
+      "inputSchema": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "family": {
+            "enum": [
+              "python_minute",
+              "portfolio",
+              "daily"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "family",
+          "job_id"
+        ],
+        "title": "research_logsArguments",
+        "type": "object"
+      },
+      "name": "research_logs",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "research_logsDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Read summary first, then complete bounded trades/positions/equity/orders pages.\n\n        Detailed sections currently support python_minute. Native values are projected,\n        never recalculated. Cursors bind the exact result and section.\n        ",
+      "inputSchema": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "family": {
+            "enum": [
+              "python_minute",
+              "portfolio",
+              "daily"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "section": {
+            "default": "summary",
+            "enum": [
+              "summary",
+              "trades",
+              "positions",
+              "equity",
+              "orders",
+              "strategy_logs"
+            ],
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "job_id"
+        ],
+        "title": "research_resultArguments",
+        "type": "object"
+      },
+      "name": "research_result",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "research_resultDictOutput",
+        "type": "object"
+      }
+    }
+  ]
+}
