@@ -3,6 +3,7 @@
 from fastapi import Request
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.strategies.files_api import mount as mount_files
 from ashare_quant.tasks.api import ActionRequest
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.minute.contracts import (
@@ -18,6 +19,7 @@ from ashare_quant.tasks.minute.service import PythonJobs
 def mount(app, store, configuration=None):
     jobs = PythonJobs(store, configuration, app.state.product)
     app.state.python_jobs = jobs
+    mount_files(app, app.state.product)
     prefix = "/api/v1/python"
 
     def closed(request):

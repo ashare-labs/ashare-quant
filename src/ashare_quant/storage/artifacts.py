@@ -49,16 +49,53 @@ def sync_dir(path):
         os.close(fd)
 
 
-def atomic(path, value):
+class AtomicWriteUncertain(OSError):
+    """Publication completed, but its directory durability could not be confirmed."""
+
+
+def atomic(path, value, *, dir_fd=None, overwrite=True):
+    """Publish complete bytes; optionally use an already checked directory descriptor."""
     path = Path(path)
     raw = value if isinstance(value, bytes) else canonical(value)
-    tmp = path.with_name(path.name + "." + uuid.uuid4().hex + ".pending")
-    with tmp.open("xb") as stream:
-        stream.write(raw)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(tmp, path)
-    sync_dir(path.parent)
+    if dir_fd is None:
+        fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            return atomic(path.name, raw, dir_fd=fd, overwrite=overwrite)
+        finally:
+            os.close(fd)
+    if path.name != str(path):
+        raise ValueError("Descriptor-relative publication requires a single filename")
+    tmp = "." + uuid.uuid4().hex + ".pending"
+    published = False
+    temporary_created = False
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o600, dir_fd=dir_fd)
+        temporary_created = True
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if overwrite:
+            os.replace(tmp, path.name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        else:
+            # link is an atomic create-if-absent; a concurrent creator cannot be overwritten.
+            os.link(tmp, path.name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd,
+                    follow_symlinks=False)
+        published = True
+        if not overwrite:
+            os.unlink(tmp, dir_fd=dir_fd)
+        os.fsync(dir_fd)
+    except OSError as exc:
+        if published:
+            raise AtomicWriteUncertain(exc.errno, "File published; durability unconfirmed") from exc
+        raise
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(tmp, dir_fd=dir_fd)
+            except OSError:
+                pass  # Best-effort cleanup must not mask the publication outcome.
 
 
 @contextmanager

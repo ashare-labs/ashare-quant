@@ -16,6 +16,7 @@ from ashare_quant.deployment.runtime import commands, deployment_lock, doctor, i
 from ashare_quant.paper.service import PaperService
 from ashare_quant.storage.artifacts import lock
 from ashare_quant.storage.store import Store
+from ashare_quant.strategies.files import StrategyFiles
 from tests.paper.fixtures import config as paper_config
 from tests.paper.fixtures import queue
 from tests.paper.test_recovery import economics
@@ -105,6 +106,9 @@ def test_native_money_trades_and_pending_run_survive_clean_restore(deployment, t
     assert first["native"]["trades"] and first["native"]["account"]["positions"]
     second_day = queue(paper, sid, session, 1, (0, 100), first["checkpoint_sha256"])
     pending = queued(deployment)
+    strategies = StrategyFiles(deployment.control_db.parent)
+    strategies.mkdir("研究")
+    strategies.save("研究/saved.py", "# 用户源码\n")
     bundle = tmp_path / "backup"
     result = create_backup(deployment, bundle)
     assert result["scope"] == "state"
@@ -117,6 +121,7 @@ def test_native_money_trades_and_pending_run_survive_clean_restore(deployment, t
     config = resolve(restored["deployment"])
     # Neither continued execution nor preserved reports may depend on the old root.
     deployment.data_root.rename(tmp_path / "old-root-hidden")
+    assert StrategyFiles(config.control_db.parent).read("研究/saved.py")["source"] == "# 用户源码\n"
     restored_paper = PaperService(config.paper_root)
     assert economics(restored_paper.report(sid, first_day)) == economics(first)
     assert economics(restored_paper.work(sid, second_day)) == expected

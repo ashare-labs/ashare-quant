@@ -155,7 +155,7 @@ def _plan(config, include_source_assets):
     add("control_db", config.control_db, "payload/state/control.sqlite3", required=True)
     add("tasks", config.control_db.with_name(config.control_db.name + ".tasks"),
         "payload/state/control.sqlite3.tasks")
-    for name in ("engines", "inputs", "checkpoints", "receipts"):
+    for name in ("engines", "inputs", "checkpoints", "receipts", "strategies"):
         add(name, config.control_db.parent / name, "payload/state/" + name)
     add("paper_root", config.paper_root, "payload/paper", required=True)
     omitted = []

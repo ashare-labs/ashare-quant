@@ -29,6 +29,7 @@
 | 正式数据发布 | `POST /api/v1/product/releases` | 保留通用发布流程及校验；已与 portfolio task service 解耦 |
 | 通用行情 | `/api/v1/market/stores`、`/market/{alias}/{dataset}` 及 prices/coverage | 保留只读查询；高级工具的“固定样本行情”只是旧页面名称，不代表应删除数据能力 |
 | 环境/频率/运行上限 | `GET /api/v1/python/catalogue` | 只有能力与限制，无 example、预设源码或参数；`frequencies` 为 1m、1d |
+| 本机策略文件 | `GET/POST /api/v1/python/directories`、`GET/PUT /api/v1/python/files` | 固定正式 state 根下目录和 UTF-8 `.py` 读写；[接口契约](strategy-files.md)，保存不执行代码，前端尚未接入 |
 | 新研究提交 | `POST /api/v1/python/jobs` | PythonCreate：显式 source、parameters、securities、日期、initial_cash、environment_id、幂等键；trusted_local_code 和 accept_research_model 均须明确提供 |
 | 日频 | 上述提交 `frequency=1d`，支持 warmup_sessions | 8 股、126 交易日、186 自然日；warmup 1–120，默认 20；末持仓按最后收盘标记 |
 | 分钟 | 上述提交 `frequency=1m` | 8 股、23 交易日、20000 股票分钟线；初始/终结空仓；固定提交股票池和回溯模型 |

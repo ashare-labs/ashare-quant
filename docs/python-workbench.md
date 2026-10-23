@@ -2,6 +2,9 @@
 
 后端统一接收用户自定义 Python 日频 / 分钟策略。提交源码、频率、股票池、日期、资金和 JSON 参数，明确确认可信代码与回溯模型；系统从当前正式发布冻结来源、参考资料和策略。此候选不包含前端改动，前端需按 [迁移说明](formal-backend-migration.md) 接入。
 
+编辑中的 `.py` 可通过[本机策略文件接口](strategy-files.md)保存到正式 state 根下的 `strategies/`。
+保存只写文件，运行仍使用下述显式提交与冻结流程；浏览器草稿不会自动迁移。
+
 策略定义 `initialize(context)`；可选 `before_trading_start`、`handle_data`、`after_trading_end` 和 `run_daily`。`context.parameters` 返回参数副本，`context.securities` 是本次固定股票池；数据查询仅访问已准备股票及已可见历史。原价历史查询需显式 `fq=None`。已有 jqdata 子集提供 history、attribute_history、get_price、get_bars、get_current_data、委托/撤单、record 和 log。没有全市场动态扫描、财务查询或任意频率能力。
 
 日频提交 `frequency="1d"` 和 `warmup_sessions`（默认 20，1—120）。最多 8 股、126 个交易日、186 个自然日；预热只供查询，不生成交易。日频只支持沪深普通主板，上市至少 30 个自然日。`run_daily` 支持 before_open/09:00、open/09:30、after_close/15:30、every_bar；`handle_data` 每交易日开盘执行一次，传入的完整 bar 截止上一交易日。开盘只允许提交原生订单并按当日开盘成交，`get_current_data().day_open` 在开盘后可见；当日完整 OHLC/量额到 15:00 才进入历史。`get_price` 支持 count 或 start/end 日期，`attribute_history` 可跳过有明确停牌标记的源行，未观测缺口不填充。收盘记录原生权益，允许期末持仓；当日总成交量 25% 是明确的回溯容量模型。`on_strategy_end` 可读取结果并记录日志，不再下单。
