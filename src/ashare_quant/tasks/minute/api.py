@@ -33,19 +33,17 @@ def mount(app, store, configuration=None):
             "frequency": "1m",
             "frequencies": ["1m", "1d"],
             "daily": {
-                "max_sessions": 126,
-                "max_calendar_days": 186,
-                "warmup_sessions": 20,
-                "max_warmup_sessions": 120,
+                "history": "requested_at_runtime",
                 "terminal_positions": "marked_at_final_close",
                 "history_factors": factors["description"] if factors else None,
             },
-            "max_securities": 8,
-            "max_sessions": 23,
-            "max_stock_minutes": 20000,
-            "terminal_positions": "flat",
+            "resource_budget": jobs.repo.policy.model_dump(mode="json"),
+            "terminal_positions": "marked_at_final_close",
             "historical_pit": False,
-            "universe": "fixed_at_submission",
+            "universe": "strategy_subscription",
+            "external_securities_required": False,
+            "catalogue_semantics": "retrospective recorded listing/code intervals; not historical PIT",
+
         }
 
     @app.post(prefix + "/jobs", status_code=201)

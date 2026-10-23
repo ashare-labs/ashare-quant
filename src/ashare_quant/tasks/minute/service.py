@@ -32,7 +32,7 @@ class PythonJobs(TaskService):
         self.history_factors = configured_factors()
 
     def for_job(self, row):
-        if json.loads(row["manifest"]).get("schema_version") == "python-minute-job.v1":
+        if json.loads(row["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2"}:
             return self
         from ashare_quant.tasks.service import Jobs
 
@@ -81,9 +81,9 @@ class PythonJobs(TaskService):
                 if p.is_file() and not p.is_symlink()
             )
             require(
-                used < 512 * 1024 * 1024,
+                used < self.repo.policy.artifact_bytes,
                 "PYTHON_TASK_STORAGE_LIMIT",
-                "Local task artifacts reached 512 MiB. Export and archive completed tasks before continuing",
+                "Local task artifacts reached the configured artifact_bytes budget",
             )
             require(
                 len(request.source.encode()) <= 262144
@@ -92,7 +92,7 @@ class PythonJobs(TaskService):
                 "Source must fit 256 KiB and parameters 16 KiB",
             )
             try:
-                tree = ast.parse(request.source, filename="strategy.py")
+                ast.parse(request.source, filename="strategy.py")
             except SyntaxError as exc:
                 raise DomainError(
                     "PYTHON_SYNTAX_ERROR",
@@ -100,11 +100,6 @@ class PythonJobs(TaskService):
                     422,
                     details={"line": exc.lineno, "column": exc.offset},
                 ) from exc
-            require(
-                any(isinstance(n, ast.FunctionDef) and n.name == "initialize" for n in tree.body),
-                "PYTHON_INITIALIZE_REQUIRED",
-                "Define initialize(context) at module level",
-            )
             require(
                 self.product is not None,
                 "PYTHON_DATA_NOT_CONFIGURED",
@@ -125,16 +120,9 @@ class PythonJobs(TaskService):
                 )
 
             pin = self.product.call(pin_release)
-            from ashare_quant.tasks.minute.prepare import scope
+            from ashare_quant.tasks.minute.demand import run_scope
 
-            days, _ = scope(
-                pin,
-                request.securities,
-                str(request.start_date),
-                str(request.end_date),
-                request.frequency,
-                request.warmup_sessions,
-            )
+            days, _ = run_scope(pin, str(request.start_date), str(request.end_date))
             self.executor.package()
             job_id = "m2job-" + uuid.uuid4().hex
             root = self.directory(job_id)
@@ -150,6 +138,8 @@ class PythonJobs(TaskService):
                 "release": pin,
                 "request_sha256": digest(request),
                 "execution": "fresh_process_no_python_resume",
+                "data_access": "demand.v2",
+                "data_budget": self.repo.policy.model_dump(mode="json"),
                 "history_factors": freeze_factors(self.history_factors, root)
                 if request.frequency == "1d"
                 else None,
@@ -219,7 +209,7 @@ class PythonJobs(TaskService):
             items=tuple(
                 self.view(r)
                 for r in self.repo.rows()
-                if json.loads(r["manifest"]).get("schema_version") == "python-minute-job.v1"
+                if json.loads(r["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2"}
             )
         )
 
@@ -264,6 +254,9 @@ class PythonJobs(TaskService):
             preparation["input_sha256"] == digest(json.loads(regular(root / "input.json"))),
             "PYTHON_INPUT_CHANGED",
         )
+        if manifest.schema_version == "python-demand-job.v2":
+            require(native.get("data_input_sha256") == preparation["input_sha256"],
+                    "PYTHON_INPUT_CHANGED", "Completed result does not bind its actual data reads")
         events = []
         for line in regular(root / "events.jsonl").decode().splitlines():
             event = json.loads(line)

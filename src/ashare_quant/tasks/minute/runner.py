@@ -47,27 +47,31 @@ def run(args):
         require(digest(request) == session["request_sha256"], "PYTHON_REQUEST_CHANGED")
         atomic(root / "phase.json", {"phase": "preparing"})
         print("Preparing frozen market data", flush=True)
-        prepare(session["release"], request, root, session.get("history_factors"))
         config = {**DEFAULTS, "initial_cash": request.initial_cash}
+        demand = session.get("data_access") == "demand.v2"
         if request.frequency == "1d":
-            from ashare_quant.backtests.daily.python_inputs import DailyPythonInputs
-
-            data = DailyPythonInputs(root / "input.json")
             config.update(matching="daily_open", lifecycle="daily", capacity_policy="daily")
+        if demand:
+            from ashare_quant.tasks.minute.demand import DemandInputs
+            from ashare_quant.tasks.policy import ServicePolicy
+            data = DemandInputs(session["release"], request, root,
+                                ServicePolicy.model_validate(session["data_budget"]),
+                                session.get("history_factors"))
         else:
-            data = MinuteInputs(
-                root / "input.json",
-                accept_assumed=True,
-                accept_state_replay=True,
-                accept_research=True,
-            )
+            prepare(session["release"], request, root, session.get("history_factors"))
+            if request.frequency == "1d":
+                from ashare_quant.backtests.daily.python_inputs import DailyPythonInputs
+                data = DailyPythonInputs(root / "input.json")
+            else:
+                data = MinuteInputs(root / "input.json", accept_assumed=True,
+                                    accept_state_replay=True, accept_research=True)
         data.validate_execution(config)
         atomic(root / "phase.json", {"phase": "executing"})
         print("Running Python strategy", flush=True)
         identity = digest(
             {
                 "session": session,
-                "input": sha(regular(root / "input.json")),
+                "input": session["release"] if demand else sha(regular(root / "input.json")),
                 "config": config,
                 "source": args["source_sha256"],
             }
@@ -80,6 +84,9 @@ def run(args):
             identity,
             parameters=request.parameters,
         )
+        if demand:
+            report = data.finalize()
+            result["data_input_sha256"] = report["input_sha256"]
         atomic(root / "result.json", result)
         atomic(root / "completed.json", {"result_sha256": digest(result)})
         complete = True

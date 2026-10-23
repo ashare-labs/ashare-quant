@@ -16,6 +16,7 @@ FAMILIES = {
     "m2-job-manifest.v6": "daily",
     "portfolio-job-manifest.v1": "portfolio",
     "python-minute-job.v1": "python",
+    "python-demand-job.v2": "python",
     "factor-job.v1": "factors",
 }
 
@@ -100,7 +101,7 @@ class History(TaskService):
             reference = json.loads(row["result"])
             require(reference["result_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
             root = self.directory(job_id)
-            if manifest["schema_version"] in {"python-minute-job.v1", "factor-job.v1"}:
+            if manifest["schema_version"] in {"python-minute-job.v1", "python-demand-job.v2", "factor-job.v1"}:
                 require(reference["evidence_manifest_sha256"] == digest(manifest),
                         "HISTORY_IDENTITY_CONFLICT")
                 raw = evidence_file(root, "published.json")

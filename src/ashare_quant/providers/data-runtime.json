@@ -1,5 +1,5 @@
 {
-  "commit": "c518cf58799aa6e57f1a8a98e0578df668296432",
+  "commit": "de9f34ee6a0bd52277e2fcf33b8494f1ff92cb0e",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "efbc594c08be1b73ee2589f7c31b064279298e82bd30cd2618ca520b680e6a34",
+    "__init__.py": "ea8e64b2a0b85c28d3399732652280e190cdecb826b2d68c9e96b33437f63948",
     "cli/__init__.py": "8d193e425e38420b7f34075c9b681b22b7eebcade388cdc0a0fdc01c8813ef57",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/cmes.py": "a7b6646761d8dda5e166de0d855c585b6f90c1496a5077ef2e12f79590795221",
@@ -102,7 +102,7 @@
     "product/configuration.py": "93fa1bd7a6b17c78ff8745827ae5a67abf627b807fce7f5f9ff519a8d4161c48",
     "product/daily.py": "9faf419af90d2becae0e63d9e2364bf4ad579aaf6b6808c743215da6590f28fd",
     "product/financial_release.py": "d19796149c9e5a1d4c457ba66efd2b8222d54cc610b4d5e83994461176fbef46",
-    "product/market_release.py": "9b83f258855e602ff297b58dcb8be4bb67a4575eb74940cbc8c0f895c6c5f636",
+    "product/market_release.py": "77499428aafb1631d4e452ad6ba15184630633bd6e96c664b6e9b862db534f03",
     "product/minute.py": "df6f904fbd47f5d3e396a2e4406dd89f640a5e6367b1bdb99db8cdac155529b8",
     "product/minute_quality.py": "0a4258e988581322172d09cd4100360fbd1357870dc0e5e4d036b266ac0f2e3f",
     "product/publication.py": "36356cbaa6cc8dcfa208d4c9732ba93424fc2d30a7d04f3eafdd7adc35d012ab",
@@ -188,10 +188,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "fc131f8d99b550cd9d13ffcb29f845c4df3e513ba17eabc748fda45abd15bee6",
+  "runtime_code_sha256": "4c22aa82bfe61ec2274b18e1db1100c1e856ecac61fc53b14d1de500d40bacd3",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "eafd8cdb7fb3a42fbf7fc50ac8490e03b41e8dd6",
-  "version": "0.10.0.dev20",
-  "wheel_sha256": "4fbab2a558a2935a79a014fadc55db0394daa804a8c25b4c902dbbdbe762b49e"
+  "tree": "e6d00743b7557cbad789d9820aa6a62fba45a883",
+  "version": "0.10.0.dev21",
+  "wheel_sha256": "1ea2cd9328d0c111089b04e7db93e099bf641f20e51933702e222fec1ea154b7"
 }

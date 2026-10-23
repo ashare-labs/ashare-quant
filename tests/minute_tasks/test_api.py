@@ -23,7 +23,7 @@ def setup(tmp_path, monkeypatch, request):
     release = SimpleNamespace(root=tmp_path, release_id=10, sha256="a" * 64)
     jobs.product = SimpleNamespace(call=lambda f: f(SimpleNamespace(release=release)))
     monkeypatch.setattr(
-        "ashare_quant.tasks.minute.prepare.scope", lambda *a: (["2024-03-04", "2024-03-05"], [])
+        "ashare_quant.tasks.minute.demand.run_scope", lambda *a: (["2024-03-04", "2024-03-05"], [])
     )
     monkeypatch.setattr(jobs.executor, "package", lambda: tmp_path)
     monkeypatch.setattr(jobs, "environment", lambda: "a" * 64)
@@ -81,12 +81,11 @@ def test_simultaneous_duplicate_requests_create_one_task(setup):
     "change",
     [
         {"source": "def initialize(:"},
-        {"source": "print('no callback')"},
         {"accept_research_model": False},
         {"trusted_local_code": False},
         {"securities": ["000001.XSHE", "000001.XSHE"]},
         {"environment_id": "b" * 64},
-        {"start_date": "2023-01-01"},
+        {"start_date": "2025-01-01"},
         {"initial_cash": 0},
     ],
 )
@@ -119,7 +118,7 @@ def test_changed_frozen_source_cannot_execute(setup):
 def test_context_parameters_are_detached_from_the_frozen_request():
     original = {"nested": {"size": 100}}
     context = Context(
-        SimpleNamespace(parameters=original, data=SimpleNamespace(ids=["000001.XSHE"]))
+        SimpleNamespace(parameters=original, api=SimpleNamespace(universe=["000001.XSHE"]))
     )
     context.parameters["nested"]["size"] = 200
     assert original["nested"]["size"] == 100

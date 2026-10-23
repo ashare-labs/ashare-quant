@@ -45,6 +45,8 @@ class Source(DailySource):
         require(frequency == "1m", "MINUTE_NATIVE_FREQUENCY")
         sid, at = instrument.order_book_id, dt.replace(tzinfo=SHANGHAI)
         require(at == self.host.at, "MINUTE_NATIVE_BAR_CLOCK")
+        if getattr(self.host.data, "demand", False):
+            self.host.data.component(sid, str(at.date()))
         row = self.host.data.bars.get((sid, at))
         if (sid, at) in self.host.data.gaps:
             return None  # Native unavailable bar; no invented OHLC/volume.
@@ -451,7 +453,8 @@ class Mod(AbstractMod):
     def initialize(self):
         from rqalpha.api import subscribe
 
-        subscribe(list(self.data.ids))
+        if self.data.ids:
+            subscribe(list(self.data.ids))
         exec(
             compile(runtime["source"], str(runtime["root"] / "strategy.py"), "exec"), self.namespace
         )
@@ -553,7 +556,9 @@ class Mod(AbstractMod):
     def portfolio_view(self):
         p, account = self.env.portfolio, self.env.portfolio.stock_account
         positions = {}
-        for sid in self.data.ids:
+        ids = ([p.order_book_id for p in account.get_positions()]
+               if getattr(self.data, "demand", False) else self.data.ids)
+        for sid in ids:
             pos = p.get_position(sid, POSITION_DIRECTION.LONG)
             corporate = self.data.corporate_actions is not None
             if pos.quantity or (corporate and pos.dividend_receivable):

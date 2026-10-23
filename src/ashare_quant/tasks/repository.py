@@ -30,7 +30,7 @@ class Repository:
                     accepted = ServicePolicy.model_validate_json(row[0])
                 except ValueError as exc:
                     raise DomainError("M2_JOB_POLICY_CHANGED", "Stored service policy is invalid") from exc
-                require(digest(accepted) == row[1], "M2_JOB_POLICY_CHANGED", "Stored service policy differs")
+                require(digest(json.loads(row[0])) == row[1], "M2_JOB_POLICY_CHANGED", "Stored service policy differs")
                 require(policy is None or policy == accepted, "M2_JOB_POLICY_CHANGED",
                         "Use this database's fixed service policy; choose a new database to change limits")
                 self.policy = accepted
@@ -46,7 +46,7 @@ class Repository:
         """Historical tasks retain their rows but do not occupy this runtime's queue."""
         if self.execution_source is None:
             return "1", ()
-        return ("COALESCE(json_extract(manifest, '$.schema_version') IN (?,?) AND "
+        return ("COALESCE(json_extract(manifest, '$.schema_version') IN (" + ",".join("?" for _ in ACTIVE_SCHEMAS) + ") AND "
                 "json_extract(manifest, '$.service_identity.source_sha256')=?,0)",
                 (*ACTIVE_SCHEMAS, self.execution_source))
 

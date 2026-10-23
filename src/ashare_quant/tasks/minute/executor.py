@@ -41,8 +41,8 @@ class Executor(TaskExecutor):
         )
         paths = [
             str(package),
-            str(metadata.distribution("rqalpha").locate_file("")),
             str(metadata.distribution("ashare-data").locate_file("")),
+            str(metadata.distribution("rqalpha").locate_file("")),
         ]
         boot = (
             "import hashlib,json,runpy,sys;p,r,a=json.loads(sys.argv[1]);"

@@ -61,7 +61,7 @@ def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20):
     return days, calendar[calendar.index(days[0]) - 1 : calendar.index(days[-1]) + 2]
 
 
-def prepare_market(pin, request):
+def prepare_market(pin, request, *, owner=None, daily=None, corporate=None):
     """Shared source observations for both Python frequencies; no execution or collection."""
     ids = list(request.securities)
     days, cal = scope(
@@ -74,9 +74,9 @@ def prepare_market(pin, request):
     )
     calendar = cal
     cfg = {"market_release": pin}
-    owner = ReleasedDailyProduct(cfg)
+    owner = owner or ReleasedDailyProduct(cfg)
     release = owner.release
-    daily = owner.prices(ids, cal[0], days[-1])
+    daily = daily if daily is not None else owner.prices(ids, cal[0], days[-1])
     bykey = {(r["security"], r["date"]): dict(r) for r in daily["rows"]}
     missing = [
         {"security": sid, "date": day} for sid in ids for day in cal[:-1] if (sid, day) not in bykey
@@ -116,11 +116,11 @@ def prepare_market(pin, request):
              "fields": [f for f in ("tradestatus", "is_st") if row.get(f) not in {"0", "1"}]},
         )
         row["suspended"] = row["tradestatus"] == "0"
-    reader = ReleasedReferences(pin, pin)
+    reader = ReleasedReferences(pin, pin) if corporate is None else None
     try:
         corporate_start = days[0] if request.frequency == "1d" else cal[0]
-        view = ReleasedCorporateView(reader, ids, corporate_start, days[-1])
-        corp = view.export_aq(
+        view = ReleasedCorporateView(reader, ids, corporate_start, days[-1]) if reader else None
+        corp = corporate if corporate is not None else view.export_aq(
             ids,
             start=corporate_start,
             end=days[-1],
@@ -134,7 +134,8 @@ def prepare_market(pin, request):
             {"issues": corp["issues"]},
         )
     finally:
-        reader.close()
+        if reader:
+            reader.close()
     refs = {
         "market": {"source": "Frozen AD MarketRelease", "sha256": release.sha256},
         "daily": {
@@ -304,8 +305,8 @@ def prepare_market(pin, request):
     return metadata, daily, release
 
 
-def prepare(pin, request, root, history_factors=None):
-    metadata, daily, release = prepare_market(pin, request)
+def prepare(pin, request, root, history_factors=None, *, owner=None, corporate=None):
+    metadata, daily, release = prepare_market(pin, request, owner=owner, corporate=corporate)
     if request.frequency == "1d":
         from ashare_quant.backtests.daily.python_inputs import prepare_daily
 

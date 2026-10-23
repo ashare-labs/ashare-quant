@@ -26,6 +26,11 @@ class ServicePolicy(Contract):
     rss_bytes: Annotated[int, Field(strict=True, ge=16777216, le=2**63-1)] = 1073741824
     cpu_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-2)] = 120
     open_files: Annotated[int, Field(strict=True, ge=64, le=2**63-1)] = 256
+    # Demand reads are budgeted independently of the trading subscription.
+    query_rows: Annotated[int, Field(strict=True, ge=1)] = 100000
+    cached_rows: Annotated[int, Field(strict=True, ge=1)] = 250000
+    read_rows: Annotated[int, Field(strict=True, ge=1)] = 1000000
+    artifact_bytes: Annotated[int, Field(strict=True, ge=1048576)] = 536870912
 
     @classmethod
     def environment(cls):

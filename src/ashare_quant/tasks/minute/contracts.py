@@ -16,8 +16,9 @@ class PythonCreate(Contract):
     source: str = Field(min_length=1, max_length=262144)
     parameters: JSONObject = Field(default_factory=dict)
     frequency: Literal["1m", "1d"] = "1m"
-    warmup_sessions: int = Field(default=20, ge=1, le=120, strict=True)
-    securities: tuple[Security, ...] = Field(min_length=1, max_length=8)
+    # Accepted for old clients; history is resolved at its actual API call.
+    warmup_sessions: int = Field(default=20, ge=0, strict=True)
+    securities: tuple[Security, ...] = ()
     start_date: date
     end_date: date
     initial_cash: float = Field(default=100000, gt=0, le=100000000, allow_inf_nan=False)
@@ -28,9 +29,6 @@ class PythonCreate(Contract):
     def bounds(self):
         if self.start_date > self.end_date or len(set(self.securities)) != len(self.securities):
             raise ValueError("Use ordered dates and unique securities")
-        limit = 186 if self.frequency == "1d" else 31
-        if (self.end_date - self.start_date).days > limit:
-            raise ValueError(f"Use at most {limit} calendar days per local task")
         return self
 
 
@@ -41,7 +39,7 @@ class PythonScope(Contract):
 
 
 class PythonManifest(Contract):
-    schema_version: Literal["python-minute-job.v1"] = "python-minute-job.v1"
+    schema_version: Literal["python-minute-job.v1", "python-demand-job.v2"] = "python-demand-job.v2"
     job_id: JobID
     request: PythonCreate
     source_sha256: Sha

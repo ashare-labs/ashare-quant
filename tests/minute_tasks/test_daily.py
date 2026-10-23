@@ -27,6 +27,7 @@ IDS = ["600000.XSHG", "000001.XSHE"]
 @pytest.fixture
 def fixed_release(tmp_path, request):
     omissions = getattr(request, "param", {})
+    ids = omissions.get("securities", IDS)
 
     def observed(value, field, index):
         absent = (index < 20 and field in omissions.get("warmup_fields", ())) or (
@@ -36,7 +37,7 @@ def fixed_release(tmp_path, request):
 
     days = [
         (date(2024, 1, 1) + timedelta(days=i)).isoformat()
-        for i in range(130)
+        for i in range(omissions.get("calendar_days", 130))
         if (date(2024, 1, 1) + timedelta(days=i)).weekday() < 5
     ]
     root = tmp_path / "constructed-market"
@@ -55,7 +56,7 @@ def fixed_release(tmp_path, request):
             [json.dumps({"manifest": {"target_start": days[0], "target_end": days[-1]}})],
         )
         db.executemany("INSERT INTO calendar VALUES(?,'constructed',NULL)", [(d,) for d in days])
-        for n, sid in enumerate(IDS, 1):
+        for n, sid in enumerate(ids, 1):
             symbol = ("sh" if sid.endswith("XSHG") else "sz") + sid[:6]
             db.execute("INSERT INTO release_instruments VALUES(?,?,?)", [n, sid, "fixture"])
             db.execute("INSERT INTO release_identifiers VALUES(?,?)", [sid, n])
@@ -72,19 +73,19 @@ def fixed_release(tmp_path, request):
             source_symbol VARCHAR,source VARCHAR,row_hash VARCHAR,response_id VARCHAR,
             observed_at VARCHAR,preclose VARCHAR,tradestatus VARCHAR,is_st VARCHAR)""")
         files = []
-        for n, sid in enumerate(IDS, 1):
+        for n, sid in enumerate(ids, 1):
             prices = [round(10 + n + math.sin(i / 5) * 0.3, 2) for i in range(len(days))]
             rows = [
                 (
                     1,
                     n,
                     d,
-                    prices[i] + 0.01,
-                    prices[i] + 0.02,
-                    prices[i] - 0.02,
-                    prices[i],
-                    100000,
-                    100000 * prices[i],
+                    observed(prices[i] + 0.01, "open", i),
+                    observed(prices[i] + 0.02, "high", i),
+                    observed(prices[i] - 0.02, "low", i),
+                    observed(prices[i], "close", i),
+                    observed(100000, "volume", i),
+                    observed(100000 * prices[i], "amount", i),
                     1,
                     ("sh" if sid.endswith("XSHG") else "sz") + sid[:6],
                     "constructed",
@@ -111,9 +112,25 @@ def fixed_release(tmp_path, request):
                     duplicate_keys=0,
                 )
             )
+        if omissions.get("minutes"):
+            for n, sid in enumerate(ids, 1):
+                item = writer.parquet(c, """
+                    SELECT 2::INTEGER series_id,instrument_id,trade_date,
+                      (trade_date::VARCHAR || 'T00:00:00+08:00')::TIMESTAMPTZ +
+                        m.minute * INTERVAL '1 minute' AS label_at,
+                      open_price,open_price AS high_price,open_price AS low_price,
+                      open_price AS close_price,10000::BIGINT volume_shares,
+                      10000 * open_price AS turnover_cny,1::INTEGER batch_id
+                    FROM prices CROSS JOIN
+                      (SELECT range AS minute FROM range(571,691)
+                       UNION ALL SELECT range FROM range(781,901)) m
+                    WHERE instrument_id=? AND trade_date BETWEEN ? AND ?
+                """, [n, days[18], days[23]], f"minutes{n}")
+                files.append(dict(item, table="bars_1m", series_id=2, instrument_id=n,
+                                  rows=6*240, first_date=days[18], last_date=days[23], duplicate_keys=0))
         evidence = []
         coverage, captures, actions = [], [], []
-        for sid in IDS:
+        for sid in ids:
             for source in ("sina_actions", "sina_structure"):
                 key = sid + source
                 coverage.append(
@@ -154,7 +171,7 @@ def fixed_release(tmp_path, request):
                 )
             actions.append(
                 dict(
-                    instrument_id=IDS.index(sid) + 1,
+                    instrument_id=ids.index(sid) + 1,
                     security=sid,
                     event_id=sid + "-past-action",
                     event_type="distribution",
@@ -232,7 +249,9 @@ def fixed_release(tmp_path, request):
 
 
 @pytest.fixture
-def daily_jobs(tmp_path, fixed_release, monkeypatch):
+def daily_jobs(tmp_path, fixed_release, monkeypatch, request):
+    if hasattr(request, "param"):
+        monkeypatch.setenv("ASHARE_QUANT_JOB_POLICY", json.dumps(request.param))
     release, days = fixed_release
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     jobs = app.state.python_jobs
@@ -274,7 +293,7 @@ def test_daily_python_preparation_native_equity_parameters_and_reload(daily_jobs
         result = client.get(job["result"]["href"]).json()
         assert result["native"]["real_strategy_executed"]
         assert result["native"]["schema"] == "aq-python-daily-result.v1"
-        assert result["preparation"]["daily_rows"] == 162
+        assert result["preparation"]["daily_rows"] == 132  # Actual 5-bar lookback plus execution days.
         assert len(result["native"]["accounts"]) == 61
         assert result["summary"]["trade_count"] > 4
         assert result["summary"]["final_equity"] != 100000
@@ -312,7 +331,7 @@ def test_daily_python_preparation_native_equity_parameters_and_reload(daily_jobs
         assert larger["summary"]["final_equity"] != result["summary"]["final_equity"]
         assert all(t["amount"] == 200 for t in larger["native"]["trades"])
         record_property(
-            "fixed_release_scope", "constructed prices; 2 securities; 61 sessions; 20 warmup"
+            "fixed_release_scope", "constructed prices; 2 securities; 61 sessions; 5 requested history bars"
         )
         record_property("shares_100", json.dumps(result["summary"]))
         record_property("shares_200", json.dumps(larger["summary"]))

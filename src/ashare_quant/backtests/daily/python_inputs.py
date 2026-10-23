@@ -66,9 +66,9 @@ class DailyPythonInputs:
     state_visibility = "posthoc_daily_replay"
     state_replay_used = True
 
-    def __init__(self, path):
-        self.document = doc = json.loads(Path(path).read_bytes())
-        self.factors = frozen_factors(Path(path).parent, doc.get("history_factors"))
+    def __init__(self, path, *, document=None, factors=None, execution_only=False):
+        self.document = doc = document if document is not None else json.loads(Path(path).read_bytes())
+        self.factors = factors if document is not None else frozen_factors(Path(path).parent, doc.get("history_factors"))
         self.sha256 = digest(doc)
         require(doc["schema"] == "aq-python-daily-input.v1", "PYTHON_DAILY_INPUT_SCHEMA")
         require(
@@ -117,6 +117,8 @@ class DailyPythonInputs:
                 "PYTHON_DAILY_ROW_SCOPE",
             )
             fields = ("open", "high", "low", "close", "volume", "amount")
+            if execution_only and key[1] not in self.days:
+                fields = ("close",)  # Native previous close does not use a historical OHLCV bar.
             if key[1] in self.days:
                 fields += ("preclose",)
             for field in fields:
@@ -129,8 +131,9 @@ class DailyPythonInputs:
                         422,
                         details={"security": key[0], "date": key[1], "field": field},
                     ) from exc
-            op, hi, lo, cl = (number(row[f]) for f in ("open", "high", "low", "close"))
-            require(lo <= min(op, cl) <= max(op, cl) <= hi, "PYTHON_DAILY_OHLC")
+            if "open" in fields:
+                op, hi, lo, cl = (number(row[f]) for f in ("open", "high", "low", "close"))
+                require(lo <= min(op, cl) <= max(op, cl) <= hi, "PYTHON_DAILY_OHLC")
             require(
                 key[1] not in self.days
                 or (row.get("tradestatus") in {"0", "1"} and row.get("is_st") in {"0", "1"}),

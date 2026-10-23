@@ -75,6 +75,10 @@ class Source(AbstractDataSource):
 
     def get_instruments(self, id_or_syms=None, types=None):
         ids = self.instruments if id_or_syms is None else id_or_syms
+        if getattr(self.host.data, "demand", False) and id_or_syms is not None:
+            self.host.data.securities(list(ids))
+            for sid in ids:
+                self.instruments.setdefault(sid, ScopedInstrument(self.host, sid))
         require(all(s in self.instruments for s in ids), "NATIVE_SECURITY_OUT_OF_SCOPE")
         return (
             [self.instruments[s] for s in ids]

@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from ashare_quant.backtests.minute.api import API, Quote, validate_callback
+from ashare_quant.backtests.minute.api import API, CurrentQuotes, Quote, validate_callback
 from ashare_quant.backtests.minute.inputs import require, stamp
 
 
@@ -10,6 +10,8 @@ class DailyQuote(Quote):
     @property
     def day_open(self):
         require(self._host.at.strftime("%H:%M") >= "09:30", "JQ_DAY_OPEN_NOT_VISIBLE")
+        if getattr(self._host.data, "demand", False):
+            return self._host.data.observed_value(self._sid, self._host.day, "open")
         return float(self._host.data.row(self._sid, self._host.day)["open"])
 
 
@@ -18,7 +20,7 @@ class DailyAPI(API):
         require(self.host.phase == "initialize", "JQ_SCHEDULE_ONLY_IN_INITIALIZE")
         validate_callback(func)
         require(
-            reference_security is None or reference_security in self.host.data.ids,
+            reference_security is None or self.securities(reference_security),
             "JQ_REFERENCE_SECURITY_OUT_OF_SCOPE",
         )
         clock = {"open": "09:30", "before_open": "09:00", "after_close": "15:30"}.get(time, time)
@@ -36,6 +38,8 @@ class DailyAPI(API):
 
     def get_current_data(self):
         require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")
+        if getattr(self.host.data, "demand", False):
+            return CurrentQuotes(self.host, DailyQuote)
         return {s: DailyQuote(self.host, s) for s in self.host.data.ids}
 
     def parse_end(self, value):
@@ -66,7 +70,9 @@ class DailyAPI(API):
         require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")
         self.securities(sid)
         require(unit in {"daily", "1d"}, f"JQ_FREQUENCY_UNSUPPORTED:{unit}")
-        require(count is None or (type(count) is int and 0 < count <= 10000), "JQ_HISTORY_COUNT")
+        require(count is None or (type(count) is int and 0 < count), "JQ_HISTORY_COUNT")
+        if not getattr(self.host.data, "demand", False):
+            require(count is None or count <= 10000, "JQ_HISTORY_COUNT")
         fields = [fields] if isinstance(fields, str) else list(fields)
         require(
             fields
@@ -74,10 +80,15 @@ class DailyAPI(API):
             and set(fields) <= {"open", "high", "low", "close", "volume", "money"},
             "JQ_HISTORY_FIELDS_UNSUPPORTED",
         )
-        rows = self.host.data.visible(sid, self.host.at, end=end, include_now=include_now)
-        if start is not None:
+        demand = getattr(self.host.data, "demand", False)
+        rows = (self.host.data.daily_history(
+            sid, self.host.at, count=count, start=start, end=end, include_now=include_now,
+            skip_paused=skip_paused, fields=fields,
+        ) if demand else self.host.data.visible(sid, self.host.at, end=end, include_now=include_now))
+        if start is not None and not demand:
+            require(start >= self.host.data.calendar[0], "JQ_HISTORY_RANGE_OUTSIDE_FROZEN_INPUT")
             rows = [r for r in rows if r["date"] >= start]
-        if skip_paused:
+        if skip_paused and not demand:
             selected = []
             for row in reversed(rows):
                 if not self.host.data.is_paused(sid, row["date"]):
@@ -85,11 +96,11 @@ class DailyAPI(API):
                 if count is not None and len(selected) == count:
                     break
             rows = list(reversed(selected))
-        elif count is not None:
+        elif count is not None and not demand:
             rows = rows[-count:]
         require(
             rows and (count is None or len(rows) == count),
-            f"JQ_INSUFFICIENT_VISIBLE_HISTORY:{sid}:{count}:{len(rows)}; increase warmup_sessions",
+            f"JQ_INSUFFICIENT_VISIBLE_HISTORY:{sid}:{count}:{len(rows)}",
         )
         latest = rows[-1]["date"]
         if basis_date is None:
@@ -148,6 +159,9 @@ class DailyAPI(API):
     ):
         require(type(df) is bool and type(skip_paused) is bool, "JQ_HISTORY_BOOLEAN_REQUIRED")
         ids = self.securities(self.universe if security_list is None else security_list)
+        if getattr(self.host.data, "demand", False):
+            require(type(count) is int and count > 0, "JQ_HISTORY_COUNT")
+            self.host.data.check_budget(len(ids) * count)
         import pandas as pd
 
         frames = {
@@ -212,6 +226,13 @@ class DailyAPI(API):
         start = str(self.parse_end(start_date).date()) if start_date is not None else None
         end = self.parse_end(end_date) if end_date is not None else None
         require(start is None or start <= str((end or self.host.at).date()), "JQ_DAILY_DATE_ORDER")
+        ids = self.securities(security)
+        if getattr(self.host.data, "demand", False):
+            size = count if type(count) is int else sum(
+                (start is None or d >= start) and stamp(d + "T15:00:00+08:00") <= (end or self.host.at)
+                for d in self.host.data.calendar
+            )
+            self.host.data.check_budget(len(ids) * size)
         frames = {
             s: self._history(
                 s,
@@ -223,7 +244,7 @@ class DailyAPI(API):
                 skip_paused=skip_paused,
                 adjustment=fq,
             )
-            for s in self.securities(security)
+            for s in ids
         }
         if isinstance(security, str):
             return frames[security]
