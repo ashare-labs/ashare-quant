@@ -15,6 +15,7 @@ MAX_BYTES = 32 * 1024 * 1024
 MAX_CELLS = 100_000
 SCHEMAS = {
     "alpha191.panel.v1": "alpha191",
+    "qlib_alpha158.panel.v1": "qlib_alpha158",
     "ad.factor-panel-batch-inputs.v1": "joinquant_panel",
     "ad.factor-research-independent-inputs.v1": "joinquant_research",
 }
@@ -147,7 +148,7 @@ class Sources:
                     securities = [s["security"] for s in stocks]
                     first = min((s["first_bar"] for s in stocks if s["first_bar"]), default=None)
                     last = max((s["last_bar"] for s in stocks if s["last_bar"]), default=None)
-                    capabilities = ["alpha191"]
+                    capabilities = ["alpha191", "qlib_alpha158"]
                     fields = ["open", "high", "low", "close", "volume", "amount", "vwap"]
                     identity = owner.release.receipt()
                     total = listing["total"]
@@ -156,7 +157,11 @@ class Sources:
                         "securities", [i["security"] for i in payload.get("items", [])]
                     )
                     first, last = payload["sessions"][0], payload["sessions"][-1]
-                    capabilities = [spec["kind"]]
+                    capabilities = (
+                        ["alpha191", "qlib_alpha158"]
+                        if spec["kind"] == "alpha191"
+                        else [spec["kind"]]
+                    )
                     fields = list(payload.get("fields", {}))
                     identity = {
                         "sha256": spec["sha256"],
@@ -221,9 +226,9 @@ class Sources:
             spec, payload = self.load(request.source_id)
             if payload is None:
                 require(
-                    request.factor_id.startswith("alpha191:"),
+                    request.factor_id.startswith(("alpha191:", "qlib_alpha158:")),
                     "FACTOR_INPUT_CONTRACT",
-                    "This raw market source supplies Alpha191 panels. Select a JoinQuant input snapshot for its adjusted-price/share/financial contracts.",
+                    "This raw market source supplies Alpha191 and Qlib Alpha158 panels. Select a JoinQuant input snapshot for its adjusted-price/share/financial contracts.",
                 )
                 payload, receipt, evaluation_inputs = market_panel(self.market(spec), spec, request)
                 kind = "alpha191"
@@ -236,9 +241,23 @@ class Sources:
                 )
                 kind = spec["kind"]
                 evaluation_inputs = None
-                if kind == "alpha191":
+                if kind == "qlib_alpha158":
                     require(
-                        request.factor_id.startswith("alpha191:"),
+                        all(
+                            isinstance(payload.get(k), str) and payload[k].strip()
+                            for k in ("volume_basis", "vwap_basis")
+                        ),
+                        "FACTOR_INPUT_CONTRACT",
+                        "Qlib panel requires explicit volume_basis and vwap_basis",
+                    )
+                    require(
+                        request.factor_id.startswith("qlib_alpha158:"),
+                        "FACTOR_INPUT_CONTRACT",
+                        "Qlib panel requires a Qlib feature",
+                    )
+                if kind in {"alpha191", "qlib_alpha158"}:
+                    require(
+                        request.factor_id.startswith(("alpha191:", "qlib_alpha158:")),
                         "FACTOR_INPUT_CONTRACT",
                         "Select a JoinQuant input snapshot for this factor",
                     )
@@ -251,6 +270,19 @@ class Sources:
                         "FACTOR_INPUT_CONTRACT",
                         "The selected snapshot does not contain this factor's input contract",
                     )
+            if request.factor_id.startswith("qlib_alpha158:"):
+                require(
+                    payload.get("instrument_ranges") is None,
+                    "FACTOR_INPUT_CONTRACT",
+                    "Register a panel with a common explicit history for dashboard exploration",
+                )
+                # Existing panel contracts specify actual share volume and explicit
+                # same-basis VWAP. Preserve that description; never adjust here.
+                payload.setdefault("volume_basis", "actual share volume; existing panel contract")
+                payload.setdefault(
+                    "vwap_basis",
+                    receipt.get("vwap", "explicit same-price-basis VWAP supplied by frozen panel"),
+                )
             sessions = payload["sessions"]
             require(
                 sessions and sessions == sorted(set(sessions)),
@@ -271,7 +303,7 @@ class Sources:
                 "FACTOR_INPUT_LIMIT",
                 "Narrow the selection to at most 100000 security sessions",
             )
-            if kind == "alpha191":
+            if kind in {"alpha191", "qlib_alpha158"}:
                 validate_panel(payload)
                 securities = payload["securities"]
                 require(

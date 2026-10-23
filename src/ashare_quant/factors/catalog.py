@@ -128,12 +128,18 @@ def catalogue(version=EXPLICIT_VERSION):
     result = []
     for (library, name), row in owner_catalog(alpha191_version=version).iterrows():
         alpha = library == "alpha191"
+        qlib = library == "qlib_alpha158"
         title, category, expression, inputs = (
-            (name.upper(), "Alpha191", row["expression"], list(row["dependencies"]))
-            if alpha
+            (
+                name.upper(),
+                "Qlib Alpha158" if qlib else "Alpha191",
+                row["expression"],
+                list(row["dependencies"]),
+            )
+            if alpha or qlib
             else DESCRIPTIONS[name]
         )
-        warmup = row["full_window_rows"] if alpha else MINIMUM.get(name, LOOKBACK.get(name))
+        warmup = row["full_window_rows"] if alpha or qlib else MINIMUM.get(name, LOOKBACK.get(name))
         parameters = []
         if alpha and name == "alpha143":
             parameters.append(
@@ -160,11 +166,16 @@ def catalogue(version=EXPLICIT_VERSION):
                 definition=row["definition"],
                 expression=expression,
                 description=(
-                    "GTJA Alpha191 显式价量研究公式。排名在本次固定股票范围内计算。"
+                    "Qlib v0.9.7 默认价量特征；部分窗口、float32、缺失和非有限值遵循官方规则。"
+                    if qlib
+                    else "GTJA Alpha191 显式价量研究公式。排名在本次固定股票范围内计算。"
                     if alpha
                     else "聚宽命名字段的已有研究定义；数值精度和来源口径沿用 AD。"
                 ),
                 inputs=inputs,
+                warmup_policy=row.get("warmup_policy") if qlib else None,
+                source=row.get("source") if qlib else None,
+                license=row.get("license") if qlib else None,
                 warmup_rows=int(warmup) if pd.notna(warmup) else None,
                 recursive_history=bool(row["recursive_or_event_history"])
                 if alpha
@@ -175,7 +186,16 @@ def catalogue(version=EXPLICIT_VERSION):
                 parameters=parameters,
                 entrypoint=row["entrypoint"],
                 definition_versions=list(VERSIONS) if alpha else [row["definition"]],
-                limitations=[
+                limitations=(
+                    [
+                        "158 是特征列数，不是有效策略数。",
+                        "窗口长度是上下文需求；官方允许部分窗口输出。",
+                        "VWAP 与成交量口径以冻结输入为准；不宣称供应商逐值等价。",
+                    ]
+                    if qlib
+                    else []
+                )
+                + [
                     "固定来源快照不等于历史时点认证或供应商逐值等价。",
                     "缺失值和预热不足保留原因，不补零。",
                 ],

@@ -1,5 +1,5 @@
 {
-  "commit": "d787254ffdd96e4869db7b5572b72403a637b13f",
+  "commit": "c518cf58799aa6e57f1a8a98e0578df668296432",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "c83f712e848578d7dc173557c3cff529aefdcc06b4a7176dc645f874857c3501",
+    "__init__.py": "efbc594c08be1b73ee2589f7c31b064279298e82bd30cd2618ca520b680e6a34",
     "cli/__init__.py": "8d193e425e38420b7f34075c9b681b22b7eebcade388cdc0a0fdc01c8813ef57",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/cmes.py": "a7b6646761d8dda5e166de0d855c585b6f90c1496a5077ef2e12f79590795221",
@@ -32,7 +32,7 @@
     "factors/alpha191/_engine.py": "5812a599ee215a97046a9967ec39a756fa73e95875bd4aad3ebe876ffd4b68c1",
     "factors/alpha191/_formulas.py": "1ddc239dd2c7849bd830633bf354628a43efc58096ac00d44f4a07563d49a628",
     "factors/alpha191/sources.json": "47aa469109f4c36f61c7312d88e9a1a4afc5ead7e022dba30e5f061ff0ab9087",
-    "factors/catalog.py": "a7688cf972c4426d1ad3ac1eecef8869dc75e0651c42af3f104cf6e7ddd27a50",
+    "factors/catalog.py": "83b85fadb272da1afb39231ddf278ca6185f9b731760f419cc6a49c81a54b970",
     "factors/evaluation/__init__.py": "0472a3af20925f167bb691b686c8d8b1963a3f9de7a58f26e111c15768aecb30",
     "factors/evaluation/_inputs.py": "0851d1a27ace0f222b8b7782893b898c3e9a248d9c21bf125d50f7d41812b73e",
     "factors/evaluation/config.py": "bd84ffc83c0094cb597119a2e840bfd1d1d237bad99c7476ba6544f18dfc8476",
@@ -46,6 +46,9 @@
     "factors/joinquant/research_view.py": "4919f8c049d0c59b85b253e04c186786d720c27826233f5fc0e35c5e6f7c7e62",
     "factors/joinquant/share_financial.py": "c0f1819efaf5bf6a4857734547caaff45e0c5364153baee9cc7a335d20d4d533",
     "factors/joinquant/source_factors.py": "a2bd19e213bdcd711e66e47f352bbb4d1a0eefffba62ad5e1111cc1547da4d5c",
+    "factors/qlib_alpha158/__init__.py": "a366da5eb15d425362b14cf0a21de712375978c25c3837dd0f1c071c6ff3e19f",
+    "factors/qlib_alpha158/_ops.py": "068624fb56b50783c372ea8b8cf979d478390e303c3c6030bd7083fbb39344ca",
+    "factors/qlib_alpha158/features.json": "3a69f7ea70f1934fb782f36a151ed970b1ac7df98e1ff708733fa2d2e0ce4e03",
     "financials/__init__.py": "218c6d3acc52fbb79fdbfef46675f243f2cd36d3e9accaf151145c9138b85b01",
     "financials/batch_followup.py": "22158d801c9d8d06aca1107a9e3289451c330b77ce6b9e465da39e528d3c5723",
     "financials/expansion.py": "055d8ecf7ecc7cb9cb38fa681d79a0bac2ddf90e066c8f99a73ee21bb32b0b35",
@@ -185,10 +188,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "de4e68401efc07635bf10b942a6ba46ed79bab3d582951760c441a6949207d6f",
+  "runtime_code_sha256": "fc131f8d99b550cd9d13ffcb29f845c4df3e513ba17eabc748fda45abd15bee6",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "f7a36e7c55735a14e8cb04e5a226291259171017",
-  "version": "0.10.0.dev19",
-  "wheel_sha256": "05ed569f6fb9f77bb2e9510055ea5b9295886dd92cb933869e27a5ff84ebe8cf"
+  "tree": "eafd8cdb7fb3a42fbf7fc50ac8490e03b41e8dd6",
+  "version": "0.10.0.dev20",
+  "wheel_sha256": "4fbab2a558a2935a79a014fadc55db0394daa804a8c25b4c902dbbdbe762b49e"
 }

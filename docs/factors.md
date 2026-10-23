@@ -103,3 +103,19 @@ python scripts/verify_wheel.py dist/ashare_quant-0.12.0.dev20-py3-none-any.whl \
 
 生成运行包时给 `scripts/package_runtime.py` 添加 `--extra factor-evaluation`，将评价依赖一起
 导入现有 hash-locked 恢复清单。真实本机来源配置、数据库及数据不进入源码或 wheel。
+
+
+Qlib Alpha158 uses namespace `qlib_alpha158` and definition `qlib.alpha158.v0.9.7`.
+The unified directory contains 368 entries (19 + 191 + 158 engineered fields);
+this is not a strategy efficacy count. Numerical definitions remain owned by AD.
+Existing Alpha191 frozen panels and CMES released daily reads can also supply
+Alpha158, with explicit source price/volume/VWAP basis in calculation provenance.
+A dedicated `qlib_alpha158.panel.v1` source uses kind `qlib_alpha158`, the same
+panel axes/fields/units and requires nonempty `volume_basis` and `vwap_basis`.
+Dashboard panels currently use a common supplied history; per-security lifetime
+ranges remain available in AD's direct API and are rejected in dashboard inputs.
+No VWAP fallback is inferred by the calculator. CMES daily VWAP uses the existing
+same-row amount/share-volume adapter and is missing when volume is zero.
+Nonfinite Qlib results are JSON null with `QLIB_NAN` or signed infinity status;
+only finite OK cells enter `ashare_data.factors.evaluation.evaluate`.
+No processor fit, feature normalization beyond official formulas, or model training.

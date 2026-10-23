@@ -39,7 +39,7 @@ class FactorCreate(Contract):
     environment_id: Sha
     idempotency_key: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=1, max_length=80)
-    factor_id: str = Field(pattern=r"^(joinquant|alpha191):[A-Za-z0-9_]+$")
+    factor_id: str = Field(pattern=r"^(joinquant|alpha191|qlib_alpha158):[A-Za-z0-9_]+$")
     definition: str = Field(min_length=1, max_length=100)
     source_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
     securities: tuple[str, ...] = Field(min_length=1, max_length=100)

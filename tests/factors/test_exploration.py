@@ -63,7 +63,7 @@ def request(app, **changes):
 def test_catalogue_and_conservative_version(app):
     with TestClient(app) as client:
         c = client.get("/api/v1/factors/catalogue").json()
-        assert len(c["items"]) == 210
+        assert len(c["items"]) == 368
         assert len([r for r in c["items"] if r["library"] == "joinquant"]) == 19
         item = next(r for r in c["items"] if r["field"] == "alpha014")
         assert item["expression"] == "DELTA(C, 5)" and item["warmup_rows"] == 6
@@ -304,3 +304,67 @@ def test_foreign_or_malformed_task_identity_is_an_explicit_conflict(app):
             app.state.factor_jobs.repo.manifest({"manifest": raw})
         assert error.value.code == "M2_JOB_IDENTITY_CONFLICT"
         assert error.value.status == 409
+
+
+def test_qlib_official_features_use_same_worker_and_evaluation(app, source):
+    specs, payload = source
+    payload["adjustment"] = "adjusted:synthetic-frozen"
+    path = Path(specs["fixture"]["path"])
+    atomic(path, payload)
+    specs["fixture"]["sha256"] = sha(path.read_bytes())
+    app.state.factor_jobs.sources = Sources(specs)
+    # Recreate the app to bind this immutable specification and identity.
+    app = create_app(str(path.parent / "qlib.sqlite3"), factor_sources=specs)
+    with TestClient(app) as client:
+        listing = client.get("/api/v1/factors/sources").json()["items"][0]
+        assert "qlib_alpha158" in listing["capabilities"]
+        body = {
+            **request(app),
+            "factor_id": "qlib_alpha158:MA60",
+            "definition": "qlib.alpha158.v0.9.7",
+            "evaluation": {"horizons": [1], "quantiles": 2, "min_assets": 2},
+        }
+        created = client.post("/api/v1/factors/jobs", json=body)
+        assert created.status_code == 201, created.text
+        job_id = created.json()["job_id"]
+        assert work_one(Jobs(app.state.factor_jobs.repo.store), job_id) == job_id
+        job = client.get("/api/v1/factors/jobs/" + job_id).json()
+        assert job["status"] == "succeeded", job
+        result = client.get("/api/v1/factors/jobs/" + job_id + "/result").json()
+        assert result["summary"]["valid_cells"] == 24  # partial windows, day one included
+        assert result["rows"][0]["value"] == 1
+        assert result["factor"]["warmup_rows"] == 60
+        assert result["evaluation"]["schema"] == "ad.factor-evaluation.v1"
+        assert result["provenance"]["calculation"]["qlib_commit"].startswith("da920b7")
+        restored = create_app(str(path.parent / "qlib.sqlite3"), factor_sources=specs)
+        with TestClient(restored) as again:
+            assert again.get("/api/v1/factors/jobs/" + job_id + "/result").json() == result
+
+
+def test_qlib_signed_infinity_is_null_with_reason_and_missing_vwap_is_not_filled(source):
+    specs, payload = source
+    payload["fields"]["open"] = payload["fields"]["close"]
+    payload["fields"]["close"] = [list(row) for row in payload["fields"]["close"]]
+    payload["fields"]["close"][0][0] = 0
+    path = Path(specs["fixture"]["path"])
+    atomic(path, payload)
+    specs["fixture"]["sha256"] = sha(path.read_bytes())
+    body = FactorCreate(
+        environment_id="a" * 64,
+        idempotency_key="edge",
+        name="edge",
+        factor_id="qlib_alpha158:OPEN0",
+        definition="qlib.alpha158.v0.9.7",
+        source_id="fixture",
+        securities=payload["securities"],
+        history_start=payload["sessions"][0],
+        start_date=payload["sessions"][0],
+        end_date=payload["sessions"][-1],
+    )
+    result = compute(Sources(specs).freeze(body), body, "m2job-" + "3" * 32)
+    assert result["rows"][0]["value"] is None
+    assert result["rows"][0]["value_text"] == "inf"
+    assert result["rows"][0]["status"] == "POSITIVE_INFINITY"
+    body = body.model_copy(update={"factor_id": "qlib_alpha158:VWAP0"})
+    result = compute(Sources(specs).freeze(body), body, "m2job-" + "4" * 32)
+    assert all(row["status"] == "MISSING_DEPENDENCY" for row in result["rows"])

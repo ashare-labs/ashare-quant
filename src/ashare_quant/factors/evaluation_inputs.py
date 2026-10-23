@@ -13,7 +13,7 @@ def source_basis(spec, payload):
         return (
             "CMES pre-adjusted close; frozen factor dataset" if spec.get("cmes_factors") else None
         )
-    if spec["kind"] == "alpha191":
+    if spec["kind"] in {"alpha191", "qlib_alpha158"}:
         basis = payload.get("adjustment", "")
         return basis if basis.startswith("adjusted:") and "close" in payload["fields"] else None
     return (
@@ -45,7 +45,7 @@ def market_labels(raw, spec, request):
 
 
 def snapshot_labels(payload, kind):
-    if kind == "alpha191":
+    if kind in {"alpha191", "qlib_alpha158"}:
         basis = payload["adjustment"]
         require(
             basis.startswith("adjusted:") and "close" in payload["fields"],

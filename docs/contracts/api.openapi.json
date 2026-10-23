@@ -1592,7 +1592,7 @@
             ]
           },
           "factor_id": {
-            "pattern": "^(joinquant|alpha191):[A-Za-z0-9_]+$",
+            "pattern": "^(joinquant|alpha191|qlib_alpha158):[A-Za-z0-9_]+$",
             "title": "Factor Id",
             "type": "string"
           },
@@ -7576,7 +7576,7 @@
                 "type": "null"
               }
             ],
-            "default": "d787254ffdd96e4869db7b5572b72403a637b13f",
+            "default": "c518cf58799aa6e57f1a8a98e0578df668296432",
             "title": "Commit"
           },
           "name": {
@@ -7594,16 +7594,16 @@
                 "type": "null"
               }
             ],
-            "default": "f7a36e7c55735a14e8cb04e5a226291259171017",
+            "default": "eafd8cdb7fb3a42fbf7fc50ac8490e03b41e8dd6",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev19",
+            "default": "0.10.0.dev20",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "05ed569f6fb9f77bb2e9510055ea5b9295886dd92cb933869e27a5ff84ebe8cf",
+            "default": "4fbab2a558a2935a79a014fadc55db0394daa804a8c25b4c902dbbdbe762b49e",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -7756,7 +7756,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev20",
+            "default": "0.12.0.dev21",
             "title": "Backend Version",
             "type": "string"
           },
@@ -8766,7 +8766,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev20"
+    "version": "0.12.0.dev21"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -48,7 +48,7 @@ def compute(frozen, request, job_id):
     data, kind = frozen["payload"], frozen["kind"]
     dates = [d for d in data["sessions"] if str(request.start_date) <= d <= str(request.end_date)]
     metadata = {}
-    if kind == "alpha191":
+    if kind in {"alpha191", "qlib_alpha158"}:
         from ashare_data.factors.alpha191 import Alpha191
 
         axes = dict(index=pd.to_datetime(data["sessions"]), columns=data["securities"])
@@ -58,17 +58,31 @@ def compute(frozen, request, job_id):
             k: pd.DataFrame(data[k], index=axes["index"], dtype=float) if data.get(k) else None
             for k in ("benchmark", "factors")
         }
-        computed = Alpha191(
-            frames,
-            universe=membership,
-            adjustment=data["adjustment"],
-            units=data["units"],
-            version=request.definition,
-            rank_policy=request.rank_policy,
-            input_id=digest(frozen),
-            **request.parameters,
-            **extra,
-        ).compute([factor["field"]])
+        if factor["library"] == "qlib_alpha158":
+            from ashare_data.factors.qlib_alpha158 import Alpha158
+
+            computed = Alpha158(
+                frames,
+                universe=membership,
+                adjustment=data["adjustment"],
+                volume_basis=data["volume_basis"],
+                vwap_basis=data["vwap_basis"],
+                units=data["units"],
+                version=request.definition,
+                input_id=digest(frozen),
+            ).compute([factor["field"]])
+        else:
+            computed = Alpha191(
+                frames,
+                universe=membership,
+                adjustment=data["adjustment"],
+                units=data["units"],
+                version=request.definition,
+                rank_policy=request.rank_policy,
+                input_id=digest(frozen),
+                **request.parameters,
+                **extra,
+            ).compute([factor["field"]])
         sliced = computed.between(str(request.start_date), str(request.end_date))
         labels = sliced.status_labels()[factor["field"]]
         rows = [
@@ -76,7 +90,7 @@ def compute(frozen, request, job_id):
                 date=day.date().isoformat(),
                 security=sid,
                 value=float(value) if math.isfinite(value) else None,
-                value_text=None,
+                value_text=(str(float(value)) if math.isinf(value) else None),
                 status=labels.loc[(day, sid)],
                 reason=None if labels.loc[(day, sid)] == "OK" else labels.loc[(day, sid)],
             )
