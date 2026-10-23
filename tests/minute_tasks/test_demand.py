@@ -332,3 +332,34 @@ def handle_data(context,data):
         entries = list(result["native"]["corporate_entitlements"]["600000.XSHG"].values())
         assert len(entries) == 1 and entries[0]["basis"] == 100
         assert "2024-03-28" in entries[0]["stages"].values()
+
+
+@pytest.mark.parametrize(
+    "fixed_release",
+    [{"minutes": True, "execution_fields": ["tradestatus", "is_st", "preclose"]}],
+    indirect=True,
+)
+def test_pool_outside_minute_last_price_does_not_prepare_execution(daily_jobs):
+    app, jobs, body = daily_jobs
+    body.pop("securities")
+    body.update(
+        frequency="1m",
+        end_date=body["start_date"],
+        source="""from jqdata import *
+def initialize(context):
+    g.read = False
+def handle_data(context,data):
+    if not g.read:
+        last = get_current_data()['000001.XSHE'].last_price
+        prices = attribute_history('000001.XSHE',1,'1m',['close'],fq=None)
+        assert last == prices.close.iloc[-1]
+        g.read = True
+""",
+    )
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "succeeded", job.get("error")
+        root = jobs.directory(job["job_id"])
+        document = json.loads((root / "input.json").read_text())
+        assert document["corporate_schedules"] == {}
+        assert not (root / "execution-cache").exists()

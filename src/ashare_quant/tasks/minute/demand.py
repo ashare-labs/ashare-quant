@@ -532,6 +532,15 @@ class DemandInputs:
 
     valuation_price = current
 
+    def quote_price(self, sid, at):
+        """A read-only last price does not prepare a native execution component."""
+        if self.frequency == "1d":
+            return self.current(sid, at)
+        if at.strftime("%H:%M") < "09:31":
+            return self.observed_value(sid, self.previous[str(at.date())], "close")
+        row = self.minute_history(sid, at, count=1, fields=["close"])[-1]
+        return float(row["close"])
+
     def valuation_mark(self, sid, at):
         return self.component(sid, str(at.date())).valuation_mark(sid, at)
 

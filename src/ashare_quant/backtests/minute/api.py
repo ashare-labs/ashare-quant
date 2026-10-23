@@ -156,6 +156,8 @@ class Quote:
 
     @property
     def last_price(self):
+        if getattr(self._host.data, "demand", False):
+            return self._host.data.quote_price(self._sid, self._host.at)
         return self._host.data.current(self._sid, self._host.at)
 
     @property
