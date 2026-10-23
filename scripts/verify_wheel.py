@@ -28,7 +28,7 @@ def main():
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--offline", action="store_true")
-    parser.add_argument("--extra", action="append", choices=["factor-evaluation"], default=[])
+    parser.add_argument("--extra", action="append", choices=["factor-evaluation", "mcp"], default=[])
     parser.add_argument("--test", action="append", default=[], help="Additional installed-wheel test paths")
     parser.add_argument("--daily-components", type=Path)
     parser.add_argument("--paper-intraday-only", action="store_true",
@@ -87,6 +87,7 @@ def main():
         for name in ("tests", "scripts", "examples"):
             shutil.copytree(project / name, validation / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(project / "docs" / "contracts", validation / "docs" / "contracts")
         shutil.copyfile(project / "pyproject.toml", validation / "pyproject.toml")
         tests = ["tests/test_api.py", "tests/test_contract_export.py", "tests/test_public_package.py",
                  "tests/minute/test_native.py", "tests/minute/test_research_contract.py",

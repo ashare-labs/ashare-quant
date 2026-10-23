@@ -1,4 +1,4 @@
-# Agent 研究 MCP（首版）
+# Agent 研究 MCP
 
 A宽在现有 HTTP 后端之上提供可选 MCP 薄适配。它复用 AD 已发布数据、AQ 输入冻结、共享异步队列、幂等、原生回测、取消及结果；不建立另一个计算或调度系统。首次使用先调用 `research_capabilities`。
 
@@ -6,25 +6,43 @@ A宽在现有 HTTP 后端之上提供可选 MCP 薄适配。它复用 AD 已发�
 
 | 研究目标 | MCP 工具 | 当前行为 |
 | --- | --- | --- |
-| 确认环境和能力 | `research_capabilities` | 实际查询产品配置、分钟 Python catalogue、AQ OpenAPI；返回环境指纹、产品上限及扩展状态 |
+| 确认环境和能力 | `research_capabilities` | 实际核对产品配置、Python/因子 catalogue、来源与 AQ OpenAPI 契约；返回环境指纹、上限及扩展状态 |
 | 发现数据 | `discover_data` | 按查询词分页列出已发布证券和分钟数据源 |
 | 覆盖和日行情 | `inspect_data` | 复用 coverage/prices，返回覆盖证据和价格页；覆盖未就绪不会被改成已就绪 |
 | 分钟行情 | `read_minute_prices` | 单证券、有界时间窗、分页；保留缺失和数据源标记 |
-| 提交自定义策略 | `submit_strategy` | 自定义分钟 Python 源码及 JSON 参数，返回现有 `job_id` 和 queued 状态；不等待回测完成 |
+| 提交自定义策略 | `submit_strategy` | 自定义分钟/日频 Python 源码及 JSON 参数，返回现有 `job_id` 和 queued 状态；不等待回测完成 |
+| 因子目录 | `discover_factors` | 按库、名称查询并分页返回真实定义、依赖、历史需求；保留 Alpha191 和 Qlib Alpha158 命名空间 |
+| 因子来源 | `factor_sources` | 登记来源的就绪状态、口径、边界；指定 source_id 后分页列出证券 |
+| 因子计算与评价 | `submit_factor` | 复用 FactorCreate、冻结输入、既有 worker 和 AD Alphalens 评价，可选 label_end |
 | 找回提交 | `find_research_job` | 按原始幂等键查原后端任务，包括适配进程重启后 |
-| 任务跟踪和停止 | `research_job`、`cancel_research_job` | 原后端状态与取消确认，支持分钟 Python、portfolio 和固定日频任务 |
-| 日志及结果 | `research_logs`、`research_result` | 摘要默认；分钟任务支持成交、持仓、权益、订单、策略日志分页 |
+| 任务跟踪和停止 | `research_job`、`cancel_research_job` | 原后端状态与取消确认，支持分钟/日频 Python、因子、portfolio 和固定日频任务 |
+| 日志及结果 | `research_logs`、`research_result` | 摘要默认；Python 支持成交/持仓/权益/订单/日志；因子支持值、评价摘要及全部诊断分页 |
 
 分钟产品上限仍是 **8 股票、23 交易日、20000 根股票分钟线**（提交日期最多跨 31 日），初始/终结空仓、固定股票池、回溯研究、非历史 PIT；Python 内存不能断点恢复。不能把底层引擎更大的容量描述成当前产品能力。portfolio 和固定日频任务目前提供管理与摘要；其提交仍使用原后端正式工作流。
 
-因子统一接口及新日频 Python 所在 Air 提交尚未在本分支出现。首版发现 `/api/v1/factors/{catalogue,sources,jobs}` 路由并返回后端 OpenAPI 指纹，但 **不会仅凭路由存在启用因子计算**。因子/Alphalens 与新日频 Python 均明确 `available=false`；没有第二套实现，也没有以 mock 宣称真实集成。接入时应对照 AQ `3424fa8`、AD `d787254` 以及日频 AQ `ba24db4` / `0ebe45f` 的实际合并契约，扩展严格请求模型、限定路径与结果投影，再增加真实 worker 验收。现有契约测试覆盖“路由已出现但适配尚未验收”仍不可用的情况。不要复用旧固定日频 API 假装新自定义日频已可用。
+适配版本 `research-mcp.v1.1` 保留原 10 个工具名，新增 3 个因子工具；原分钟提交默认仍为 `1m`。
+组合基线为 AQ 因子 `b82f55e`、日频 `ba24db4`/`0ebe45f`、MCP `d4038b6`，
+固定 AD `c518cf5`（它已包含日频 AD `058ca16`）。适配器必须与该组合后端一起使用。
+能力发现同时检查实际 schema 和 live catalogue/sources；只有路径、HTTP 200、旧日频固定任务均不能启用扩展。
+`available` 表示接口与运行模块可用；具体来源的可计算字段、历史上下文和执行参考状态仍由来源及准备结果判定。
+
+日频指定 `frequency="1d"`，上限 8 股、126 交易日、186 自然日，`warmup_sessions` 为 1–120，默认 20；
+末持仓按最后收盘标记。`python_daily` 与原 `python_minute` family 是同一后端 `/python` 队列的路由别名，
+任务详情中的 frequency 才是实际频率。`daily` 仍指旧固定日频任务，不能与自定义 Python 混用。
+
+因子目录共 368 项：19 项聚宽命名研究因子、191 项 Alpha191、158 项 Qlib 工程特征。
+例如 `alpha191:alpha158` 不是 `qlib_alpha158:ROC5`。不把特征列数当作有效策略数。
+`factor_sources` 只接收登记 ID；目录证券页沿用后端可浏览范围，来源若另有更大的 total_securities 会明确保留。
+因子最多 100 股、100000 个证券交易日和 32 MiB 输入，十年日期上限与计算语义由后端负责。
+计算与评价在同一任务完成；`evaluation` 可选，收益价格必须有其声明的复权证据和标签缓冲。
+CMES 的 VWAP 是已观测同一行 amount/share-volume，零量保持缺失；不宣称供应商 VWAP 或历史 PIT 认证。
 
 ## 安装及启动
 
 沿用仓库 Python 3.12.13 和已固定的 AD wheel（参见[安装指南](../README.md#安装指南)）。MCP 依赖是可选 extra，普通 API/worker 不需要导入 MCP SDK。
 
 ```sh
-uv sync --frozen --extra native --extra mcp
+uv sync --locked --extra native --extra factor-evaluation --extra mcp
 ```
 
 先按现有部署清单启动 **同一配置** 的 API 和 task-worker。MCP 不会自行启动或改写服务、初始化数据、采集或发布。假定已运行的研究 API 位于 `http://127.0.0.1:8000`：
@@ -47,7 +65,7 @@ HTTP endpoint 是 `http://127.0.0.1:8766/mcp`。CLI 固定绑定 loopback，没�
 1. 调用 `research_capabilities`，记录产品 `configuration_id` 和分钟 Python `environment_id`；读取当前模型限制。
 2. 用 `discover_data` 发现已发布证券，带相同 `configuration_id` 做 `inspect_data` / `read_minute_prices`。coverage 的 ready 指认证覆盖是否满足，不能替代对分钟回溯模型的明确接受。
 3. 用户确认信任源码和研究模型后，传 `submission` 对象给 `submit_strategy`。字段与后端 `PythonCreate` 一致：`environment_id`、`name`、`idempotency_key`、`source`、`parameters`、`securities`、`start_date`、`end_date`、`initial_cash`、`trusted_local_code: true`、`accept_research_model: true`。两个确认字段没有默认值，适配器不会自动同意。
-4. 保存立即返回的 `job_id`，用 `research_job(family="python_minute", job_id=...)` 跟踪 worker。`research_logs` 获取后端日志；失败状态保留 code/message/source_line 等诊断。
+4. 日频显式传 `frequency="1d"` 和 `warmup_sessions`，仍须用户两项确认。保存立即返回的 `job_id`，用 `research_job(family="python_minute" 或 "python_daily", job_id=...)` 跟踪 worker。`research_logs` 获取后端日志；失败状态保留 code/message/source_line 等诊断。
 5. 完成后先 `research_result`（默认 summary），再按需要指定 `section` 为 `trades`、`positions`、`equity`、`orders` 或 `strategy_logs`，传回 `next_cursor` 读完整页面。
 6. 改参数开始新实验时生成新幂等键，保留相同源码、环境身份及明确确认。切换部署或数据发布后须重新发现和确认环境。
 
@@ -63,21 +81,38 @@ HTTP endpoint 是 `http://127.0.0.1:8766/mcp`。CLI 固定绑定 loopback，没�
 
 现有后端 result/logs API 尚无服务端分页；适配器每次在 **32 MiB 响应上限** 内读取、校验并投影，只将需要的页面交给 agent。超限明确失败，并提示用现有后端导出；没有引入任意文件资源读取。未来更大的结果应先增加后端有界结果接口，不能取消限制或一次把全部结果塞入上下文。
 
+## 因子闭环与结果
+
+1. 从 capabilities 的 `extensions.factors` 取 environment_id；确认 evaluation_available。
+2. `discover_factors` 选择准确 ID/definition，再用 `factor_sources` 查看来源口径及证券。
+3. `submit_factor` 使用后端 FactorCreate 字段：environment_id、幂等键、名称、factor_id、definition、source_id、securities、history_start、start_date、end_date、parameters、rank_policy，可选 evaluation 和 label_end。
+4. 沿用 `family="factors"` 的任务/取消/日志工具。结果默认摘要；`factor_values` 读取完整值、状态、缺失原因；`evaluation_summary`、`ic`、`rank_ic`、`quantile_returns`、`quantile_membership`、`spread`、`stability`、`turnover` 和 `cost_sensitivity` 是直接的 AD 行数据。
+5. `evaluation` 分区将完整评价对象投影为 JSON Pointer/value 叶节点，保留空容器、覆盖、警告与口径，便于有界无损读取。摘要中的紧凑元数据可能带截断标志；要完整诊断请分页读取该分区。没有计算新绩效。
+
 ## 验证与交接
-
-2026-10-22 的 mini 验收记录：全库回归 901 passed / 481 skipped（外部真实数据及显式环境未提供）；最后的 MCP 错误边界调整后，MCP、HTTP 契约和分钟任务定向回归 36 passed。最终实际 wheel 在仓库外独立安装，18 项 MCP 测试全部通过，安装包源码指纹与源码环境相同。两次合成策略（100 股/200 股）各产生 2 笔成交，末值分别为 99998.98 和 100007.96；所有结果页等于直接读取同一后端结果。该数值仅作工程验收，不能解释为实盘收益证据。
-
-最终 wheel SHA-256：`e1e89bc453672837f19b1179d45e3b2ed99fb1cc75f2094bfef58fb1f509d6ea`。
 
 ```sh
 python scripts/export_mcp.py
+python scripts/generate_contracts.py
 python scripts/check_structure.py
 ruff check src scripts tests
-python scripts/run_tests.py -q tests/mcp
+python scripts/run_tests.py -q tests/mcp tests/factors tests/minute_tasks
 ```
 
-[工具契约快照](contracts/research-mcp.tools.json)由真实 SDK `tools/list` 生成。`tests/mcp/fixture.py` 使用已安装 AD `ReleaseWriter` 创建隔离合成 release（1 股票、2 执行交易日、480 分钟），不下载市场数据、不伪装为市场来源验收。测试通过临时 loopback API、官方 stdio/HTTP MCP 客户端及现有 worker/RQAlpha 完整执行。部分原生元数据中的 `real_market_data` 是既有 release 路径标记；该测试明确使用合成数据，该字段不能被引用成真实行情验收。
+[工具契约快照](contracts/research-mcp.tools.json)由真实 SDK tools/list 生成。
+`tests/mcp/fixture.py` 是明确标记的合成发布；测试通过临时 loopback HTTP、stdio、共享 worker 与实际原生引擎验证，
+不将合成行情称为真实市场证据。新增因子测试保留原分钟测试，覆盖目录/来源、Alpha191/Qlib 计算、评价所有分区、
+输入冻结、幂等和取消；日频测试检查必填确认、历史查询、真实原生执行和末持仓语义。
 
-覆盖协议与 schema、旧版握手、来源/环境/路径边界、摘要和全量分页逐项对照直接 HTTP 返回、参数再测、丢失响应恢复、并发幂等、排队/运行中取消、策略失败、Host/Origin、响应字节上限和可选扩展失效行为。打包验收还要安装实际 wheel，在仓库外运行同样闭环，确认模块从 wheel 环境加载。没有生产部署或 dot 已连接的结论。
+`scripts/validate_research_mcp.py --plan PLAN.json --output NEW_DIRECTORY` 接受操作者指定的已有真实发布和来源，
+通过临时两种传输执行因子与可选日频请求，与同一后端结果页、独立直调任务、刷新恢复逐项对照。
+计划内 Python 请求的两个确认必须由用户明确给出，脚本不会补上；没有 Python 请求时只验因子。
+输出仅保留一份回执与原任务状态/冻结产物，源数据不复制、不采集、不修改。结束时关闭临时监听。
+实际验收结果和包身份见本次独立候选交接，历史 mini 的计数不作为本次 Air 证明。
 
-远程 dot 需要另行获准的长期宿主、可达 HTTPS MCP 地址、身份认证/授权与 host/origin 白名单、同机可信研究后端和 worker，以及部署管理及数据权限安排。当前本地无认证入口仅供可信本机调试。不得通过临时公网隧道、扩大凭据权限或关闭安全校验“完成连接”；本次未实施这些条件，mini 也不是常驻服务器。
+打包验证使用 `scripts/verify_wheel.py --extra mcp --extra factor-evaluation --test tests/mcp --test tests/factors --test tests/minute_tasks`，
+在仓库外安装实际 wheel 并检查源码身份、资源和动态入口；需要使用显式 wheel 参数和新 output 目录。
+
+远程 dot 仍需要另行批准的长期宿主、可达 HTTPS MCP 地址、认证/授权、Host/Origin 白名单、
+同机可信后端/worker 和明确的数据权限。当前无认证 loopback 入口只供可信本机调试。
+本次不安装常驻服务，不开公网/隧道，不配置凭据，不改变 VPN/权限，也不宣称 dot 已连接。

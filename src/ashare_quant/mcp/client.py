@@ -8,6 +8,8 @@ import httpx
 
 PREFIXES = {
     "python_minute": "/api/v1/python",
+    "python_daily": "/api/v1/python",
+    "factors": "/api/v1/factors",
     "portfolio": "/api/v1/portfolio",
     "daily": "/api/v1/tasks/daily",
 }

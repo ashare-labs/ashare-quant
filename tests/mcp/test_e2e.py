@@ -86,7 +86,7 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                     assert refused.status_code == 421
                 for mode in ("auto", "legacy"):
                     async with Client(mcp_url + "/mcp", mode=mode) as client:
-                        assert len((await client.list_tools()).tools) == 10
+                        assert len((await client.list_tools()).tools) == 13
                         caps = await call(client, "research_capabilities")
                         assert caps["python_minute"]["available"]
                         assert all(f["available"] for f in caps["task_families"].values())
@@ -101,7 +101,8 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                     env = caps["python_minute"]["value"]["environment_id"]
                     cid = caps["product"]["value"]["configuration_id"]
                     assert caps["python_minute"]["value"]["max_stock_minutes"] == 20000
-                    assert not caps["extensions"]["factors"]["available"]
+                    assert caps["extensions"]["factors"]["available"]
+                    assert caps["extensions"]["python_daily"]["available"]
                     found = await call(client, "discover_data", configuration_id=cid)
                     assert found["catalogue"]["securities"][0]["security"] == SID
                     selection = dict(securities=[SID], start=DAYS[1], end=DAYS[2])

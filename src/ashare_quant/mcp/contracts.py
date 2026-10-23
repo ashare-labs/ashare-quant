@@ -6,10 +6,32 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 
 from ashare_quant.product.contracts import ProductCoverageRequest, ProductMinuteSelection
+from ashare_quant.tasks.factors.contracts import FactorCreate
 from ashare_quant.tasks.minute.contracts import PythonCreate
 
-Family = Literal["python_minute", "portfolio", "daily"]
-Section = Literal["summary", "trades", "positions", "equity", "orders", "strategy_logs"]
+Family = Literal["python_minute", "python_daily", "factors", "portfolio", "daily"]
+Section = Literal[
+    "summary",
+    "trades",
+    "positions",
+    "equity",
+    "orders",
+    "strategy_logs",
+    "factor_values",
+    "evaluation",
+    "evaluation_summary",
+    "ic",
+    "rank_ic",
+    "quantile_membership",
+    "quantile_returns",
+    "spread",
+    "stability",
+    "turnover",
+    "cost_sensitivity",
+]
+Library = Literal["alpha191", "qlib_alpha158", "joinquant"]
+Definition = Literal["gtja191.explicit.v1", "gtja191.public.v1"]
+SourceID = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")]
 Sha = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Key = Annotated[str, Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_-]+$")]
 PageSize = Annotated[int, Field(ge=1, le=200)]
@@ -34,3 +56,7 @@ class MinuteSelection(ProductMinuteSelection):
 
 class StrategySubmission(PythonCreate):
     """Consent fields remain required Literal[True]; never inferred by this adapter."""
+
+
+class FactorSubmission(FactorCreate):
+    """Use the backend's bounded, closed request without accepting source paths."""

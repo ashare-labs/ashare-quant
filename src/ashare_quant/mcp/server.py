@@ -10,15 +10,20 @@ from ashare_quant.mcp.client import PREFIXES, Backend, ResearchError, Settings
 from ashare_quant.mcp.contracts import (
     Cursor,
     DailySelection,
+    Definition,
+    FactorSubmission,
     Family,
     Key,
+    Library,
     MinuteSelection,
     PageSize,
     Section,
     Sha,
+    SourceID,
     StrategySubmission,
 )
-from ashare_quant.mcp.projection import compact, digest, job_view, page, result_rows
+from ashare_quant.mcp.discovery import capabilities, require_environment, require_extension
+from ashare_quant.mcp.projection import compact, digest, job_view, page, result_rows, sections
 from ashare_quant.tasks.daily.contracts import JobID
 
 
@@ -81,46 +86,7 @@ def create_server(backend):
     @tool()
     async def research_capabilities() -> dict[str, Any]:
         """Discover real backend availability, environment identities and research limits."""
-        config = await backend.optional("/api/v1/product/config")
-        minute = await backend.optional("/api/v1/python/catalogue")
-        schema = await backend.optional("/api/v1/openapi.json")
-        paths = schema.get("value", {}).get("paths", {})
-        factors = ["/api/v1/factors/" + part for part in ("catalogue", "sources", "jobs")]
-        factor_paths = {p: p in paths for p in factors}
-        # The Air contracts are deliberately not invented from a path name or HTTP 200.
-        return compact(
-            dict(
-                adapter_version="research-mcp.v1",
-                backend_openapi_sha256=digest(schema["value"]) if schema["available"] else None,
-                product=config,
-                python_minute=minute,
-                task_families={
-                    family: {"available": prefix + "/jobs" in paths}
-                    for family, prefix in PREFIXES.items()
-                },
-                extensions={
-                    "factors": dict(
-                        discovered_paths=factor_paths,
-                        available=False,
-                        reason="Air factor request/result contract and real integration pending; "
-                        "no factor submission adapter enabled",
-                    ),
-                    "python_daily": dict(
-                        available=False,
-                        reason="Air custom daily Python contract pending; existing fixed daily "
-                        "evaluation jobs are a separate family",
-                    ),
-                },
-                adapter_limits=dict(
-                    page_size=200,
-                    daily_securities=8,
-                    daily_calendar_days=31,
-                    minute_calendar_days=3,
-                    backend_response_bytes=32 * 1024 * 1024,
-                ),
-                trust="Trusted local Python only; process supervision is not a hostile-code sandbox",
-            )
-        )
+        return await capabilities(backend)
 
     @tool()
     async def discover_data(
@@ -189,17 +155,77 @@ def create_server(backend):
             )
         return matched[0] if matched else None
 
-    @tool(read=False, open_world=True)
-    async def submit_strategy(submission: StrategySubmission) -> dict[str, Any]:
-        """Submit trusted custom minute Python and return job_id immediately, without waiting.
+    @tool()
+    async def discover_factors(
+        environment_id: Sha,
+        library: Library | None = None,
+        query: Annotated[str, Field(max_length=100)] = "",
+        version: Definition = "gtja191.explicit.v1",
+        limit: PageSize = 50,
+        cursor: Cursor | None = None,
+    ) -> dict[str, Any]:
+        """Page the live factor catalogue, including exact IDs, definitions and input dependencies.
 
-        User must explicitly accept trusted_local_code and accept_research_model. Both are
-        required, never defaulted. Reuse this exact body/key after uncertain network outcomes.
-        Limits: 8 stocks, 23 sessions, 20000 stock-minutes; no Python checkpoint resume.
+        qlib_alpha158 features and GTJA alpha191:alpha158 are separate namespaces.
         """
+        await require_extension(backend, "factors")
+        value = await backend.request(
+            "GET", "/api/v1/factors/catalogue", params={"version": version}
+        )
+        require_environment(value, environment_id)
+        rows = [
+            r
+            for r in value["items"]
+            if (library is None or r["library"] == library)
+            and query.casefold() in (r["id"] + " " + r.get("name", "")).casefold()
+        ]
+        return dict(
+            environment_id=environment_id,
+            evaluation_available=value["evaluation_available"],
+            limits=value["limits"],
+            page=page(rows, [environment_id, library, query, version], limit, cursor),
+        )
+
+    @tool()
+    async def factor_sources(
+        environment_id: Sha,
+        source_id: SourceID | None = None,
+        limit: PageSize = 50,
+        cursor: Cursor | None = None,
+    ) -> dict[str, Any]:
+        """List registered sources and their real readiness/bases; select an ID to page its securities.
+
+        Only server-registered IDs are accepted. Source locators are never agent inputs.
+        The owner catalogue may itself report fewer securities than total_securities.
+        """
+        await require_extension(backend, "factors")
+        value = await backend.request("GET", "/api/v1/factors/sources")
+        require_environment(value, environment_id)
+        if source_id is None:
+            rows = [
+                compact({k: v for k, v in r.items() if k != "securities"}) for r in value["items"]
+            ]
+            return dict(
+                environment_id=environment_id,
+                page=page(rows, [environment_id, "sources"], limit, cursor),
+            )
+        row = next((r for r in value["items"] if r["id"] == source_id), None)
+        if row is None:
+            raise ResearchError("FACTOR_SOURCE_NOT_FOUND", "Select a registered source ID")
+        return dict(
+            source=compact({k: v for k, v in row.items() if k != "securities"}),
+            page=page(
+                [{"security": s} for s in row["securities"]],
+                [environment_id, source_id],
+                limit,
+                cursor,
+            ),
+        )
+
+    async def submit(submission, family):
         body = submission.model_dump(mode="json")
         try:
-            return job_view(await backend.request("POST", "/api/v1/python/jobs", body=body))
+            return job_view(await backend.request("POST", PREFIXES[family] + "/jobs", body=body))
         except ResearchError as exc:
             if (
                 exc.payload["code"]
@@ -208,7 +234,7 @@ def create_server(backend):
             ):
                 raise
             try:
-                original = await find("python_minute", submission.idempotency_key, body)
+                original = await find(family, submission.idempotency_key, body)
             except ResearchError as lookup:
                 if lookup.payload["code"] == "IDEMPOTENCY_CONFLICT":
                     raise
@@ -222,6 +248,31 @@ def create_server(backend):
                 idempotency_key=submission.idempotency_key,
                 outcome="uncertain",
             ) from exc
+
+    @tool(read=False, open_world=True)
+    async def submit_strategy(submission: StrategySubmission) -> dict[str, Any]:
+        """Submit explicitly trusted minute (default 1m) or daily (1d) Python to the shared queue.
+
+        User must explicitly accept trusted_local_code and accept_research_model; never infer them.
+        Daily: 8 stocks, 126 sessions, 186 calendar days, 1–120 warmup sessions; final positions
+        marked at final close. Minute: 23 sessions, 20000 stock-minutes, final positions flat.
+        Reuse the exact body/key after uncertain outcomes; no Python checkpoint resume.
+        """
+        family = "python_daily" if submission.frequency == "1d" else "python_minute"
+        if family == "python_daily":
+            await require_extension(backend, "python_daily")
+        return await submit(submission, family)
+
+    @tool(read=False)
+    async def submit_factor(submission: FactorSubmission) -> dict[str, Any]:
+        """Freeze a registered factor input and submit calculation with optional Alphalens evaluation.
+
+        Numerical definitions and evaluation are owned by the existing backend. No expressions,
+        paths or source edits are accepted. Use the catalogue definition/environment exactly.
+        Evaluation labels need observed prices through label_end; missing data stays missing.
+        """
+        await require_extension(backend, "factors")
+        return await submit(submission, "factors")
 
     @tool()
     async def find_research_job(family: Family, idempotency_key: Key) -> dict[str, Any]:
@@ -263,8 +314,8 @@ def create_server(backend):
     ) -> dict[str, Any]:
         """Read summary first, then complete bounded trades/positions/equity/orders pages.
 
-        Detailed sections currently support python_minute. Native values are projected,
-        never recalculated. Cursors bind the exact result and section.
+        Detailed sections support Python and factor jobs. Native values are projected,
+        never recalculated. evaluation is a lossless page of JSON-pointer/value leaves. Cursors bind the exact result and section.
         """
         result = await backend.request("GET", PREFIXES[family] + "/jobs/" + job_id + "/result")
         identity = [family, job_id, section, digest(result)]
@@ -277,11 +328,16 @@ def create_server(backend):
                 summary=result.get("summary"),
                 parameters=compact(result.get("parameters")),
                 release=compact(result.get("release")),
-                sections=(
-                    ["trades", "positions", "equity", "orders", "strategy_logs"]
-                    if family == "python_minute"
-                    else []
+                factor=compact(result.get("factor")),
+                provenance=compact(result.get("provenance")),
+                evaluation=compact(
+                    {
+                        k: v
+                        for k, v in (result.get("evaluation") or {}).items()
+                        if k in {"schema", "summary", "engine", "config", "warnings", "assumptions"}
+                    }
                 ),
+                sections=sections(result, family),
             )
         return page(result_rows(result, family, section), identity, limit, cursor)
 

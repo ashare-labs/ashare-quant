@@ -118,6 +118,13 @@ def job_view(value):
             "start_date",
             "end_date",
             "securities",
+            "frequency",
+            "warmup_sessions",
+            "factor_id",
+            "definition",
+            "source_id",
+            "history_start",
+            "label_end",
         )
         if k in request
     }
@@ -128,8 +135,51 @@ def job_view(value):
     return result
 
 
+PYTHON_SECTIONS = ["trades", "positions", "equity", "orders", "strategy_logs"]
+EVALUATION_SECTIONS = [
+    "evaluation",
+    "evaluation_summary",
+    "ic",
+    "rank_ic",
+    "quantile_membership",
+    "quantile_returns",
+    "spread",
+    "stability",
+    "turnover",
+    "cost_sensitivity",
+]
+
+
+def sections(value, family):
+    if family in {"python_minute", "python_daily"}:
+        return PYTHON_SECTIONS
+    if family == "factors":
+        return ["factor_values"] + (EVALUATION_SECTIONS if value.get("evaluation") else [])
+    return []
+
+
+def leaves(value, pointer=""):
+    """Lossless JSON projection including empty containers; no numeric transformations."""
+    if isinstance(value, (dict, list)) and value:
+        items = value.items() if isinstance(value, dict) else enumerate(value)
+        for key, item in items:
+            escaped = str(key).replace("~", "~0").replace("/", "~1")
+            yield from leaves(item, pointer + "/" + escaped)
+    else:
+        yield {"pointer": pointer, "value": value}
+
+
 def result_rows(value, family, section):
-    if family == "python_minute":
+    if section not in sections(value, family):
+        raise ResearchError("RESULT_SECTION_UNAVAILABLE", "Section unavailable for this result")
+    if family == "factors":
+        if section == "factor_values":
+            return value["rows"]
+        evaluation = value["evaluation"]
+        if section == "evaluation":
+            return list(leaves(evaluation))
+        return evaluation["summary" if section == "evaluation_summary" else section]
+    if family in {"python_minute", "python_daily"}:
         native = value["native"]
         if section == "equity":
             return [

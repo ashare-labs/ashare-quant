@@ -105,7 +105,7 @@ def test_sdk_schema_and_missing_air_contracts_are_honest():
         for mode in ("auto", "legacy"):
             async with Client(server, mode=mode) as c:
                 tools = {t.name: t for t in (await c.list_tools()).tools}
-                assert len(tools) == 10
+                assert len(tools) == 13
                 schema = tools["submit_strategy"].input_schema
                 fields = schema["$defs"]["StrategySubmission"]
                 assert {
