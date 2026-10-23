@@ -9,7 +9,7 @@ from ashare_quant.contracts import DomainError
 
 
 def source_inventory() -> dict[str, str]:
-    """The installed runtime tree, including source, fixtures and identity inputs."""
+    """The installed runtime tree, including source and identity inputs."""
     result = {}
     try:
         for package in ("ashare_quant",):

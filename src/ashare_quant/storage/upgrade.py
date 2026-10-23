@@ -93,7 +93,7 @@ def upgrade_copy(source, destination):
             if str(sidecar.relative_to(archive)) not in before:
                 sidecar.unlink(missing_ok=True)
         from ashare_quant.storage.store import Store
-        from ashare_quant.tasks.daily.service import Jobs
+        from ashare_quant.tasks.service import Jobs
 
         Jobs(Store(root / "control.sqlite3"))
         if _inventory(source) != before or _inventory(archive / source.name) != before:

@@ -16,8 +16,8 @@ CHILD = r"""
 import json, os, signal, sys, time
 from pathlib import Path
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.daily.executor import Configuration
-from ashare_quant.tasks.daily.service import Jobs
+from tests.support.daily.executor import Configuration
+from tests.support.daily.service import Jobs
 from ashare_quant.tasks.worker import work_one
 db, owner, job_id, marker, mode = sys.argv[1:]
 jobs = Jobs(Store(db), Configuration(Path(owner)))

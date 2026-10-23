@@ -37,7 +37,7 @@ def main():
     out = parser.parse_args().output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     question = out / "synthetic-question"
-    shutil.copytree(REPO / "examples/portfolio", question)
+    shutil.copytree(REPO / "tests/fixtures/research/portfolio", question)
     manifest = json.loads((question / "manifest.json").read_text())
     manifest["purpose"] = "Synthetic dividend field-boundary regression, not a real market run"
     manifest["windows"] = [{"id": "w2020", "start": "2020-02-03", "end": LATER_PAY}]
@@ -84,7 +84,7 @@ def main():
             sys.executable,
             "-B",
             "-m",
-            "ashare_quant.portfolio",
+            "tests.support.portfolio_engine",
             "--manifest",
             str(question / "manifest.json"),
             "--input",

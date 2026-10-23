@@ -9,8 +9,8 @@ import pytest
 from ashare_data import DataError, Store
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.providers.daily.portable import bind_dataset
-from ashare_quant.providers.daily.portable_policy import validate_plan
+from tests.support.legacy_provider.portable import bind_dataset
+from tests.support.legacy_provider.portable_policy import validate_plan
 
 
 def recipe(kind):

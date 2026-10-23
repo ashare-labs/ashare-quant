@@ -86,14 +86,13 @@ def _validate(db, path):
                      "automatic_migration": False, "old_task_execution": False,
                      "remediation": ["preserve_database_and_task_directory", "read_with_original_pinned_backend",
                                      "use_new_database_path_for_v6"]})
-    if detected:
-        from ashare_quant.identity import source_sha256
-        if sources != {source_sha256()}:
-            raise DatabaseCompatibilityError(
-                "M2_DATABASE_EXECUTOR_INCOMPATIBLE",
-                "Tasks require their original fixed backend; preserve the database and use database-upgrade for a separate new run database",
-                details={"database_modified": False, "old_task_execution": False,
-                         "detected_source_sha256": sorted(str(v) for v in sources)})
+    # Source identities belong to individual frozen tasks, not the entire database.
+    # A supported historical schema may be read after an upgrade. Execution still
+    # checks the exact source, and the worker never claims foreign-source tasks.
+    if any(not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None for value in sources):
+        raise DatabaseCompatibilityError(
+            "M2_DATABASE_EXECUTOR_INCOMPATIBLE", "Task source identity is missing or malformed",
+            details={"database_modified": False, "old_task_execution": False})
     different = [name for name, value in expected.items() if actual.get(name) != value]
     if version != 4 or different:
         raise DatabaseCompatibilityError(

@@ -6,9 +6,9 @@ import pytest
 from ashare_data import Store
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.providers.daily.owner_wire import source_pin
-from ashare_quant.providers.daily.portable import bind_dataset
-from ashare_quant.tasks.daily.catalogue import window
+from tests.support.daily.catalogue import window
+from tests.support.legacy_provider.owner_wire import source_pin
+from tests.support.legacy_provider.portable import bind_dataset
 
 
 def test_distribution_and_portable_owner_versions_are_both_preserved(owner_store):

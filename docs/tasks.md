@@ -1,13 +1,13 @@
-# 日频任务与策略
+# 研究任务
 
-`tasks.daily` 提供有限日频服务；`backtests.daily` 表示决策和账本契约，`strategies.daily`/`strategies.python` 管理策略，`providers.daily` 消费 A数达公开数据。共同队列、锁、发布与进程控制在 tasks 和 storage。
+自定义 Python 日频和分钟共用 `/api/v1/python`、同一任务表、租约、资源预算和 worker。因子通过 `/api/v1/factors` 使用相同队列。`GET /api/v1/tasks/service` 返回共享资源状态，`GET /api/v1/tasks/openapi.json` 返回当前任务契约。
 
-HTTP 前缀 `/api/v1/tasks/daily`。`GET /jobs/catalogue` 返回窗口、参数、假设、绑定和源码身份；`POST /data/bind` 绑定配置 Store 内既有 dataset。`POST /jobs` 创建任务，`GET /jobs/{id}` 查询，后缀 `/manifest`、`/logs`、`/result` 读取冻结材料，`POST /cancel`、`/resume` 操作现有任务。完整字段见 [生成契约](contracts/tasks.openapi.json)。
+`POST /api/v1/python/jobs` 接受用户源码、参数、频率、证券、日期、资金、环境身份、幂等键和两项明确确认。GET 列表、详情、manifest、logs、result 均不执行策略；POST cancel 请求取消。
 
-CLI：`task-catalogue`、`tasks`、`task-data-bind`、`task-data-import`、`task-create`、`task-status`、`task-manifest`、`task-logs`、`task-cancel`、`task-resume`、`task-result`、`task-service`、`task-worker`。`--db` 指向新控制库，owner Store 由 `ASHARE_QUANT_DAILY_STORE` 配置。
+网络中断时用原幂等键找回任务，应用重启后读取原冻结结果。任意 Python 内存没有可序列化检查点：`can_resume=false`，POST resume 明确返回 `PYTHON_RESTART_REQUIRED`。不会把重试提交、恢复结果读取、重跑策略混成一个动作。需要重跑时由用户明确创建新任务与新键。
 
-`task-strategy-register --request RULE.json` 注册规则。`task-strategy-register-python --file SOURCE.py --descriptor DESCRIPTOR.json` 注册本地可信单文件 Python；HTTP 只能读取、选择 Python 版本。示例在 examples/rules 和 examples/python。版本冻结源码、参数和 SDK 摘要；文件修改须注册新版本。
+worker 只处理当前源码的 Python 和因子任务；退役固定窗口、七算法、旧源码的待处理记录保持原样。来源、数据和运行时身份仍在执行前校验，读取旧结果不要求安装旧策略算法。旧待执行记录通过 display_status 明确为 retired / runtime_unavailable，附 execution_reason，原始 stored_status 保留。当前 counts/available_pending 只统计当前可执行队列，历史数量在 historical_counts 单列，不能让它们阻塞新研究。
 
-`two_day`、`w1`、`w2` 是当前 AD 提供的数据窗口 ID；旧 `m2a` 已改为 `two_day`。可在准入交易日内选结束日期，不能借参数扩大数据域、证券或角色。旧准备态和封存结果 API 已退出；新任务只读取自己的执行回执。
+`GET /api/v1/history/jobs` 可按 family=daily/portfolio/python/factors 筛选；详情、manifest、logs 和 result 为只读冻结记录。结果核对数据库身份、接受清单、会话及发布摘要；老封存格式还核对 seal 中每份文件。响应中的原源码身份不会改成当前版本，此校验不重新审计历史策略收益。
 
-取消保留检查点；恢复须核对源码、运行依赖、绑定和已发布材料。新版任务目录为 `.tasks`，不要直接接入旧库。共享 worker 处理日频和组合队列，各功能域保留自己的账本投影。
+CLI 提供 `python-create --request`、`task-worker`、`task-service`、`history`、`history-strategies`、`task-status/manifest/logs/result/cancel/resume`。已删除 `task-create`、固定数据导入绑定和预设策略注册命令。详见 [迁移清单](formal-backend-migration.md) 和 [生成契约](contracts/tasks.openapi.json)。

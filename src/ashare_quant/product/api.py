@@ -20,7 +20,7 @@ from ashare_quant.product.service import Product
 
 
 def mount(app, store, configuration=None):
-    product = Product(store, app.state.portfolio_jobs, configuration)
+    product = Product(store, configuration)
     app.state.product = product
     prefix = "/api/v1/product"
 

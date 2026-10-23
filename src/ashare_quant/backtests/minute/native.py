@@ -743,7 +743,7 @@ def run_native(root, data, source, config, identity, *, parameters=None):
     from rqalpha.model.trade import Trade
 
     from ashare_quant.execution.rqalpha.checkpoint import Counter
-    from ashare_quant.execution.synthetic.mod import atomic_json
+    from ashare_quant.execution.serialization import atomic_json
 
     records = []
     for d in data.days:

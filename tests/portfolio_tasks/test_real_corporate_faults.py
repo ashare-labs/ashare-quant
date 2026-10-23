@@ -45,7 +45,7 @@ def invoke(source, output, invocation, fault="none"):
     boot = (
         "import json,sys;paths,args=json.loads(sys.argv[1]);sys.path[:0]=paths;"
         "sys.argv=['portfolio',*args];"
-        "from ashare_quant.portfolio.__main__ import main;main()"
+        "from tests.support.portfolio_engine import main;main()"
     )
     paths = [str(package_root()), str(metadata.distribution("rqalpha").locate_file(""))]
     command = [sys.executable, "-I", "-S", "-B", "-c", boot,

@@ -5,10 +5,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from ashare_quant.backtests.daily.contracts import Sha
 from ashare_quant.contracts import Contract
-from ashare_quant.tasks.daily.contracts import JobID, JobView
-from ashare_quant.tasks.result_contracts import JSONObject
+from ashare_quant.tasks.contracts import JobID, JobView, JSONObject, Sha
 
 
 class EvaluationOptions(Contract):
@@ -68,10 +66,6 @@ class FactorCreate(Contract):
         ):
             raise ValueError("Use unique canonical securities")
         return self
-
-    @property
-    def window_id(self):
-        return "selected"
 
 
 class FactorScope(Contract):

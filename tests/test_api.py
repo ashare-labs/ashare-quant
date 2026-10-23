@@ -1,4 +1,3 @@
-import json
 import socket
 import subprocess
 import sys
@@ -7,8 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant import __version__
-from ashare_quant.api import create_app
-from ashare_quant.tasks.synthetic.worker import work_one
+from tests.support.app import create_app
+from tests.support.synthetic.worker import work_one
 
 
 @pytest.fixture
@@ -65,20 +64,15 @@ def test_api_errors_schema_and_host_policy(client):
     assert schema["components"]["schemas"]["Account"]["properties"]["cash"]["type"] == "string"
     assert schema["components"]["schemas"]["DataQuery"]["properties"]["as_of"]["format"] == "date-time"
     capability = client.get("/api/v1/capabilities").json()
-    assert "fixture" in capability["executable_modes"]
+    assert "fixture" not in capability["executable_modes"]
     assert capability["rqalpha_validation"] in (
         "optional_dependency_missing", "optional_native_installed_use_task_catalogue")
     assert capability["real_market_validation"] == "not_run"
 
 
-def test_cli_roundtrip_and_refusal_exit_code(tmp_path):
+def test_retired_cli_commands_are_not_installed(tmp_path):
     base = [sys.executable, "-m", "ashare_quant.cli", "--db", str(tmp_path / "cli.sqlite3")]
-    demo = subprocess.run(base + ["demo"], capture_output=True, text=True)
-    assert demo.returncode == 0, demo.stdout + demo.stderr
-    output = json.loads(demo.stdout)
-    assert output["state"]["account"]["cash"] == "9000.00"
-    version_id = output["state"]["run"]["strategy_version_id"]
-    rejected = subprocess.run(base + ["run-create", "--strategy", version_id, "--key", "real",
-        "--mode", "paper", "--engine", "rqalpha"], capture_output=True, text=True)
-    assert rejected.returncode == 2
-    assert json.loads(rejected.stdout)["error"]["code"] == "ENGINE_NOT_ADMITTED"
+    for command in ("demo", "scenarios", "strategy-create", "run-create", "portfolio-create", "task-data-import"):
+        response = subprocess.run(base + [command], capture_output=True, text=True)
+        assert response.returncode == 2 and "invalid choice" in response.stderr
+        assert not (tmp_path / "cli.sqlite3").exists()

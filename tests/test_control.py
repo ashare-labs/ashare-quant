@@ -7,11 +7,11 @@ from decimal import Decimal
 
 import pytest
 
-from ashare_quant.backtests.synthetic import FixtureReplayAdapter, fixture_bytes, specifications
 from ashare_quant.contracts import DomainError, RunCreate, StrategyCreate
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.synthetic.service import Service
-from ashare_quant.tasks.synthetic.worker import work_one
+from tests.support.synthetic.replay import FixtureReplayAdapter, fixture_bytes, specifications
+from tests.support.synthetic.service import Service
+from tests.support.synthetic.worker import work_one
 
 
 def engine(scenario):
@@ -155,7 +155,7 @@ def test_actual_process_exit_and_new_process_recovery(store, queued):
     script = '''
 import os,sys
 from ashare_quant.storage.store import Store
-from ashare_quant.backtests.synthetic import FixtureReplayAdapter
+from tests.support.synthetic.replay import FixtureReplayAdapter
 s=Store(sys.argv[1]); rid=sys.argv[2]
 _, token, cp=s.claim(rid)
 m=s.manifest(rid); e=FixtureReplayAdapter('restart',m.fixture_sha256)
@@ -168,8 +168,7 @@ os._exit(91)
     assert store.run(run.run_id).cursor == 2
     assert store.state(run.run_id).account.cash == "9000.00"
     expire(store, run.run_id)  # Deterministic simulated lease expiry; no 30-second test sleep.
-    recovered = subprocess.run([sys.executable, "-m", "ashare_quant.cli", "--db", str(store.path),
-                                "worker", "--run-id", run.run_id], capture_output=True, text=True)
+    recovered = subprocess.run([sys.executable, "-c", "import sys; from ashare_quant.storage.store import Store; from tests.support.synthetic.worker import work_one; work_one(Store(sys.argv[1]), sys.argv[2])", str(store.path), run.run_id], capture_output=True, text=True)
     assert recovered.returncode == 0, recovered.stdout + recovered.stderr
     state = Store(store.path).state(run.run_id)
     assert state.run.status == "succeeded" and state.run.cursor == 4
@@ -188,7 +187,7 @@ def test_backup_restores_complete_projection(store, queued, tmp_path):
 
 def test_pin_change_blocks_but_correct_environment_can_resume(store, queued, monkeypatch):
     run = queued()
-    monkeypatch.setattr("ashare_quant.tasks.synthetic.worker.source_sha256", lambda: "changed")
+    monkeypatch.setattr("tests.support.synthetic.worker.source_sha256", lambda: "changed")
     with pytest.raises(DomainError) as err:
         work_one(store, run.run_id)
     assert err.value.code == "BACKEND_CHANGED"

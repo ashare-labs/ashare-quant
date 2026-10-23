@@ -25,7 +25,7 @@ def run(args):
         from ashare_quant.execution.rqalpha.guards import install_network_guard
         from ashare_quant.factors.compute import compute
         from ashare_quant.providers.runtime import verify
-        from ashare_quant.tasks.daily.runner import watch_control
+        from ashare_quant.tasks.control import watch_control
         from ashare_quant.tasks.factors.contracts import FactorCreate, FactorResult
 
         threading.Thread(

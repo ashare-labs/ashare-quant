@@ -3,8 +3,8 @@
 Calendar/master/actions/limits/status assets must be supplied by A数达 itself;
 this module does not reconstruct them. Methods intentionally stay explicit.
 """
-from ashare_quant.execution.rqalpha.fixture import CapabilityError
-from ashare_quant.execution.rqalpha.fixture import aware
+from ashare_quant.execution.rqalpha.provider import CapabilityError
+from ashare_quant.execution.rqalpha.provider import aware
 
 
 class AsharePriceBridge:

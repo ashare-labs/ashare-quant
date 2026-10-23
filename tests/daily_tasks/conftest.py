@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
-from ashare_quant.tasks.daily.executor import Configuration
+from tests.support.app import create_app
+from tests.support.daily.executor import Configuration
 
 
 @pytest.fixture(scope="session")
@@ -17,8 +17,8 @@ def owner_store(tmp_path_factory):
         pytest.skip("Composed real M2 checks require explicit owner components; not executed")
     from ashare_data import Store
 
-    from ashare_quant.providers.daily.owner_wire import verify_runtime
     from ashare_quant.runtime import runtime_fingerprint
+    from tests.support.legacy_provider.owner_wire import verify_runtime
 
     runtime_fingerprint(native=True)
     verify_runtime()

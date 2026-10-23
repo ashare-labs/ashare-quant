@@ -19,6 +19,19 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
     try:
         with worker_slot(jobs.root, jobs.repo.policy.max_workers) as serial:
             for candidate in ids:
+                from ashare_quant.tasks.contracts import ACTIVE_SCHEMAS
+
+                # Do not even create a lock file in retained historical tasks.
+                row = jobs.repo.row(candidate)
+                frozen = json.loads(row["manifest"])
+                if jobs.active_queue and frozen.get("schema_version") not in ACTIVE_SCHEMAS:
+                    if job_id:
+                        jobs.for_job(row)
+                    continue
+                if jobs.active_queue and frozen.get("service_identity", {}).get("source_sha256") != jobs.source:
+                    if job_id:
+                        raise DomainError("M2_JOB_SERVICE_CHANGED", "Execution requires the task's original runtime", 409)
+                    continue
                 try:
                     with lock(jobs.directory(candidate) / "host-writer.lock") as writer:
                         row = jobs.repo.row(candidate)
@@ -77,7 +90,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
             command = jobs.executor.command(
                 "run",
                 root,
-                manifest.request.window_id,
+                *jobs.executor_args(manifest),
                 invocation,
                 manifest.session_file_sha256,
                 fault=fault,
@@ -155,7 +168,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
             proof = jobs.executor.immediate(
                 "inspect",
                 root,
-                manifest.request.window_id,
+                *jobs.executor_args(manifest),
                 invocation + "-inspect",
                 manifest.session_file_sha256,
                 lock_fds=lock_fds,
@@ -192,7 +205,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
             proof = jobs.executor.immediate(
                 "inspect",
                 root,
-                manifest.request.window_id,
+                *jobs.executor_args(manifest),
                 invocation + "-error-inspect",
                 manifest.session_file_sha256,
                 lock_fds=lock_fds,

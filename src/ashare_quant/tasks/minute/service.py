@@ -8,7 +8,7 @@ from ashare_quant import __version__
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, require, sha
 from ashare_quant.tasks.base import TaskService
-from ashare_quant.tasks.daily.contracts import ResultReference
+from ashare_quant.tasks.contracts import ResultReference
 from ashare_quant.tasks.minute.contracts import (
     PythonJobList,
     PythonManifest,
@@ -20,11 +20,13 @@ from ashare_quant.tasks.minute.repository import Repository
 
 
 class PythonJobs(TaskService):
+    active_queue = True
+
     def __init__(self, store, configuration=None, product=None):
         from ashare_quant.providers.daily.history import configured_factors
 
         super().__init__(store, configuration)
-        self.repo = Repository(store, self.repo.policy)
+        self.repo = Repository(store, self.repo.policy, execution_source=self.source)
         self.executor = Executor(self.root, self.config, self.repo.policy)
         self.product = product
         self.history_factors = configured_factors()
@@ -32,7 +34,7 @@ class PythonJobs(TaskService):
     def for_job(self, row):
         if json.loads(row["manifest"]).get("schema_version") == "python-minute-job.v1":
             return self
-        from ashare_quant.tasks.daily.service import Jobs
+        from ashare_quant.tasks.service import Jobs
 
         return Jobs(self.repo.store, self.config).for_job(row)
 
@@ -179,11 +181,12 @@ class PythonJobs(TaskService):
     def check(self, row, *, execution=False):
         self.guard()
         manifest = self.repo.manifest(row)
-        require(
-            manifest.source_sha256 == self.source,
-            "M2_JOB_SERVICE_CHANGED",
-            "Use the task's original service package",
-        )
+        if execution:
+            require(
+                manifest.source_sha256 == self.source,
+                "M2_JOB_SERVICE_CHANGED",
+                "Use the task's original service package",
+            )
         root = self.directory(row["job_id"])
         require(regular(root / "accepted-manifest.json") == canonical(manifest))
         for name, expected in manifest.files.items():
@@ -205,9 +208,9 @@ class PythonJobs(TaskService):
     def view(self, row):
         self.check(row)
         view = self.repo.view(row)
-        phase = view.status
+        phase = view.display_status or view.status
         path = self.directory(view.job_id) / "phase.json"
-        if view.status == "running" and path.exists():
+        if phase == "running" and path.exists():
             phase = json.loads(regular(path)).get("phase", "running")
         return view.model_copy(update={"phase": phase})
 
@@ -221,6 +224,7 @@ class PythonJobs(TaskService):
         )
 
     def resume(self, job_id):
+        self.check(self.repo.row(job_id))
         raise DomainError(
             "PYTHON_RESTART_REQUIRED",
             "Create a new isolated run; Python memory is not resumable",
@@ -229,20 +233,24 @@ class PythonJobs(TaskService):
 
     def result(self, job_id):
         row = self.repo.row(job_id)
-        self.check(row)
+        manifest = self.check(row)
         require(
             row["status"] == "succeeded" and row["result"],
             "M2_JOB_RESULT_NOT_READY",
             "Run has no completed result",
         )
         reference = ResultReference.model_validate_json(row["result"])
+        require(reference.result_id == job_id and reference.evidence_manifest_sha256 == digest(manifest),
+                "PYTHON_RESULT_CHANGED", "Published result belongs to another task")
         raw = regular(self.directory(job_id) / "published.json")
         require(
             sha(raw) == reference.snapshot_sha256,
             "PYTHON_RESULT_CHANGED",
             "Completed result changed",
         )
-        return PythonResult.model_validate_json(raw)
+        value = PythonResult.model_validate_json(raw)
+        require(value.job_id == job_id, "PYTHON_RESULT_CHANGED")
+        return value
 
     @staticmethod
     def publish(root, manifest, invocation, attempt_count, logs):

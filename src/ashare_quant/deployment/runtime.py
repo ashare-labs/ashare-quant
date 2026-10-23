@@ -200,8 +200,8 @@ def initialize(config):
     """Only this explicit command initializes absent runtime databases."""
     from ashare_quant.paper.service import PaperService
     from ashare_quant.storage.store import Store
-    from ashare_quant.tasks.daily.executor import Configuration
-    from ashare_quant.tasks.daily.service import Jobs
+    from ashare_quant.tasks.executor import Configuration
+    from ashare_quant.tasks.service import Jobs
 
     source = _database_check(
         config.daily_root / "daily.sqlite3", {"bars", "instruments", "calendar", "responses"}
@@ -237,7 +237,7 @@ def run(config, component, *, once=False, task_id=None):
             import uvicorn
 
             from ashare_quant.api import create_app
-            from ashare_quant.tasks.daily.executor import Configuration
+            from ashare_quant.tasks.executor import Configuration
 
             app = create_app(
                 str(config.control_db),
@@ -253,8 +253,8 @@ def run(config, component, *, once=False, task_id=None):
             uvicorn.run(create_app(config.paper_root), host="127.0.0.1", port=config.paper_port)
         elif component == "task-worker":
             from ashare_quant.storage.store import Store
-            from ashare_quant.tasks.daily.executor import Configuration
-            from ashare_quant.tasks.daily.service import Jobs
+            from ashare_quant.tasks.executor import Configuration
+            from ashare_quant.tasks.service import Jobs
             from ashare_quant.tasks.worker import work_one
 
             jobs = Jobs(Store(config.control_db), Configuration(config.owner_store_root))

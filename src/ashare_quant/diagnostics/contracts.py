@@ -2,8 +2,8 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, StrictBool, model_validator
 
-from ashare_quant.backtests.daily.execution_dates import ISODate
 from ashare_quant.contracts import Contract
+from ashare_quant.tasks.contracts import ISODate
 
 Alias = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
 Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]

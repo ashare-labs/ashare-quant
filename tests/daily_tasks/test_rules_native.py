@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-from ashare_quant.backtests.daily.contracts import Signal
-from ashare_quant.backtests.daily.journal import Journal, check_decision
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.canonical import digest
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.daily.executor import Configuration
-from ashare_quant.tasks.daily.service import Jobs
 from ashare_quant.tasks.worker import work_one
 from tests.daily_tasks.conftest import request
 from tests.daily_tasks.test_native import complete
+from tests.support.daily.executor import Configuration
+from tests.support.daily.service import Jobs
+from tests.support.legacy_backtests.contracts import Signal
+from tests.support.legacy_backtests.journal import Journal, check_decision
 
-EXAMPLES = Path(__file__).parents[2] / "examples" / "rules"
+EXAMPLES = Path(__file__).parents[2] / "tests/fixtures/research" / "rules"
 
 
 def register(client, name):

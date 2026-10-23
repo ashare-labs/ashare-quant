@@ -12,7 +12,7 @@ from ashare_quant import __version__
 from ashare_quant.api import create_app
 from ashare_quant.identity import source_sha256
 from ashare_quant.paper.api import create_app as create_paper_app
-from ashare_quant.tasks.openapi import document, portfolio_document
+from ashare_quant.tasks.openapi import document
 
 
 @contextmanager
@@ -59,7 +59,6 @@ def main():
         schemas = {
             "api": app.openapi(),
             "tasks": document(app),
-            "portfolio": portfolio_document(app),
             "paper": create_paper_app(root / "paper").openapi(),
         }
         hashes = {}

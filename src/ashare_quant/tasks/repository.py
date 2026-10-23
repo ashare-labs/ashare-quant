@@ -7,7 +7,12 @@ import uuid
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import canonical, digest, require
 from ashare_quant.storage.store import now
-from ashare_quant.tasks.daily.contracts import JobCreate, JobManifest, JobView, ResultReference
+from ashare_quant.tasks.contracts import (
+    ACTIVE_SCHEMAS,
+    JobView,
+    ResultReference,
+    execution_presentation,
+)
 from ashare_quant.tasks.policy import ServicePolicy, ServiceStatus
 
 LEASE_SECONDS = 15
@@ -15,8 +20,9 @@ LEASE_SECONDS = 15
 
 class Repository:
     view_type = JobView
-    def __init__(self, store, policy=None):
+    def __init__(self, store, policy=None, *, execution_source=None):
         self.store = store
+        self.execution_source = execution_source
         with store.initialization() as snapshot:
             row = snapshot.execute("SELECT policy,policy_sha256 FROM task_service WHERE singleton=1").fetchone()
             if row:
@@ -36,21 +42,39 @@ class Repository:
                     db.execute("INSERT INTO task_service VALUES(1,?,?)",
                                (canonical(self.policy).decode(), digest(self.policy)))
 
+    def queue_scope(self):
+        """Historical tasks retain their rows but do not occupy this runtime's queue."""
+        if self.execution_source is None:
+            return "1", ()
+        return ("COALESCE(json_extract(manifest, '$.schema_version') IN (?,?) AND "
+                "json_extract(manifest, '$.service_identity.source_sha256')=?,0)",
+                (*ACTIVE_SCHEMAS, self.execution_source))
+
     def capacity(self, db=None):
         if db is None:
             with self.store.connection() as connection:
                 return self.capacity(connection)
-        pending = db.execute("SELECT COUNT(*) FROM tasks WHERE status IN ('queued','running','cancelling')").fetchone()[0]
+        scope, parameters = self.queue_scope()
+        pending = db.execute("SELECT COUNT(*) FROM tasks WHERE " + scope +
+                             " AND status IN ('queued','running','cancelling')", parameters).fetchone()[0]
         if pending >= self.policy.max_pending:
             raise DomainError("M2_JOB_QUEUE_FULL", "Pending task capacity reached; retry after completion or cancellation", 429,
                               details={"max_pending": self.policy.max_pending})
 
     def status(self):
+        scope, parameters = self.queue_scope()
         with self.store.connection() as db:
-            counts = {r[0]: r[1] for r in db.execute("SELECT status,COUNT(*) FROM tasks GROUP BY status")}
-            recovery = db.execute("SELECT COUNT(*) FROM tasks WHERE status IN ('running','cancelling') AND COALESCE(lease_until,0)<=?", (time.time(),)).fetchone()[0]
+            counts = {r[0]: r[1] for r in db.execute(
+                "SELECT status,COUNT(*) FROM tasks WHERE " + scope + " GROUP BY status", parameters)}
+            historical = {r[0]: r[1] for r in db.execute(
+                "SELECT status,COUNT(*) FROM tasks WHERE NOT (" + scope + ") GROUP BY status", parameters)}
+            recovery = db.execute("SELECT COUNT(*) FROM tasks WHERE " + scope +
+                                  " AND status IN ('running','cancelling') AND COALESCE(lease_until,0)<=?",
+                                  (*parameters, time.time())).fetchone()[0]
         return ServiceStatus(policy=self.policy, policy_sha256=digest(self.policy), counts=counts,
-                             recovery_required=recovery, available_pending=max(0, self.policy.max_pending - sum(counts.get(k, 0) for k in ('queued','running','cancelling'))))
+                             historical_counts=historical, recovery_required=recovery,
+                             available_pending=max(0, self.policy.max_pending - sum(
+                                 counts.get(k, 0) for k in ('queued','running','cancelling'))))
 
     @staticmethod
     def _log(db, job_id, event, details=None):
@@ -79,15 +103,8 @@ class Repository:
 
     @staticmethod
     def _manifest(row):
-        value = JobManifest.model_validate_json(row["manifest"])
-        require(
-            digest(value) == row["manifest_sha256"]
-            and value.job_id == row["job_id"]
-            and digest(value.request) == row["request_hash"]
-            and value.request == JobCreate.model_validate_json(row["request"])
-            and row["account_id"] == "bt-" + value.session["run_id"]
-        )
-        return value
+        raise DomainError("TASK_FAMILY_RETIRED", "Use the read-only history reader", 409)
+
 
     def view(self, row):
         try:
@@ -100,7 +117,7 @@ class Repository:
         expired = (
             row["status"] in {"running", "cancelling"} and (row["lease_until"] or 0) <= time.time()
         )
-        return self.view_type(
+        view = self.view_type(
             job_id=row["job_id"],
             request=manifest.request,
             status=row["status"],
@@ -119,6 +136,10 @@ class Repository:
             result=ResultReference.model_validate_json(row["result"]) if row["result"] else None,
             error=json.loads(row["error"]) if row["error"] else None,
         )
+        if self.execution_source is not None:
+            view = view.model_copy(update=execution_presentation(
+                row["status"], json.loads(row["manifest"]), self.execution_source))
+        return view
 
     def existing(self, request):
         with self.store.connection() as db:
@@ -171,15 +192,12 @@ class Repository:
             return [dict(r) for r in db.execute("SELECT * FROM tasks ORDER BY created_at,rowid")]
 
     def candidates(self):
+        scope, parameters = self.queue_scope()
         with self.store.connection() as db:
-            return [
-                r[0]
-                for r in db.execute(
-                    "SELECT job_id FROM tasks WHERE status='queued' OR "
-                    "(status IN ('running','cancelling') AND lease_until<=? AND error IS NULL) ORDER BY created_at,rowid",
-                    (time.time(),),
-                )
-            ]
+            return [r[0] for r in db.execute(
+                "SELECT job_id FROM tasks WHERE " + scope + " AND (status='queued' OR "
+                "(status IN ('running','cancelling') AND lease_until<=? AND error IS NULL)) ORDER BY created_at,rowid",
+                (*parameters, time.time()))]
 
     def cancel(self, job_id):
         with self.store.connection(transaction=True) as db:

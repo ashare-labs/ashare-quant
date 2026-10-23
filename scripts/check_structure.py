@@ -17,7 +17,7 @@ def main():
     )
     if (root / "PKG-INFO").is_file():
         # An unpacked sdist has no Git metadata. Check only its declared publication inputs.
-        names = [str(p.relative_to(root)) for base in ("src", "tests", "examples", "scripts", "docs")
+        names = [str(p.relative_to(root)) for base in ("src", "tests", "scripts", "docs")
                  for p in (root / base).rglob("*")
                  if p.is_file() and "__pycache__" not in p.parts]
         names += [p.name for p in root.iterdir() if p.is_file()]
@@ -29,8 +29,10 @@ def main():
     errors = []
     retired = re.compile(r"^(m2(?:_|$)|round_one$|second_batch$|execution_six$|br1_fixed$|d1(?:_|$))")
     for rel in paths:
-        if rel.parts[0] in {"tools", "archives"}:
+        if rel.parts[0] in {"tools", "archives", "examples"}:
             errors.append(f"retired top-level directory: {rel}")
+        if rel.parts[0] == "src" and any(p in {"fixtures", "examples"} for p in rel.parts):
+            errors.append(f"development data in product package: {rel}")
         if rel.parts[0] == "src" and any(retired.match(part) for part in rel.parts[1:]):
             errors.append(f"phase-based product path: {rel}")
         if rel.suffix == ".py" and not re.fullmatch(r"[a-z_][a-z_0-9]*", rel.stem):

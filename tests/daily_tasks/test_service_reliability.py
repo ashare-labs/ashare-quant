@@ -8,11 +8,11 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
-from ashare_quant.tasks.daily.executor import Configuration
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.worker import work_one
 from tests.daily_tasks.conftest import create, request
+from tests.support.app import create_app
+from tests.support.daily.executor import Configuration
 
 
 def test_bounded_parallel_queue_idempotency_and_result_trace(owner_store, tmp_path):

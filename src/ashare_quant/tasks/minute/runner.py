@@ -25,7 +25,7 @@ def run(args):
         from ashare_quant.backtests.minute.native import run_native
         from ashare_quant.backtests.minute.runner import DEFAULTS
         from ashare_quant.execution.rqalpha.guards import install_network_guard
-        from ashare_quant.tasks.daily.runner import watch_control
+        from ashare_quant.tasks.control import watch_control
         from ashare_quant.tasks.minute.contracts import PythonCreate
         from ashare_quant.tasks.minute.prepare import prepare
 

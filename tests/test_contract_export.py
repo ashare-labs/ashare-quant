@@ -20,8 +20,7 @@ def test_generated_documents_equal_runtime_endpoints(tmp_path):
     with TestClient(app) as client:
         for name, endpoint in (
             ("api", "/api/v1/openapi.json"),
-            ("tasks", "/api/v1/tasks/daily/openapi.json"),
-            ("portfolio", "/api/v1/portfolio/openapi.json"),
+            ("tasks", "/api/v1/tasks/openapi.json"),
         ):
             response = client.get(endpoint)
             assert response.status_code == 200

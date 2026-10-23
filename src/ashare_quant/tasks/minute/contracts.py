@@ -5,11 +5,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from ashare_quant.backtests.daily.contracts import Sha
 from ashare_quant.contracts import Contract
-from ashare_quant.tasks.daily.contracts import JobID, JobView
-from ashare_quant.tasks.portfolio.contracts import Security
-from ashare_quant.tasks.result_contracts import JSONObject
+from ashare_quant.tasks.contracts import JobID, JobView, JSONObject, Security, Sha
 
 
 class PythonCreate(Contract):
@@ -35,10 +32,6 @@ class PythonCreate(Contract):
         if (self.end_date - self.start_date).days > limit:
             raise ValueError(f"Use at most {limit} calendar days per local task")
         return self
-
-    @property
-    def window_id(self):
-        return "selected"
 
 
 class PythonScope(Contract):

@@ -10,7 +10,7 @@ from ashare_quant.factors.compute import evaluation_available, validate_paramete
 from ashare_quant.factors.inputs import Sources
 from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, require, sha
 from ashare_quant.tasks.base import TaskService
-from ashare_quant.tasks.daily.contracts import ResultReference
+from ashare_quant.tasks.contracts import ResultReference
 from ashare_quant.tasks.factors.contracts import (
     FactorJobList,
     FactorManifest,
@@ -22,16 +22,18 @@ from ashare_quant.tasks.factors.repository import Repository
 
 
 class FactorJobs(TaskService):
+    active_queue = True
+
     def __init__(self, store, configuration=None, sources=None, product=None):
         super().__init__(store, configuration)
-        self.repo = Repository(store, self.repo.policy)
+        self.repo = Repository(store, self.repo.policy, execution_source=self.source)
         self.executor = Executor(self.root, self.config, self.repo.policy)
         self.sources = Sources(sources, product)
 
     def for_job(self, row):
         if json.loads(row["manifest"]).get("schema_version") == "factor-job.v1":
             return self
-        from ashare_quant.tasks.daily.service import Jobs
+        from ashare_quant.tasks.service import Jobs
 
         return Jobs(self.repo.store, self.config).for_job(row)
 
@@ -126,11 +128,12 @@ class FactorJobs(TaskService):
     def check(self, row, *, execution=False):
         self.guard()
         manifest = self.repo.manifest(row)
-        require(
-            manifest.source_sha256 == self.source,
-            "M2_JOB_SERVICE_CHANGED",
-            "Use this result's original service package",
-        )
+        if execution:
+            require(
+                manifest.source_sha256 == self.source,
+                "M2_JOB_SERVICE_CHANGED",
+                "Use this result's original service package",
+            )
         root = self.directory(row["job_id"])
         require(regular(root / "accepted-manifest.json") == canonical(manifest))
         for name, expected in manifest.files.items():
@@ -169,20 +172,24 @@ class FactorJobs(TaskService):
 
     def result(self, job_id):
         row = self.repo.row(job_id)
-        self.check(row)
+        manifest = self.check(row)
         require(
             row["status"] == "succeeded" and row["result"],
             "M2_JOB_RESULT_NOT_READY",
             "No completed result",
         )
         reference = ResultReference.model_validate_json(row["result"])
+        require(reference.result_id == job_id and reference.evidence_manifest_sha256 == digest(manifest),
+                "FACTOR_RESULT_CHANGED", "Published result belongs to another task")
         raw = regular(self.directory(job_id) / "published.json")
         require(
             sha(raw) == reference.snapshot_sha256,
             "FACTOR_RESULT_CHANGED",
             "Published result changed",
         )
-        return FactorResult.model_validate_json(raw)
+        value = FactorResult.model_validate_json(raw)
+        require(value.job_id == job_id, "FACTOR_RESULT_CHANGED")
+        return value
 
     @staticmethod
     def publish(root, manifest, invocation, attempt_count, logs):

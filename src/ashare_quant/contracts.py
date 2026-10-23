@@ -286,7 +286,7 @@ class Capabilities(Contract):
     api_version: Literal["v1"] = "v1"
     backend_version: str
     storage: Literal["sqlite-control-and-projections"] = "sqlite-control-and-projections"
-    executable_modes: tuple[Literal["fixture", "synthetic"], ...] = ("fixture", "synthetic")
+    executable_modes: tuple[Literal["python_daily", "python_minute", "factors"], ...] = ()
     real_market_validation: Literal["not_run"] = "not_run"
     rqalpha_validation: Literal["optional_dependency_missing", "optional_native_installed_use_task_catalogue"]
     rqalpha_commit: str

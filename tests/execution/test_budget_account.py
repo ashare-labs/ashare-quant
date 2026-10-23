@@ -13,6 +13,7 @@ from ashare_quant.execution.reservation import budget_remaining
 def invoke(tmp_path, scenario):
     out = tmp_path / "result.json"
     paths = [
+        str(Path(__file__).resolve().parents[2]),
         str(Path(__file__).resolve().parents[2] / "src"),
         str(metadata.distribution("rqalpha").locate_file("")),
         str(Path(__file__).parent),

@@ -15,11 +15,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import canonical, digest, sha
-from ashare_quant.tasks.portfolio.contracts import PortfolioSelection
 from ashare_quant.tasks.worker import work_one
+from tests.support.app import create_app
+from tests.support.portfolio.contracts import PortfolioSelection
 
 P = "/api/v1/portfolio"
 
@@ -256,7 +256,7 @@ def test_http_matches_standalone_and_reopens(host, tmp_path):
         sys.executable,
         "-B",
         "-m",
-        "ashare_quant.portfolio",
+        "tests.support.portfolio_engine",
         "--manifest",
         str(root / "execution.json"),
         "--input",
@@ -548,7 +548,7 @@ def test_data_gaps_are_fields_and_never_create_accounts(host, tmp_path):
 def test_v6_and_portfolio_share_original_worker_and_capacity(host, tmp_path):
     from ashare_data import Store as OwnerStore
 
-    from ashare_quant.tasks.daily.executor import Configuration
+    from tests.support.daily.executor import Configuration
 
     folder = os.getenv("ASHARE_QUANT_TEST_DAILY_COMPONENTS")
     if not folder:
@@ -603,7 +603,7 @@ def test_dead_publisher_recovers_complete_checkpoint_without_new_trades(host, tm
     code = """
 import os, signal, sys
 from pathlib import Path
-from ashare_quant.api import create_app
+from tests.support.app import create_app
 from ashare_quant.tasks.worker import work_one
 database, job_id, marker = sys.argv[1:]
 app = create_app(database)
@@ -674,7 +674,7 @@ def test_create_rechecks_requested_id_even_if_registry_returns_another_version(h
 
 @pytest.mark.parametrize("change", ["version", "executable", "prepared_session"])
 def test_coherently_rehashed_frozen_strategy_substitution_is_refused(host, change):
-    from ashare_quant.tasks.portfolio.publication import project
+    from tests.support.portfolio.publication import project
 
     app, jobs, client, _ = host
     job = create(host)
@@ -917,7 +917,7 @@ def test_frozen_data_misbinding_refuses_reads_resume_and_execution(host, change)
     "change", ["request_dataset", "request_mode", "request_ack", "data_identity"]
 )
 def test_completed_receipt_cannot_publish_mismatched_data_identity(host, change):
-    from ashare_quant.tasks.portfolio.publication import names, project
+    from tests.support.portfolio.publication import names, project
 
     _, jobs, client, _ = host
     job = create(host)

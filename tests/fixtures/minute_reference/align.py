@@ -12,7 +12,6 @@ from itertools import product
 from pathlib import Path
 
 from ashare_quant.backtests.minute import run_backtest
-from examples.minute_research.run_demo import CONFIG
 from tests.fixtures.minute_reference.audit_execution import audit_run
 from tests.fixtures.minute_reference.build_scripts import ROOT, generate
 from tests.fixtures.minute_reference.compare import (
@@ -30,6 +29,7 @@ from tests.fixtures.minute_reference.compare import (
     timestamp,
     validate_rows,
 )
+from tests.fixtures.research.minute_research.run_demo import CONFIG
 
 LOG_PINS = {
     "shared_cash_t1": "11bdb192c4320227537d2845287ea31d88d741446f7ad3da31c9efea1741f896",
@@ -288,7 +288,7 @@ def main():
             json.loads((args.existing / (name + "-original-default") / "result.json").read_text())
             if args.existing
             else execute(
-                ROOT / "examples/minute_research" / f"{name}.py",
+                ROOT / "tests/fixtures/research/minute_research" / f"{name}.py",
                 args.input,
                 args.output / (name + "-original-default"),
                 CONFIG,

@@ -7,14 +7,14 @@ from pathlib import Path
 import pytest
 
 from ashare_quant.storage.store import Store
-from ashare_quant.strategies.python.spec import PythonDescriptor
-from ashare_quant.tasks.daily.executor import Configuration
-from ashare_quant.tasks.daily.service import Jobs
 from ashare_quant.tasks.worker import work_one
 from tests.daily_tasks.conftest import create
 from tests.daily_tasks.test_native import complete
+from tests.support.daily.executor import Configuration
+from tests.support.daily.service import Jobs
+from tests.support.legacy_python.spec import PythonDescriptor
 
-EXAMPLES = Path(__file__).parents[2] / "examples" / "python"
+EXAMPLES = Path(__file__).parents[2] / "tests/fixtures/research" / "python"
 
 
 def register(jobs, file):

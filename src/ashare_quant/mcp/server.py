@@ -24,7 +24,7 @@ from ashare_quant.mcp.contracts import (
 )
 from ashare_quant.mcp.discovery import capabilities, require_environment, require_extension
 from ashare_quant.mcp.projection import compact, digest, job_view, page, result_rows, sections
-from ashare_quant.tasks.daily.contracts import JobID
+from ashare_quant.tasks.contracts import JobID
 
 
 def create_server(backend):
@@ -144,7 +144,8 @@ def create_server(backend):
         )
 
     async def find(family, key, expected=None):
-        items = (await backend.request("GET", PREFIXES[family] + "/jobs"))["items"]
+        items = (await backend.request("GET", PREFIXES[family] + "/jobs",
+                                       params={"family": family} if family in {"portfolio", "daily"} else None))["items"]
         matched = [j for j in items if j.get("request", {}).get("idempotency_key") == key]
         if len(matched) > 1:
             raise ResearchError("BACKEND_IDEMPOTENCY_CONFLICT", "Multiple jobs use this key")
@@ -292,6 +293,8 @@ def create_server(backend):
     @tool(read=False, destructive=True)
     async def cancel_research_job(family: Family, job_id: JobID) -> dict[str, Any]:
         """Request backend cancellation; running jobs may remain cancelling until acknowledged."""
+        if family in {"portfolio", "daily"}:
+            raise ResearchError("TASK_FAMILY_RETIRED", "Historical tasks are read-only")
         return job_view(
             await backend.request("POST", PREFIXES[family] + "/jobs/" + job_id + "/cancel", body={})
         )

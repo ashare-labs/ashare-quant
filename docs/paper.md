@@ -1,14 +1,10 @@
-# Paper 模拟与恢复
+# 账户历史与独立运行时
 
-`python -m ashare_quant.paper --help` 管理本地模拟；`paper.api:create_app` 提供独立 `/api/v1/paper` 应用。[HTTP 契约](contracts/paper.openapi.json) 使用临时空根生成。
+产品 `/api/v1/paper` 仅保留能力、schema、会话目录、状态、view 和日报告读取。手工创建会话、注入 decisions/closes、fork、advance、ingest、work、pause/resume 的 HTTP 路由均已删除；`python -m ashare_quant.paper` 也仅提供 sessions/status/view/report/serve。
 
-流程：创建新身份，绑定数据与策略，验证风险和假设，按显式交易日生成意图，推进原生执行，收盘检查账户与检查点。synthetic_fixture 和 historical_research 必须保留标签；历史回放成功不授予实时观察或实盘权限。
+账户和账本没有删除。读取报告按原会话身份和封存检查点校验，不执行或重新生成策略。数据源、行情查询、正式发布及必要诊断不受此清理影响。
 
-paper.online_cli 处理日历观察与计划，paper.intraday_cli 处理分钟观察，paper.continuation_cli 和 paper.successor_cli 处理显式前序绑定的延续。先看 --help，再指定新账户根。来源 readiness、行动范围和开收盘边界依据真实证据，不能修改日期或旧回执补齐缺证。
-
-输入、源码、环境与消费契约逐项冻结。新版只有一份已安装 AD 候选，子进程保持离线和只读边界。风控、T+1、预算、分红与股份规则由原生能力执行；控制层保存意图、租约、状态和投影。
-
-恢复先核对源码、策略、数据、计划和状态摘要。旧运行包、审阅凭证和账户继续使用原身份；模拟测试通过不会改变历史验收结论。`runtime_migration_cli` 处理已有 v2 延续绑定且尚未开始的账户，不能用于已结算 v3 账户。
+既有已登记账户由独立 owner、online/intraday/continuation/successor 运行时管理，涉及真实持仓连续性，不属于演练端点。其底层计算与迁移工具保留，本次不对任何实际账户执行迁移、推进或恢复。以下运行时说明适用于已有独立账户，不构成产品预设算法创建平台。
 
 ## 已结算 v3 运行时迁移
 

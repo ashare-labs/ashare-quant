@@ -296,7 +296,7 @@ def audit_jq(rows, *, with_checks=False):
 
 
 def audit_aq(result, source):
-    from examples.minute_research.run_demo import economic_audit
+    from tests.fixtures.research.minute_research.run_demo import economic_audit
 
     economic_audit(result, source)
     require(

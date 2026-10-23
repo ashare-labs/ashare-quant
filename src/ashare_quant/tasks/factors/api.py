@@ -2,8 +2,8 @@
 
 from ashare_data.factors.alpha191 import EXPLICIT_VERSION
 
-from ashare_quant.tasks.daily.api import ActionRequest
-from ashare_quant.tasks.daily.contracts import JobID, JobLogs
+from ashare_quant.tasks.api import ActionRequest
+from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.factors.contracts import (
     FactorCreate,
     FactorJobList,

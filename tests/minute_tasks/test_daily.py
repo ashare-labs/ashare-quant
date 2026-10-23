@@ -18,8 +18,8 @@ from ashare_data.storage.market_release import MarketRelease, ReleaseWriter, con
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
-from ashare_quant.tasks.minute.example import DAILY_SOURCE
 from ashare_quant.tasks.worker import work_one
+from tests.support.python_sources import DAILY_SOURCE
 
 IDS = ["600000.XSHG", "000001.XSHE"]
 

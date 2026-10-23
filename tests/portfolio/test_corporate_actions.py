@@ -22,7 +22,7 @@ KEY = SID + ":distribution:synthetic-plan-one"
 
 
 def fixture():
-    manifest = json.loads((REPO / "examples/portfolio/manifest.json").read_text())
+    manifest = json.loads((REPO / "tests/fixtures/research/portfolio/manifest.json").read_text())
     manifest["securities"] = [SID]
     manifest["windows"] = [{"id": "test", "start": "2020-02-03", "end": "2020-02-10"}]
     config = {"id": "daily-equal-weight", "purpose": "Synthetic fixed-target date-stage rule"}
@@ -220,7 +220,7 @@ def native(
         sys.executable,
         "-B",
         "-m",
-        "ashare_quant.portfolio",
+        "tests.support.portfolio_engine",
         "--manifest",
         str(question / "manifest.json"),
         "--input",

@@ -130,7 +130,7 @@ class Observe(ast.NodeTransformer):
 def generate(name, platform):
     if name not in NAMES or platform not in ("aq", "jq"):
         raise ValueError("Only the two frozen cases and aq/jq platforms are supported")
-    original = (ROOT / "examples/minute_research" / f"{name}.py").read_text()
+    original = (ROOT / "tests/fixtures/research/minute_research" / f"{name}.py").read_text()
     tree = Observe().visit(ast.parse(original))
     # JQ injects trading functions/styles into the strategy global namespace;
     # jqdata itself does not export LimitOrderStyle. AQ also injects this subset.

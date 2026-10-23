@@ -66,7 +66,7 @@ def test_exact_cumulative_capacity_is_not_reissued_per_order():
 
 @pytest.mark.parametrize("volume,fill", [(999999, 0), (1999999, 100)])
 def test_real_native_account_at_synthetic_rounding_boundary(tmp_path, volume, fill):
-    source = REPO / "examples/portfolio/participation"
+    source = REPO / "tests/fixtures/research/portfolio/participation"
     question = tmp_path / "question"
     strategy = question / "daily-equal-weight"
     strategy.mkdir(parents=True)
@@ -86,7 +86,7 @@ def test_real_native_account_at_synthetic_rounding_boundary(tmp_path, volume, fi
         sys.executable,
         "-B",
         "-m",
-        "ashare_quant.portfolio",
+        "tests.support.portfolio_engine",
         "--manifest",
         str(question / "manifest.json"),
         "--input",

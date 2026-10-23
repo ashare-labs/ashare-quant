@@ -10,12 +10,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from ashare_quant.api import create_app
-from ashare_quant.backtests.daily.parameter_policy import RegisteredPythonParameters
 from ashare_quant.contracts import DomainError
-from ashare_quant.strategies.python.spec import PythonDescriptor
 from ashare_quant.strategies.python.supervision import BoundedOutput, check_phase
-from ashare_quant.tasks.daily.service import Jobs
+from tests.support.app import create_app
+from tests.support.daily.service import Jobs
+from tests.support.legacy_backtests.parameter_policy import RegisteredPythonParameters
+from tests.support.legacy_python.spec import PythonDescriptor
 
 NORMAL = """from ashare_quant.strategies.api import TargetShares
 print("OWNED_MODULE_LOADED")
@@ -87,13 +87,11 @@ def test_cli_registration_does_not_load_module(tmp_path):
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    version = json.loads(result.stdout)["version_id"]
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
     assert "OWNED_MODULE_LOADED" not in result.stdout + result.stderr
-    assert (
-        subprocess.run(base + ["task-python-strategy-get", version], capture_output=True).returncode
-        == 0
-    )
+    assert not (tmp_path / "control.sqlite3").exists()
+
 
 
 def test_ordinary_output_and_deadline_bounds(tmp_path):

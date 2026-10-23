@@ -15,10 +15,10 @@ A宽在现有 HTTP 后端之上提供可选 MCP 薄适配。它复用 AD 已发�
 | 因子来源 | `factor_sources` | 登记来源的就绪状态、口径、边界；指定 source_id 后分页列出证券 |
 | 因子计算与评价 | `submit_factor` | 复用 FactorCreate、冻结输入、既有 worker 和 AD Alphalens 评价，可选 label_end |
 | 找回提交 | `find_research_job` | 按原始幂等键查原后端任务，包括适配进程重启后 |
-| 任务跟踪和停止 | `research_job`、`cancel_research_job` | 原后端状态与取消确认，支持分钟/日频 Python、因子、portfolio 和固定日频任务 |
+| 任务跟踪和停止 | `research_job`、`cancel_research_job` | Python/因子状态与取消；portfolio 和旧固定日频仅只读状态 |
 | 日志及结果 | `research_logs`、`research_result` | 摘要默认；Python 支持成交/持仓/权益/订单/日志；因子支持值、评价摘要及全部诊断分页 |
 
-分钟产品上限仍是 **8 股票、23 交易日、20000 根股票分钟线**（提交日期最多跨 31 日），初始/终结空仓、固定股票池、回溯研究、非历史 PIT；Python 内存不能断点恢复。不能把底层引擎更大的容量描述成当前产品能力。portfolio 和固定日频任务目前提供管理与摘要；其提交仍使用原后端正式工作流。
+分钟产品上限仍是 **8 股票、23 交易日、20000 根股票分钟线**（提交日期最多跨 31 日），初始/终结空仓、固定股票池、回溯研究、非历史 PIT；Python 内存不能断点恢复。不能把底层引擎更大的容量描述成当前产品能力。portfolio 和旧固定日频仅通过历史接口提供查找与摘要；其创建和执行平台已退役，取消明确拒绝。
 
 适配版本 `research-mcp.v1.1` 保留原 10 个工具名，新增 3 个因子工具；原分钟提交默认仍为 `1m`。
 组合基线为 AQ 因子 `b82f55e`、日频 `ba24db4`/`0ebe45f`、MCP `d4038b6`，
@@ -28,7 +28,7 @@ A宽在现有 HTTP 后端之上提供可选 MCP 薄适配。它复用 AD 已发�
 
 日频指定 `frequency="1d"`，上限 8 股、126 交易日、186 自然日，`warmup_sessions` 为 1–120，默认 20；
 末持仓按最后收盘标记。`python_daily` 与原 `python_minute` family 是同一后端 `/python` 队列的路由别名，
-任务详情中的 frequency 才是实际频率。`daily` 仍指旧固定日频任务，不能与自定义 Python 混用。
+任务详情中的 frequency 才是实际频率。`daily` 仍指只读历史日频任务，不能与自定义 Python 混用。
 
 因子目录共 368 项：19 项聚宽命名研究因子、191 项 Alpha191、158 项 Qlib 工程特征。
 例如 `alpha191:alpha158` 不是 `qlib_alpha158:ROC5`。不把特征列数当作有效策略数。
@@ -116,3 +116,5 @@ python scripts/run_tests.py -q tests/mcp tests/factors tests/minute_tasks
 远程 dot 仍需要另行批准的长期宿主、可达 HTTPS MCP 地址、认证/授权、Host/Origin 白名单、
 同机可信后端/worker 和明确的数据权限。当前无认证 loopback 入口只供可信本机调试。
 本次不安装常驻服务，不开公网/隧道，不配置凭据，不改变 VPN/权限，也不宣称 dot 已连接。
+
+`daily`/`portfolio` 家族的查找、状态、日志与结果通过历史接口读取，取消返回 TASK_FAMILY_RETIRED；没有提交固定算法的工具。其余 10 项研究工具与 3 项因子工具继续使用原 HTTP 执行链路。

@@ -10,12 +10,9 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from ashare_quant import __version__
-from ashare_quant.backtests.synthetic import specifications
 from ashare_quant.contracts import (
     Account,
     Capabilities,
-    DataBatch,
-    DataQuery,
     DomainError,
     ErrorResponse,
     EventPage,
@@ -24,15 +21,12 @@ from ashare_quant.contracts import (
     LogEntry,
     Manifest,
     Order,
-    RunCreate,
     RunView,
     StateView,
-    StrategyCreate,
     StrategyVersion,
     ValidationResponse,
 )
-from ashare_quant.data import PinnedAshareData, capabilities
-from ashare_quant.execution.synthetic.specs import rq_specifications
+from ashare_quant.data import capabilities
 from ashare_quant.market.reader import (
     ResearchCoverage,
     ResearchCoverageQuery,
@@ -43,7 +37,6 @@ from ashare_quant.market.reader import (
 )
 from ashare_quant.storage.errors import storage_error
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.synthetic.service import Service
 
 
 def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None, factor_sources=None) -> FastAPI:
@@ -65,7 +58,7 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
             from pathlib import Path as FilePath
 
             from ashare_quant.deployment.runtime import require_initialized
-            from ashare_quant.tasks.daily.executor import Configuration
+            from ashare_quant.tasks.executor import Configuration
 
             db_path = db_path if db_path is not None else str(product_configuration.control_db)
             if FilePath(db_path).expanduser().resolve() != product_configuration.control_db:
@@ -77,7 +70,7 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
             if daily_tasks_configuration is None:
                 daily_tasks_configuration = Configuration(product_configuration.owner_store_root)
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
-        from ashare_quant.tasks.daily.service import Jobs
+        from ashare_quant.tasks.service import Jobs
 
         jobs = Jobs(store, daily_tasks_configuration)
     except (DomainError, OSError, sqlite3.Error) as exc:
@@ -93,12 +86,9 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
             }, headers={"Cache-Control": "no-store", "Retry-After": "2"})
 
         return app
-    service = Service(store)
     app.state.store = store
-    from ashare_quant.tasks.daily.api import mount as mount_tasks
-    mount_tasks(app, store, daily_tasks_configuration, jobs=jobs)
-    from ashare_quant.tasks.portfolio.api import mount as mount_portfolio_jobs
-    mount_portfolio_jobs(app, store, daily_tasks_configuration)
+    from ashare_quant.tasks.api import mount as mount_tasks
+    mount_tasks(app, store, jobs=jobs)
     from ashare_quant.product.api import mount as mount_product
     mount_product(app, store, product_configuration)
     from ashare_quant.tasks.minute.api import mount as mount_python
@@ -137,13 +127,7 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     def get_capabilities() -> Capabilities:
         return capabilities()
 
-    @app.get("/api/v1/scenarios")
-    def scenarios() -> dict:
-        return specifications()
 
-    @app.get("/api/v1/rqalpha/scenarios")
-    def native_scenarios() -> dict:
-        return rq_specifications()
 
     @app.get("/api/v1/runs/{run_id}/receipt")
     def native_receipt(run_id: str) -> dict:
@@ -157,9 +141,6 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     def execution(run_id: str) -> ExecutionStatus:
         return store.execution_status(run_id)
 
-    @app.post("/api/v1/strategies", status_code=201)
-    def register_strategy(request: StrategyCreate) -> StrategyVersion:
-        return service.register_strategy(request)
 
     @app.get("/api/v1/strategies")
     def list_strategies() -> list[StrategyVersion]:
@@ -169,9 +150,6 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     def strategy(version_id: str) -> StrategyVersion:
         return store.strategy(version_id)
 
-    @app.post("/api/v1/runs", status_code=202)
-    def submit_run(request: RunCreate) -> RunView:
-        return service.submit(request)
 
     @app.get("/api/v1/runs")
     def list_runs() -> list[RunView]:
@@ -205,13 +183,7 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     def logs(run_id: str, after: int = Query(default=0, ge=0)) -> list[LogEntry]:
         return store.logs(run_id, after)
 
-    @app.post("/api/v1/runs/{run_id}/cancel")
-    def cancel(run_id: str) -> RunView:
-        return store.cancel(run_id)
 
-    @app.post("/api/v1/data/admission")
-    def admission(query: DataQuery) -> DataBatch:
-        return PinnedAshareData().read(query)
 
     @app.get("/api/v1/market/stores")
     def research_aliases() -> list[str]:

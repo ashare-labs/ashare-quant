@@ -214,7 +214,7 @@ def test_structured_reference_cannot_be_replaced_by_a_limit_origin_label(protoco
 
 
 def test_dataset_modes_come_from_the_input_and_old_descriptors_remain_readable(protocol):
-    from ashare_quant.tasks.portfolio.data import Datasets
+    from ashare_quant.market.datasets import Datasets
 
     release, query, config, refs, _, _, _ = protocol
     path = consume(release, query, config, refs)

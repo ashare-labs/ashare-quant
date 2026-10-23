@@ -5,19 +5,26 @@ from pydantic import TypeAdapter
 
 from ashare_quant.identity import source_sha256
 from ashare_quant.storage.artifacts import lock, require
-from ashare_quant.tasks.daily.contracts import JobID, JobLogs
-from ashare_quant.tasks.daily.executor import Configuration
+from ashare_quant.tasks.contracts import JobID, JobLogs
+from ashare_quant.tasks.executor import Configuration
 from ashare_quant.tasks.repository import Repository
 
 
 class TaskService:
+    active_queue = False
+
     def __init__(self, store, configuration=None):
         self.config = configuration or Configuration.environment()
         self.root = store.path.with_name(store.path.name + ".tasks")
         require(not self.root.is_symlink())
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.repo = Repository(store, self.config.policy)
         self.source = source_sha256()
+        self.repo = Repository(store, self.config.policy,
+                               execution_source=self.source if self.active_queue else None)
+
+    def executor_args(self, manifest):
+        """Optional executor-specific positional arguments; active tasks need none."""
+        return ()
 
     def guard(self):
         require(
@@ -74,7 +81,7 @@ class TaskService:
                 proof = self.executor.immediate(
                     "inspect",
                     self.directory(job_id),
-                    manifest.request.window_id,
+                    *self.executor_args(manifest),
                     "resume-" + uuid.uuid4().hex,
                     manifest.session_file_sha256,
                     lock_fds=(writer.fileno(),),

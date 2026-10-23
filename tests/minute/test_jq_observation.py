@@ -39,7 +39,7 @@ class RecoverBusiness(ast.NodeTransformer):
 @pytest.mark.parametrize("name", NAMES)
 @pytest.mark.parametrize("platform", ["aq", "jq"])
 def test_observer_preserves_every_original_business_function(name, platform):
-    original = ast.parse((ROOT / "examples/minute_research" / f"{name}.py").read_text())
+    original = ast.parse((ROOT / "tests/fixtures/research/minute_research" / f"{name}.py").read_text())
     generated = generate(name, platform)
     # The hosted Python3 runtime accepts these scripts; guard syntax compatibility too.
     actual = {

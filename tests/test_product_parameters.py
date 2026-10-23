@@ -1,20 +1,21 @@
 """Product parameters must not inherit the acceptance example's tiny portfolio."""
 
 import json
-import runpy
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 import ashare_quant.strategies.python.supervision as supervision
-from ashare_quant.backtests.daily.contracts import Signal, StrategyDefinition
-from ashare_quant.backtests.daily.parameter_policy import BandParameters, RegisteredPythonParameters
 from ashare_quant.contracts import DomainError
-from ashare_quant.strategies.daily.rules import DecisionRule, RuleCondition
-from ashare_quant.tasks.daily.executor import Configuration
-from ashare_quant.tasks.daily.service import Jobs
 from ashare_quant.tasks.policy import ServicePolicy
+from tests.support.daily.executor import Configuration
+from tests.support.daily.service import Jobs
+from tests.support.legacy_backtests.contracts import Signal, StrategyDefinition
+from tests.support.legacy_backtests.parameter_policy import (
+    BandParameters,
+    RegisteredPythonParameters,
+)
+from tests.support.legacy_strategies.rules import DecisionRule, RuleCondition
 
 
 @pytest.mark.parametrize("quantity", [300, 1000, 100000])
@@ -78,7 +79,7 @@ def test_resource_budgets_remain_positive_finite(kwargs):
 
 @pytest.mark.parametrize("invalid_lease", [False, True])
 def test_runner_watchdog_uses_configured_budget_and_preserves_lease_fence(tmp_path, monkeypatch, invalid_lease):
-    runner = runpy.run_path(str(Path(__file__).parents[1] / "src/ashare_quant/tasks/daily/runner.py"))
+    runner = vars(__import__("ashare_quant.tasks.control", fromlist=["watch_control"]))
     calls = []
     class Connection:
         def __enter__(self):

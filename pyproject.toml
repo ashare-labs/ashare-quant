@@ -85,7 +85,7 @@ packages = ["src/ashare_quant"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/.gitignore", "/.python-version", "/README.md", "/CONTRIBUTING.md", "/pyproject.toml", "/uv.lock",
-  "/src", "/tests", "/examples", "/scripts", "/docs",
+  "/src", "/tests", "/scripts", "/docs",
 ]
 
 [project.scripts]
@@ -111,6 +111,8 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 # These reference strategy fixtures run inside engines that inject their API globals.
 [tool.ruff.lint.per-file-ignores]
+"tests/support/rqalpha/strategy.py" = ["F821"]
+"tests/support/rqalpha/launcher.py" = ["E402"]
 "tests/fixtures/minute_reference/gap_native_control.py" = ["F821"]
 "tests/fixtures/minute_reference/gap_ported.py" = ["F403", "F405", "I001"]
 "tests/fixtures/minute_reference/gap_probe.py" = ["F403", "F405", "I001"]

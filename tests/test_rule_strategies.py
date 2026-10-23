@@ -7,13 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from ashare_quant.api import create_app
-from ashare_quant.backtests.daily.parameter_policy import parse_parameters
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.canonical import canonical
-from ashare_quant.strategies.daily.registry import StrategyRegistry
-from ashare_quant.strategies.daily.rules import RuleStrategyDefinition
-from ashare_quant.strategies.daily.strategy import evaluate
+from tests.support.app import create_app
+from tests.support.legacy_backtests.parameter_policy import parse_parameters
+from tests.support.legacy_strategies.registry import StrategyRegistry
+from tests.support.legacy_strategies.rules import RuleStrategyDefinition
+from tests.support.legacy_strategies.strategy import evaluate
 
 
 def definition():

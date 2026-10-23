@@ -7,16 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.paper.contracts import (
-    AdvanceAction,
-    CloseInput,
-    ControlAction,
-    Decision,
-    ForkSimulation,
-    SessionConfig,
-)
 from ashare_quant.paper.errors import error_value
-from ashare_quant.paper.risk import require
 from ashare_quant.paper.service import PaperService
 
 
@@ -55,27 +46,8 @@ def create_app(root):
 
     @app.get("/api/v1/paper/capabilities")
     def capabilities():
-        return {
-            "contract_version": "paper-api.v2",
-            "native_continuation": True,
-            "data_modes": ["synthetic_fixture", "historical_research"],
-            "historical_replay_enabled": True,
-            "ad_daily_delivery_enabled": True,
-            "ad_execution_gate": "fixed_daily_observation_then_each_actual_order_security_date_side",
-            "cash_dividend_policy": "explicit_gross_zero_withholding_payment_date_0900",
-            "historical_pit_verified": False,
-            "execution_permission": False,
-            "source_sha256": service_source(),
-            "observed_data_enabled": False,
-            "continuous_paper_accepted": False,
-            "broker_enabled": False,
-            "strategy_execution": "pinned_shared_daily_signals",
-            "awaiting": [
-                "AD_w2024_unknown_required_order_fields_not_observation_day_blanket_rejection",
-                "source_qualified_live_or_historical_delivery_timestamps",
-                "independent_quant_web_human_acceptance",
-            ],
-        }
+        return {"contract_version": "paper-history.v1", "read_only": True,
+                "source_sha256": service_source(), "execution_permission": False}
 
     def service_source():
         from ashare_quant.identity import source_sha256
@@ -96,47 +68,8 @@ def create_app(root):
 
         return profiles()
 
-    @app.post("/api/v1/paper/sessions/{sid}/fork", status_code=201)
-    def fork(sid: str, body: ForkSimulation):
-        from ashare_quant.paper.replay import bind, load
 
-        _, config = service.session(sid)
-        binding, _ = load(service, sid, config)
-        directory = service.root / sid / "replay"
-        if binding["schema"] == "paper-execution-binding.v1":
-            from ashare_quant.paper.execution import fork as execution_fork
 
-            return execution_fork(service, sid, body.account_id, body.risk.model_dump(mode="json"))
-        return bind(
-            service,
-            directory / "manifest.json",
-            directory / "input.json",
-            config.strategy_id,
-            binding["window"]["id"],
-            body.account_id,
-            accept_model=binding["accept_owner_state_model"],
-            risk=body.risk.model_dump(mode="json"),
-            cash_dividend_policy=config.cash_dividend_policy,
-        )
-
-    @app.post("/api/v1/paper/sessions/{sid}/ingest")
-    def ingest(sid: str, body: AdvanceAction):
-        from ashare_quant.paper.execution import ingest as append
-
-        try:
-            return append(service, sid, body.day.isoformat(), body.expected_parent)
-        except DomainError as exc:
-            service.alert(sid, body.day.isoformat(), exc)
-            raise
-
-    @app.post("/api/v1/paper/sessions", status_code=201)
-    def create(body: SessionConfig):
-        row = service.create(body)
-        return {
-            "session_id": row["id"],
-            "identity": row["identity"],
-            "data_mode": body.data_mode,
-        }
 
     @app.get("/api/v1/paper/sessions/{sid}")
     def status(sid: str):
@@ -146,38 +79,14 @@ def create_app(root):
     def view(sid: str, day: date | None = None):
         return service.view(sid, day.isoformat() if day else None)
 
-    @app.post("/api/v1/paper/sessions/{sid}/advance")
-    def advance(sid: str, body: AdvanceAction):
-        from ashare_quant.paper.replay import advance as replay_advance
 
-        return replay_advance(service, sid, body.day.isoformat(), body.expected_parent)
 
-    @app.post("/api/v1/paper/sessions/{sid}/days/{day}/work")
-    def work(sid: str, day: date, body: ControlAction):
-        frozen = Decision.model_validate_json(service.day(sid, day.isoformat())["decision"])
-        require(frozen.expected_parent == body.expected_parent, "PAPER_PARENT_CONFLICT")
-        return service.work(sid, day.isoformat())
 
-    @app.post("/api/v1/paper/sessions/{sid}/decisions", status_code=201)
-    def decision(sid: str, body: Decision):
-        row = service.prepare(sid, body)
-        return {"day": row["day"], "status": row["status"], "intent_id": row["intent_id"]}
-
-    @app.post("/api/v1/paper/sessions/{sid}/closes", status_code=202)
-    def close(sid: str, body: CloseInput):
-        row = service.seal_close(sid, body)
-        return {"day": row["day"], "status": row["status"], "input_id": row["input_id"]}
 
     @app.get("/api/v1/paper/sessions/{sid}/days/{day}/report")
     def report(sid: str, day: date):
         return service.report(sid, day.isoformat())
 
-    @app.post("/api/v1/paper/sessions/{sid}/pause")
-    def pause(sid: str, body: ControlAction):
-        return service.control(sid, "pause", body.expected_parent, body.reason)
 
-    @app.post("/api/v1/paper/sessions/{sid}/resume")
-    def resume(sid: str, body: ControlAction):
-        return service.control(sid, "resume", body.expected_parent, body.reason)
 
     return app

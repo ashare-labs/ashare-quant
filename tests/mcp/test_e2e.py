@@ -161,7 +161,7 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                         )
                         assert conflict.is_error
                         job_id = job["job_id"]
-                        await asyncio.to_thread(work_one, app.state.daily_tasks, job_id)
+                        await asyncio.to_thread(work_one, app.state.tasks, job_id)
                         status = await call(
                             client, "research_job", family="python_minute", job_id=job_id
                         )
@@ -311,7 +311,7 @@ def test_response_loss_concurrent_idempotency_cancellation_and_failure(tmp_path)
                         source='def initialize(context):\n    raise ValueError("intentional engineering failure")\n',
                     ),
                 )
-                await asyncio.to_thread(work_one, app.state.daily_tasks, bad["job_id"])
+                await asyncio.to_thread(work_one, app.state.tasks, bad["job_id"])
                 state = await call(c, "research_job", family="python_minute", job_id=bad["job_id"])
                 assert state["status"] == "failed" and state["error"]
                 assert "intentional engineering failure" in json.dumps(state["error"])
@@ -325,7 +325,7 @@ def test_response_loss_concurrent_idempotency_cancellation_and_failure(tmp_path)
                     ),
                 )
                 work = asyncio.create_task(
-                    asyncio.to_thread(work_one, app.state.daily_tasks, slow["job_id"])
+                    asyncio.to_thread(work_one, app.state.tasks, slow["job_id"])
                 )
                 try:
                     for _ in range(100):

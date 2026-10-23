@@ -21,15 +21,15 @@ def capabilities() -> Capabilities:
         native_installed = False
     return Capabilities(
         backend_version=__version__, rqalpha_commit=RQALPHA_COMMIT,
-        executable_modes=("fixture", "synthetic") if native_installed else ("fixture",),
+        executable_modes=("python_daily", "python_minute", "factors") if native_installed else (),
         rqalpha_validation=("optional_native_installed_use_task_catalogue" if native_installed
                            else "optional_dependency_missing"),
         ashare_data_version=ASHARE_VERSION, ashare_data_commit=ASHARE_COMMIT,
         ashare_data_tree=ASHARE_TREE,
         limitations=(
-            "Daily task admission is described by /api/v1/tasks/daily/jobs/catalogue; portfolio has its own preflight.",
+            "Custom Python admission is described by /api/v1/python/catalogue; factors use /api/v1/factors/catalogue.",
             "One installed data-owner candidate is shared by market reads, diagnostics, tasks and paper.",
-            "Fixture mode is synthetic. New candidate source and execution have not inherited historical independent review.",
+            "New candidate source and execution do not inherit historical independent review.",
             "Unknown PIT, price limits, corporate actions and source clocks remain unknown.",
             "RQAlpha runs trusted local strategies; no hostile-code sandbox, broker access or commercial permission is implied.",
         ),

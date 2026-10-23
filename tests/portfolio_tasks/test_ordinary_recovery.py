@@ -18,10 +18,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
 from ashare_quant.portfolio.inputs import digest as input_digest
 from ashare_quant.storage.artifacts import canonical
 from ashare_quant.tasks.worker import work_one
+from tests.support.app import create_app
 
 P = "/api/v1/portfolio"
 NATIVE_STAGES = ("native_submit", "decision_candidate", "before_replace", "after_replace")
@@ -201,7 +201,7 @@ def test_ordinary_dead_publisher_recovers_checkpoint_without_new_trades(ordinary
     code = """
 import os,signal,sys
 from pathlib import Path
-from ashare_quant.api import create_app
+from tests.support.app import create_app
 from ashare_quant.tasks.worker import work_one
 app=create_app(sys.argv[1])
 def stage(name,*_):

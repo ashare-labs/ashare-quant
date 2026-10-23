@@ -23,7 +23,7 @@ def main():
     args = parser.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    manifest_path = REPO / "examples/portfolio/manifest.json"
+    manifest_path = REPO / "tests/fixtures/research/portfolio/manifest.json"
     manifest = json.loads(manifest_path.read_text())
     service = PaperService(out / "store")
     results = {

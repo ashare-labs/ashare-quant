@@ -1,3 +1,7 @@
+# 当前产品迁移
+
+固定窗口、七算法与演练入口已退役，当前切换要求见 [正式后端迁移](formal-backend-migration.md)。以下仅记录更早的目录演变，不作为当前接口调用指南。
+
 # 功能布局迁移
 
 新版没有旧名 shim。m2 的契约迁入 backtests.daily，策略迁入 strategies.daily，数据适配迁入 providers.daily；tasks 拆为共享 tasks 和 tasks.daily；m2_native 迁入 execution.daily；portfolio_jobs 迁入 tasks.portfolio。daily_portfolio 迁入 portfolio，minute 迁入 backtests.minute，rqprobe 迁入 execution.rqalpha。

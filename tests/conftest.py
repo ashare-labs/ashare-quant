@@ -2,7 +2,7 @@ import pytest
 
 from ashare_quant.contracts import RunCreate, StrategyCreate
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.synthetic.service import Service
+from tests.support.synthetic.service import Service
 
 
 @pytest.fixture(autouse=True)

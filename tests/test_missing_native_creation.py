@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
-from ashare_quant.tasks.daily.executor import Configuration
+from tests.support.app import create_app
+from tests.support.daily.executor import Configuration
 
 
 def test_missing_native_retries_preserve_existing_residue_and_create_nothing(tmp_path, monkeypatch):
     from ashare_data import Store as DataStore
 
-    import ashare_quant.tasks.daily.executor as executor
+    import tests.support.daily.executor as executor
 
     product = os.getenv("ASHARE_QUANT_TEST_M2_PRODUCT")
     if not product:

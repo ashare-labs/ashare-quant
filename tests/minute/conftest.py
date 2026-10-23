@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def minute_doc():
-    return runpy.run_path(str(ROOT / "examples/minute/make_fixture.py"))["fixture"]()
+    return runpy.run_path(str(ROOT / "tests/fixtures/research/minute/make_fixture.py"))["fixture"]()
 
 
 @pytest.fixture

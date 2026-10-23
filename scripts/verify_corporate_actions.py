@@ -66,7 +66,7 @@ def main():
             ).hexdigest(),
         ),
     )
-    manifest_template = json.loads((REPO / "examples/portfolio/manifest.json").read_text())
+    manifest_template = json.loads((REPO / "tests/fixtures/research/portfolio/manifest.json").read_text())
     cases = [
         dict(
             name="longi-hold",
@@ -246,7 +246,7 @@ def main():
             str(args.native_python),
             "-B",
             "-m",
-            "ashare_quant.portfolio",
+            "tests.support.portfolio_engine",
             "--manifest",
             str(root / "manifest.json"),
             "--input",

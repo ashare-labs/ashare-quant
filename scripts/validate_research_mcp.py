@@ -126,7 +126,7 @@ async def exercise(client, backend, app, request, family):
             client, "find_research_job", family=family, idempotency_key=body["idempotency_key"]
         )
     )["job"]["job_id"] == job_id
-    await asyncio.to_thread(work_one, app.state.daily_tasks, job_id)
+    await asyncio.to_thread(work_one, app.state.tasks, job_id)
     state = await call(client, "research_job", family=family, job_id=job_id)
     logs = await collect(client, "research_logs", family=family, job_id=job_id)
     direct_logs = await backend.request("GET", prefix + "/jobs/" + job_id + "/logs")
@@ -157,7 +157,7 @@ async def exercise(client, backend, app, request, family):
     # Independent direct-HTTP job verifies values, not only the same result projection.
     control = body | {"idempotency_key": body["idempotency_key"] + "-direct"}
     other = await backend.request("POST", prefix + "/jobs", body=control)
-    await asyncio.to_thread(work_one, app.state.daily_tasks, other["job_id"])
+    await asyncio.to_thread(work_one, app.state.tasks, other["job_id"])
     comparison = await backend.request("GET", prefix + "/jobs/" + other["job_id"] + "/result")
     assert comparison["summary"] == direct["summary"]
     for section in sections(direct, family):

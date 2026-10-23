@@ -16,11 +16,11 @@ from ashare_quant.deployment.runtime import commands, deployment_lock, doctor, i
 from ashare_quant.paper.service import PaperService
 from ashare_quant.storage.artifacts import lock
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.synthetic.service import Service
-from ashare_quant.tasks.synthetic.worker import work_one
 from tests.paper.fixtures import config as paper_config
 from tests.paper.fixtures import queue
 from tests.paper.test_recovery import economics
+from tests.support.synthetic.service import Service
+from tests.support.synthetic.worker import work_one
 
 
 def manifest(tmp_path):

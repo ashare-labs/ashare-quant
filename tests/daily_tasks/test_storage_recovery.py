@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-import ashare_quant.tasks.daily.service as service
+import tests.support.daily.service as service
 from ashare_quant.tasks.worker import work_one
 from tests.daily_tasks.conftest import request
 

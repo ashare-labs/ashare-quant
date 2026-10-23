@@ -4,7 +4,6 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +12,6 @@ from ashare_quant.api import create_app
 from ashare_quant.cli import main
 from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
-from ashare_quant.tasks.daily.executor import Configuration
 
 
 @pytest.fixture
@@ -48,7 +46,7 @@ def legacy(tmp_path, args, **variables):
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=90)
 
 
-@pytest.mark.parametrize("command", [["task-worker", "--once"], ["worker", "--once"], ["tasks"]])
+@pytest.mark.parametrize("command", [["task-worker", "--once"], ["history"], ["task-service"]])
 def test_ambiguous_state_refused_without_creating_database(tmp_path, command):
     run = legacy(tmp_path, command)
     assert run.returncode == 2, run.stderr
@@ -134,37 +132,6 @@ def test_openapi_preserves_explicit_selection(deployment, tmp_path, selection):
     assert not (tmp_path / ".state").exists()
 
 
-def test_legacy_worker_runs_api_task_from_selected_deployment(deployment, tmp_path):
-    source = os.getenv("ASHARE_QUANT_TEST_CORPORATE_INPUT")
-    if not source:
-        pytest.skip("Caller-supplied frozen corporate input required for real worker regression")
-    app = create_app(str(deployment.control_db), product_configuration=deployment,
-                     daily_tasks_configuration=Configuration(deployment.owner_store_root))
-    dataset = app.state.portfolio_jobs.import_data(Path(source), "CLI recovery regression")
-    prefix = "/api/v1/portfolio"
-    with TestClient(app) as client:
-        selection = dict(dataset_id=dataset.dataset_id, securities=["000651.XSHE"],
-                         start_date="2022-04-06", end_date="2022-04-11", accept_retrospective_state=True)
-        preflight = client.post(prefix + "/preflight", json=selection).json()
-        assert preflight["ready"], preflight
-        strategy = client.post(prefix + "/strategies", json={"algorithm": "equal-weight"}).json()
-        response = client.post(prefix + "/jobs", json=selection | dict(
-            name="Selected legacy worker", idempotency_key="legacy-shared-state",
-            strategy_version_id=strategy["version_id"], assumption_ack_sha256=preflight["assumption_ack_sha256"]))
-        assert response.status_code == 201, response.text
-        job = response.json()
-        run = legacy(tmp_path, ["task-worker", "--once"], ASHARE_DEPLOYMENT=str(deployment.deployment))
-        assert run.returncode == 0, run.stdout + run.stderr
-        reply = json.loads(run.stdout.strip().splitlines()[-1])
-        assert reply["processed_job_id"] == job["job_id"]
-        assert reply["control_db"] == str(deployment.control_db)
-        status = client.get(prefix + "/jobs/" + job["job_id"]).json()
-        assert status == reply["job"] and status["status"] == "succeeded"
-        result = client.get(prefix + "/jobs/" + job["job_id"] + "/result").json()
-        assert result["audit"]["passed"] and result["trades"]
-        assert result["receipt"]["corporate_entitlements"]["000651.XSHE"]
-    assert not (tmp_path / ".state").exists()
-
 
 def test_user_config_unifies_cli_api_and_invalid_configuration(deployment, tmp_path, monkeypatch):
     config_home = tmp_path / "user-config"
@@ -173,7 +140,7 @@ def test_user_config_unifies_cli_api_and_invalid_configuration(deployment, tmp_p
     link.symlink_to(deployment.deployment)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     assert resolve().control_db == deployment.control_db
-    run = legacy(tmp_path, ["tasks"], XDG_CONFIG_HOME=str(config_home))
+    run = legacy(tmp_path, ["history"], XDG_CONFIG_HOME=str(config_home))
     assert run.returncode == 0, run.stdout + run.stderr
     with TestClient(create_app()) as client:
         response = client.get("/api/v1/product/config")
@@ -181,7 +148,7 @@ def test_user_config_unifies_cli_api_and_invalid_configuration(deployment, tmp_p
         assert response.json()["profile"] == "product"
     link.unlink()
     link.symlink_to(tmp_path / "missing.json")
-    run = legacy(tmp_path, ["tasks"], XDG_CONFIG_HOME=str(config_home))
+    run = legacy(tmp_path, ["history"], XDG_CONFIG_HOME=str(config_home))
     assert run.returncode == 2
     assert json.loads(run.stdout)["error"]["code"] == "DEPLOYMENT_INVALID"
     assert not (tmp_path / ".state").exists()

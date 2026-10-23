@@ -12,8 +12,8 @@ install_network_guard()
 from rqalpha.core.events import EVENT, Event
 
 from ashare_quant.execution.reservation import install_budget_account
-from ashare_quant.execution.rqalpha.fixture import SyntheticProvider
-from ashare_quant.execution.rqalpha.mod import ProbeMod
+from tests.support.rqalpha.fixture import SyntheticProvider
+from tests.support.rqalpha.mod import ProbeMod
 
 
 class BudgetProbe(ProbeMod):
@@ -78,7 +78,7 @@ def main():
     import rqalpha.main
     import rqalpha.utils.config as configs
 
-    import ashare_quant.execution.rqalpha.mod as mod
+    import tests.support.rqalpha.mod as mod
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
@@ -125,7 +125,7 @@ def main():
             ),
             probe=dict(
                 enabled=True,
-                lib="ashare_quant.execution.rqalpha.mod",
+                lib="tests.support.rqalpha.mod",
                 priority=1000,
                 actions=False,
                 missing=[],

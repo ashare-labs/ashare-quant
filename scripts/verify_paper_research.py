@@ -32,9 +32,9 @@ def main():
     args = p.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    risk = json.loads((REPO / "examples/daily-paper-research-risk.json").read_text())
+    risk = json.loads((REPO / "tests/fixtures/research/daily-paper-research-risk.json").read_text())
     atomic(out / "risk.json", risk)
-    manifest = REPO / "examples/portfolio/manifest.json"
+    manifest = REPO / "tests/fixtures/research/portfolio/manifest.json"
     scopes = json.loads(manifest.read_text())["windows"]
     results = []
 

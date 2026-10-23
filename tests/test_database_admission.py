@@ -15,12 +15,12 @@ from fastapi.testclient import TestClient
 
 import ashare_quant.storage.compatibility as database_compat
 import ashare_quant.storage.lifecycle as database_lifecycle
-from ashare_quant.api import create_app
 from ashare_quant.cli import main
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.store import Store
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.repository import Repository
+from tests.support.app import create_app
 
 
 def inventory(root):
@@ -111,7 +111,7 @@ def test_reopen_with_fixed_policy_never_opens_original_sqlite(tmp_path, monkeypa
 
 
 def test_policy_refusal_does_not_write_database_or_sidecars(tmp_path):
-    from ashare_quant.tasks.daily.executor import Configuration
+    from tests.support.daily.executor import Configuration
 
     path = tmp_path / "control.sqlite3"
     create_app(str(path))
@@ -279,7 +279,7 @@ def test_read_only_initialization_directory_returns_http_and_cli_code(tmp_path, 
             response = client.get("/api/v1/health")
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "STORAGE_PERMISSION_DENIED"
-        assert main(["--db", str(path), "tasks"]) == 2
+        assert main(["--db", str(path), "history"]) == 2
         assert json.loads(capsys.readouterr().out)["error"]["code"] == "STORAGE_PERMISSION_DENIED"
     finally:
         tmp_path.chmod(0o700)

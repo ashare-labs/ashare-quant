@@ -1,13 +1,13 @@
 """Shared contract generation for runtime endpoints and published snapshots."""
 
 
-def document(app, *, prefixes=None, title="A宽 daily tasks"):
+def document(app, *, prefixes=None, title="A宽 research tasks"):
     full = app.openapi()
     paths = {
         name: value
         for name, value in full["paths"].items()
         if name.startswith(prefixes or
-            ("/api/v1/tasks/daily/jobs", "/api/v1/tasks/daily/results", "/api/v1/tasks/daily/data", "/api/v1/tasks/daily/strategies", "/api/v1/tasks/daily/python-strategies")
+            ("/api/v1/tasks/", "/api/v1/python/", "/api/v1/factors/", "/api/v1/history/")
         )
     }
     required = set()
@@ -36,7 +36,3 @@ def document(app, *, prefixes=None, title="A宽 daily tasks"):
         "paths": paths,
         "components": {"schemas": dict(sorted(schemas.items()))},
     }
-
-
-def portfolio_document(app):
-    return document(app, prefixes=("/api/v1/portfolio",), title="A宽 portfolio tasks")

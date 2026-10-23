@@ -5,15 +5,15 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
 from ashare_quant.storage.artifacts import sha
-from ashare_quant.strategies.daily.rules import DecisionRule, RuleStrategyDefinition
-from ashare_quant.strategies.python.spec import PythonDescriptor
-from ashare_quant.tasks.daily.executor import Configuration
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.worker import work_one
 from tests.daily_tasks.conftest import create
 from tests.daily_tasks.test_native import complete
+from tests.support.app import create_app
+from tests.support.daily.executor import Configuration
+from tests.support.legacy_python.spec import PythonDescriptor
+from tests.support.legacy_strategies.rules import DecisionRule, RuleStrategyDefinition
 
 
 @pytest.mark.parametrize("kind", ["template", "rules", "python"])

@@ -21,7 +21,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     source = args.execution_source.resolve()
     spec = json.loads((source / "consumer.json").read_text())
-    risk = json.loads((REPO / "examples/daily-paper-research-risk.json").read_text())
+    risk = json.loads((REPO / "tests/fixtures/research/daily-paper-research-risk.json").read_text())
     service = PaperService(output / "store")
     cases = {}
     for name, window, policy, strategy in (
@@ -32,7 +32,7 @@ def main():
     ):
         item = bind(
             service,
-            REPO / "examples/portfolio/manifest.json",
+            REPO / "tests/fixtures/research/portfolio/manifest.json",
             source / "research/binding.json",
             spec["research_sha"],
             source / "execution/binding.json",

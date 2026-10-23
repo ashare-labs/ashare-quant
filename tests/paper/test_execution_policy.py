@@ -6,12 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.paper.api import create_app
 from ashare_quant.paper.contracts import SessionConfig
 from ashare_quant.paper.risk import profiles
 from ashare_quant.paper.service import PaperService
 from tests.paper.fixtures import close, config, decision, queue
 from tests.paper.test_replay import bound
+from tests.support.paper_api import create_app
 
 
 def policy_config(account):
@@ -30,7 +30,7 @@ def policy_config(account):
 
 
 def test_policy_profile_and_public_fork_do_not_mutate_old_account(tmp_path):
-    example = Path(__file__).resolve().parents[2] / "examples/daily-paper-research-risk.json"
+    example = Path(__file__).resolve().parents[2] / "tests/fixtures/research/daily-paper-research-risk.json"
     assert json.loads(example.read_text()) == profiles()["target_then_native_cash_v1"]
     service, sid = bound(tmp_path, risk={})
     old = service.status(sid)

@@ -19,7 +19,6 @@ LIMITATIONS = (
     "source-scoped corporate coverage, date-level gross cash/share credit and fixed fees.",
     "The portfolio engine supports ordinary main-board A shares and requires 120 observed "
     "warmup sessions and a successor session.",
-    "Fixed daily evaluations remain a separate explicit data binding.",
 )
 
 
@@ -30,8 +29,13 @@ def environment_configuration():
 
 
 class Product:
-    def __init__(self, store, jobs, configuration=None):
-        self.store, self.jobs = store, jobs
+    def __init__(self, store, configuration=None):
+        from ashare_quant.market.datasets import Datasets
+        from ashare_quant.tasks.base import TaskService
+
+        self.store = store
+        self.tasks = TaskService(store)
+        self.datasets = Datasets(self.tasks.root, self.tasks.repo.policy.file_bytes)
         self.configuration = deepcopy(configuration)
         self.configuration_error = None
         self.configuration_changed = False
@@ -231,10 +235,9 @@ class Product:
                 "minute_sources": "/api/v1/product/minute/sources",
                 "minute_prices": "/api/v1/product/minute/prices",
                 "publish": error is None,
-                "portfolio": error is None,
+                "python_strategies": "/api/v1/python/catalogue",
                 "covered_research": error is None and bool(config and config.reference_sets),
                 "price_only_no_limits": error is None,
-                "fixed_evaluation": "separate_explicit_binding",
                 "portfolio_instrument_scope": "main_board_ordinary_a_shares",
                 "warmup_sessions": 120,
                 "preflight_required": True,
@@ -321,7 +324,7 @@ class Product:
         from ashare_quant.product.publication import consume
 
         config = self.configured()
-        self.jobs.guard()
+        self.tasks.guard()
         references = config.references(selection.reference_set)
         unsupported = [
             sid
@@ -355,5 +358,5 @@ class Product:
         )
         path = self.call(lambda owner: consume(release, selection, config, references))
         name = selection.name or f"Market {selection.start} to {selection.end}"
-        dataset = self.jobs.import_data(path, name)
+        dataset = self.datasets.import_file(path, name)
         return ProductRelease(release=release, dataset=dataset)

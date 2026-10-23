@@ -70,7 +70,7 @@ def main():
     args = p.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    examples = REPO / "examples/portfolio"
+    examples = REPO / "tests/fixtures/research/portfolio"
     manifest = json.loads((examples / "manifest.json").read_text())
     synthetic = out / "synthetic.json"
     synthetic.write_text(json.dumps(generate(manifest)))
@@ -92,7 +92,7 @@ def main():
             sys.executable,
             "-B",
             "-m",
-            "ashare_quant.portfolio",
+            "tests.support.portfolio_engine",
             "--manifest",
             str(question),
             "--input",

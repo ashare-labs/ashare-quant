@@ -10,8 +10,8 @@ PREFIXES = {
     "python_minute": "/api/v1/python",
     "python_daily": "/api/v1/python",
     "factors": "/api/v1/factors",
-    "portfolio": "/api/v1/portfolio",
-    "daily": "/api/v1/tasks/daily",
+    "portfolio": "/api/v1/history",
+    "daily": "/api/v1/history",
 }
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 

@@ -10,7 +10,7 @@ import pytest
 from ashare_quant.backtests.minute import run_backtest
 from ashare_quant.backtests.minute.runner import MinuteRunError
 
-EXAMPLES = Path(__file__).resolve().parents[2] / "examples/minute"
+EXAMPLES = Path(__file__).resolve().parents[2] / "tests/fixtures/research/minute"
 ZERO_COST = {"commission_rate": 0, "sell_tax": 0, "min_commission": 0}
 
 

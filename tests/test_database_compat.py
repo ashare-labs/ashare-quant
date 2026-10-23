@@ -72,7 +72,7 @@ def test_old_list_detail_and_actions_refuse_without_changes(old_database):
     assert files_at(old_database.parent) == before
 
 
-@pytest.mark.parametrize("arguments", [["tasks"], ["task-status", JOB], ["task-worker", "--once"]])
+@pytest.mark.parametrize("arguments", [["history"], ["task-status", JOB], ["task-worker", "--once"]])
 def test_old_cli_refuses_without_changes(old_database, arguments):
     before = files_at(old_database.parent)
     result = subprocess.run([sys.executable, "-m", "ashare_quant.cli", "--db", str(old_database),
@@ -122,8 +122,9 @@ def test_fresh_v6_database_can_reopen(tmp_path):
     for _ in range(2):
         with TestClient(create_app(str(path))) as client:
             assert client.get("/api/v1/health").status_code == 200
-            assert client.get("/api/v1/tasks/daily/jobs").status_code == 200
-            assert client.get("/api/v1/tasks/daily/jobs/catalogue").json()["contract_version"] == "m2-jobs.v6"
+            assert client.get("/api/v1/history/jobs").json() == {"items": []}
+            assert client.get("/api/v1/tasks/service").status_code == 200
+            assert client.get("/api/v1/tasks/daily/jobs").status_code == 404
 
 
 def test_previous_table_layout_is_refused_without_creating_new_task_storage(tmp_path):

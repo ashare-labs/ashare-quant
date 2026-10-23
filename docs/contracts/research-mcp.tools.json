@@ -436,7 +436,7 @@
                 "type": "string"
               },
               "environment_id": {
-                "pattern": "^[a-f0-9]{64}$",
+                "pattern": "^[0-9a-f]{64}$",
                 "title": "Environment Id",
                 "type": "string"
               },
@@ -638,7 +638,7 @@
                 "type": "string"
               },
               "environment_id": {
-                "pattern": "^[a-f0-9]{64}$",
+                "pattern": "^[0-9a-f]{64}$",
                 "title": "Environment Id",
                 "type": "string"
               },

@@ -495,7 +495,7 @@ class PaperService:
     def view(self, sid, selected_day=None):
         """A verified human projection; never derives another cash/position ledger."""
         status = self.status(sid)
-        session, config = self.session(sid)
+        session, config = self.session(sid, verify=False)
         days = status["days"]
         selected = next((d for d in days if d["day"] == selected_day), None)
         if selected_day is None and days:
@@ -553,7 +553,7 @@ class PaperService:
 
     def report(self, sid, day):
         row = self.day(sid, day)
-        session, _ = self.session(sid)
+        session, _ = self.session(sid, verify=False)
         root = self.root / sid / str(day)
         try:
             require(row["status"] == "committed", "PAPER_REPORT_NOT_COMMITTED")
@@ -567,8 +567,7 @@ class PaperService:
                 "PAPER_REPORT_CHANGED",
             )
             return json.loads(report)
-        except Exception as exc:
-            self.alert(sid, str(day), exc)
+        except Exception:
             raise
 
     def _heartbeat(self, sid, day, token):

@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 
 from ashare_quant.backtests.minute import run_backtest
-from examples.minute_research.run_demo import CONFIG, economic_audit
 from tests.fixtures.minute_reference.build_scripts import NAMES, ROOT, generate
 from tests.fixtures.minute_reference.compare import INPUT_SHA256, require
+from tests.fixtures.research.minute_research.run_demo import CONFIG, economic_audit
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
         observed.write_text(generate(name, "aq"))
         outputs = []
         for script, suffix in (
-            (ROOT / "examples/minute_research" / f"{name}.py", "-original"),
+            (ROOT / "tests/fixtures/research/minute_research" / f"{name}.py", "-original"),
             (observed, ""),
         ):
             run = run_backtest(

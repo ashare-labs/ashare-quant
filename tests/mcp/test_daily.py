@@ -47,7 +47,7 @@ def test_daily_request_consent_native_results_and_held_positions(tmp_path):
                 assert (await call(c, "submit_strategy", submission=body))["job_id"] == job[
                     "job_id"
                 ]
-                await asyncio.to_thread(work_one, app.state.daily_tasks, job["job_id"])
+                await asyncio.to_thread(work_one, app.state.tasks, job["job_id"])
                 state = await call(c, "research_job", family="python_daily", job_id=job["job_id"])
                 assert state["status"] == "succeeded", state
                 direct = await backend.request(

@@ -32,7 +32,7 @@ def run(name, arguments, expected=0):
 
 caps = run("01-capabilities", ["source-diagnostics-capabilities"])
 assert "calendar-r1" in caps["configured_sources"]
-query = json.loads((Path(__file__).resolve().parents[1] / "examples/diagnostics/preflight-600000.json").read_text())
+query = json.loads((Path(__file__).resolve().parents[1] / "tests/fixtures/research/diagnostics/preflight-600000.json").read_text())
 
 
 def diagnose(name, value, expected=0):

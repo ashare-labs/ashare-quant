@@ -3,8 +3,8 @@ from rqalpha.interface import AbstractDataSource, AbstractPriceBoard
 from rqalpha.const import TRADING_CALENDAR_TYPE
 from rqalpha.model.instrument import Instrument
 from rqalpha.model.tick import TickObject
-from ashare_quant.execution.rqalpha.fixture import CapabilityError
-from ashare_quant.execution.rqalpha.fixture import aware
+from ashare_quant.execution.rqalpha.provider import CapabilityError
+from ashare_quant.execution.rqalpha.provider import aware
 
 REQUIRED = frozenset({'calendar', 'instruments', 'raw_bars', 'adjustments', 'actions', 'status', 'limits', 'frozen_as_of'})
 

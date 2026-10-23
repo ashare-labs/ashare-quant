@@ -30,11 +30,14 @@ def main():
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--extra", action="append", choices=["factor-evaluation", "mcp"], default=[])
     parser.add_argument("--test", action="append", default=[], help="Additional installed-wheel test paths")
+    parser.add_argument("--only-tests", action="store_true", help="Run only explicit --test paths for a focused patch verification")
     parser.add_argument("--daily-components", type=Path)
     parser.add_argument("--paper-intraday-only", action="store_true",
                         help="Run only the synthetic owner/native paper behavior regressions")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.only_tests and not args.test:
+        parser.error("--only-tests requires at least one --test")
     project = Path(__file__).resolve().parents[1]
     wheel = args.wheel.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -84,7 +87,7 @@ def main():
         assert installed["source_sha256"] == source["source_sha256"]
         validation = root / "validation"
         validation.mkdir()
-        for name in ("tests", "scripts", "examples"):
+        for name in ("tests", "scripts"):
             shutil.copytree(project / name, validation / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copytree(project / "docs" / "contracts", validation / "docs" / "contracts")
@@ -101,7 +104,7 @@ def main():
         paper_intraday = ["tests/paper/test_intraday.py", "tests/paper/test_intraday_partial.py",
                           "tests/paper/test_late_close.py", "tests/paper/test_legacy_close_replay.py"]
         tests = paper_intraday if args.paper_intraday_only else tests + paper_intraday
-        tests += args.test
+        tests = args.test if args.only_tests else tests + args.test
         test_output = run("tests", [str(python), "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider",
                                    "--basetemp", str(root / "test-output"),
                                    "--junitxml", str(output / "tests.xml"), *tests], validation)
@@ -112,6 +115,7 @@ def main():
                   "excluded_development_tools": ["ruff"], "offline": args.offline,
                   "daily_real_components": bool(args.daily_components),
                   "paper_intraday_only": args.paper_intraday_only,
+                  "only_explicit_tests": args.only_tests,
                   "extras": args.extra,
                   "tests": tests, "test_summary": test_output.strip().splitlines()[-1]}
         (output / "result.json").write_text(json.dumps(result, indent=2) + "\n")

@@ -13,14 +13,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import lock, worker_slot
 from ashare_quant.storage.upgrade import upgrade_copy
-from ashare_quant.tasks.daily.executor import Configuration, Executor
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.process import stop
 from ashare_quant.tasks.repository import Repository
+from tests.support.app import create_app
+from tests.support.daily.executor import Configuration, Executor
 
 
 def row(repo, number):
@@ -98,12 +98,14 @@ def test_execution_slots_and_admission_wait_are_bounded(tmp_path):
 
 
 def test_http_service_contract_and_untrusted_mutations(tmp_path):
-    app = create_app(str(tmp_path / "control.sqlite3"))
+    from ashare_quant.api import create_app as product_app
+
+    app = product_app(str(tmp_path / "control.sqlite3"))
     with TestClient(app) as client:
-        status = client.get("/api/v1/tasks/daily/jobs/service")
+        status = client.get("/api/v1/tasks/service")
         assert status.status_code == 200
         assert status.json()["contract_version"] == "m2-job-service.v1"
-        assert status.json()["job_contract_version"] == "m2-jobs.v6"
+        assert status.json()["job_contract_version"] == "research-jobs.v1"
         for origin in (
             "https://evil.invalid",
             "null",
@@ -112,17 +114,17 @@ def test_http_service_contract_and_untrusted_mutations(tmp_path):
             "http://localhost/path",
         ):
             for endpoint in (
-                "/api/v1/tasks/daily/strategies",
-                "/api/v1/tasks/daily/data/bind",
-                "/api/v1/tasks/daily/jobs",
-                "/api/v1/tasks/daily/jobs/m2job-" + "0" * 32 + "/cancel",
+                "/api/v1/python/jobs",
+                "/api/v1/factors/jobs",
+                "/api/v1/python/jobs",
+                "/api/v1/python/jobs/m2job-" + "0" * 32 + "/cancel",
             ):
                 response = client.post(endpoint, headers={"origin": origin}, json={})
                 assert response.status_code == 403, response.text
                 assert response.json()["error"]["code"] == "M2_JOB_ORIGIN_REFUSED"
         assert (
             client.post(
-                "/api/v1/tasks/daily/jobs", headers={"sec-fetch-site": "cross-site"}, json={}
+                "/api/v1/python/jobs", headers={"sec-fetch-site": "cross-site"}, json={}
             ).status_code
             == 403
         )
@@ -132,13 +134,13 @@ def test_http_service_contract_and_untrusted_mutations(tmp_path):
             {"origin": "http://127.0.0.1:4173"},
             {"origin": "http://localhost:5173"},
         ):
-            assert client.post("/api/v1/tasks/daily/jobs", headers=headers, json={}).status_code == 422
-        assert client.put("/api/v1/tasks/daily/jobs/service", json={"max_workers": 100}).status_code == 405
-        assert client.get("/api/v1/tasks/daily/jobs/service?max_workers=100").status_code == 422
-        assert client.get("/api/v1/tasks/daily/jobs").json() == {"items": []}
-        assert app.state.daily_tasks.repo.status().policy.max_workers == 1
-        scoped = client.get("/api/v1/tasks/daily/openapi.json").json()
-        assert "/api/v1/tasks/daily/jobs/service" in scoped["paths"]
+            assert client.post("/api/v1/python/jobs", headers=headers, json={}).status_code == 422
+        assert client.put("/api/v1/tasks/service", json={"max_workers": 100}).status_code == 405
+        assert client.get("/api/v1/tasks/service?max_workers=100").status_code == 422
+        assert client.get("/api/v1/python/jobs").json() == {"items": []}
+        assert app.state.tasks.repo.status().policy.max_workers == 1
+        scoped = client.get("/api/v1/tasks/openapi.json").json()
+        assert "/api/v1/tasks/service" in scoped["paths"]
 
 
 @pytest.mark.parametrize("kind", ["empty_old", "future", "malformed"])
@@ -288,7 +290,7 @@ def test_stop_terminates_descendant_group(tmp_path):
         stop(process)
 
 
-def test_v6_source_change_refuses_before_schema_mutation(store):
+def test_v6_source_change_allows_load_but_retired_execution_is_refused(store):
     repo = Repository(store)
     job_id = row(repo, 9)
     with store.connection(transaction=True) as db:
@@ -305,11 +307,15 @@ def test_v6_source_change_refuses_before_schema_mutation(store):
             ),
         )
     before = store.path.read_bytes()
-    with TestClient(create_app(str(store.path))) as client:
-        response = client.post(f"/api/v1/tasks/daily/jobs/{job_id}/resume", json={})
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "M2_DATABASE_EXECUTOR_INCOMPATIBLE"
-        assert response.json()["error"]["details"]["database_modified"] is False
+    from ashare_quant.api import create_app as product_app
+    from ashare_quant.tasks.service import Jobs as ProductJobs
+
+    with TestClient(product_app(str(store.path))) as client:
+        assert client.get("/api/v1/health").status_code == 200
+        assert client.post(f"/api/v1/tasks/daily/jobs/{job_id}/resume", json={}).status_code == 404
+    with pytest.raises(DomainError) as refused:
+        ProductJobs(store).for_job(repo.row(job_id))
+    assert refused.value.code == "TASK_FAMILY_RETIRED"
     assert store.path.read_bytes() == before
 
 

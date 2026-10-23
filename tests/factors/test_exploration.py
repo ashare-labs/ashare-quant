@@ -12,8 +12,8 @@ from ashare_quant.factors.catalog import catalogue
 from ashare_quant.factors.compute import compute
 from ashare_quant.factors.inputs import Sources
 from ashare_quant.storage.artifacts import atomic, sha
-from ashare_quant.tasks.daily.service import Jobs
 from ashare_quant.tasks.factors.contracts import FactorCreate
+from ashare_quant.tasks.service import Jobs
 from ashare_quant.tasks.worker import work_one
 
 
@@ -97,7 +97,7 @@ def test_real_process_duplicate_frozen_source_and_refresh(app, source):
         assert result["summary"]["missing_cells"] == 10
         assert {r["value"] for r in result["rows"] if r["value"] is not None} == {-5.0, 5.0}
         assert all(r["status"] == "WARMUP" for r in result["rows"][:10])
-        assert client.get("/api/v1/tasks/daily/jobs").json()["items"] == []
+        assert client.get("/api/v1/tasks/daily/jobs").status_code == 404
         restored = create_app(str(app.state.factor_jobs.repo.store.path), factor_sources=source[0])
         with TestClient(restored) as again:
             assert again.get("/api/v1/factors/jobs/" + job_id + "/result").json() == result

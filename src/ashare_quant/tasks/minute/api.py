@@ -3,15 +3,15 @@
 from fastapi import Request
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.tasks.daily.api import ActionRequest
-from ashare_quant.tasks.daily.contracts import JobID, JobLogs
+from ashare_quant.tasks.api import ActionRequest
+from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.minute.contracts import (
     PythonCreate,
     PythonJobList,
     PythonJobView,
+    PythonManifest,
     PythonResult,
 )
-from ashare_quant.tasks.minute.example import DAILY_SOURCE, SOURCE
 from ashare_quant.tasks.minute.service import PythonJobs
 
 
@@ -30,12 +30,9 @@ def mount(app, store, configuration=None):
         factors = jobs.history_factors
         return {
             "environment_id": jobs.environment(),
-            "example": SOURCE,
             "frequency": "1m",
             "frequencies": ["1m", "1d"],
             "daily": {
-                "example": DAILY_SOURCE,
-                "parameters": {"lookback": 20, "shares": 100},
                 "max_sessions": 126,
                 "max_calendar_days": 186,
                 "warmup_sessions": 20,
@@ -49,7 +46,6 @@ def mount(app, store, configuration=None):
             "terminal_positions": "flat",
             "historical_pit": False,
             "universe": "fixed_at_submission",
-            "parameters": {"lookback": 5, "shares": 100},
         }
 
     @app.post(prefix + "/jobs", status_code=201)
@@ -66,6 +62,10 @@ def mount(app, store, configuration=None):
     def get(job_id: JobID) -> PythonJobView:
         return jobs.get(job_id)
 
+    @app.get(prefix + "/jobs/{job_id}/manifest")
+    def manifest(job_id: JobID) -> PythonManifest:
+        return jobs.check(jobs.repo.row(job_id))
+
     @app.get(prefix + "/jobs/{job_id}/logs")
     def logs(job_id: JobID) -> JobLogs:
         return jobs.logs(job_id)
@@ -73,6 +73,10 @@ def mount(app, store, configuration=None):
     @app.post(prefix + "/jobs/{job_id}/cancel")
     def cancel(job_id: JobID, body: ActionRequest = ActionRequest()) -> PythonJobView:
         return jobs.cancel(job_id)
+
+    @app.post(prefix + "/jobs/{job_id}/resume")
+    def resume(job_id: JobID, body: ActionRequest = ActionRequest()) -> PythonJobView:
+        return jobs.resume(job_id)
 
     @app.get(prefix + "/jobs/{job_id}/result")
     def result(job_id: JobID) -> PythonResult:

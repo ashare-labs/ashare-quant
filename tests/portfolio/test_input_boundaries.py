@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def source(tmp_path):
-    manifest = json.loads((REPO / "examples/portfolio/manifest.json").read_text())
+    manifest = json.loads((REPO / "tests/fixtures/research/portfolio/manifest.json").read_text())
     document = runpy.run_path(str(REPO / "scripts/verify_portfolio.py"))["generate"](
         manifest, True
     )

@@ -87,6 +87,11 @@ async def capabilities(backend):
             python_minute=python,
             task_families={
                 family: {
+                    "read_only": family in {"portfolio", "daily"},
+                    "submission_enabled": (factor_ready if family == "factors" else daily_ready
+                                           if family == "python_daily" else
+                                           python["available"] and prefix + "/jobs" in paths
+                                           if family == "python_minute" else False),
                     "available": (
                         factor_ready
                         if family == "factors"

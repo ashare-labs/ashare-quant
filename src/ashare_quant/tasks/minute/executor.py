@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ashare_quant.identity import source_sha256
 from ashare_quant.storage.artifacts import regular, sha
-from ashare_quant.tasks.daily.executor import Executor as TaskExecutor
+from ashare_quant.tasks.executor import Executor as TaskExecutor
 
 
 class Executor(TaskExecutor):
@@ -19,7 +19,6 @@ class Executor(TaskExecutor):
         self,
         action,
         job_dir,
-        window,
         invocation,
         session_file_sha=None,
         *,

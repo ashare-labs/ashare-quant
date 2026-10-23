@@ -6,7 +6,9 @@ import threading
 import time
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.strategies.python.spec import OUTPUT_LIMIT, PHASE_SECONDS
+
+OUTPUT_LIMIT = 1048576
+PHASE_SECONDS = 5
 
 
 class BoundedOutput:

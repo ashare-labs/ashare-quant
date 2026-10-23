@@ -15,7 +15,7 @@ from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
 from ashare_quant.market.reader import DailyResearchRow, ResearchCoverageQuery, ResearchQuery
 from ashare_quant.product import publication, service
-from ashare_quant.tasks.portfolio.contracts import PortfolioDataset
+from tests.support.portfolio.contracts import PortfolioDataset
 
 P = "/api/v1/product"
 SELECTION = {
@@ -100,7 +100,7 @@ def test_missing_configuration_never_selects_sample_data(tmp_path):
             assert response.status_code == 503, response.text
             assert response.json()["error"]["code"] == "DEPLOYMENT_NOT_CONFIGURED"
             assert response.headers["Cache-Control"] == "no-store"
-        assert client.get("/api/v1/portfolio/catalogue").json()["datasets"] == []
+        assert client.get("/api/v1/portfolio/catalogue").status_code == 404
 
 
 def test_environment_selects_same_database_and_explicit_store_for_api_worker(
@@ -111,8 +111,8 @@ def test_environment_selects_same_database_and_explicit_store_for_api_worker(
     monkeypatch.setenv("ASHARE_QUANT_DAILY_STORE", str(configuration.data_root / "wrong-owner"))
     app = create_app()
     assert app.state.store.path == configuration.control_db
-    assert app.state.daily_tasks.repo.store.path == app.state.portfolio_jobs.repo.store.path
-    assert app.state.daily_tasks.config.owner_store == configuration.owner_store_root
+    assert app.state.tasks.repo.store.path == app.state.product.store.path
+    assert app.state.tasks.config.owner_store == configuration.owner_store_root
     with TestClient(app) as client:
         before = client.get(P + "/config").json()
         assert before["configured"] and before["profile"] == "product"
@@ -331,7 +331,7 @@ def test_strict_requests_and_local_origin(configuration, owner_protocol):
         assert response.json()["error"]["code"] == "PRODUCT_ORIGIN_REFUSED"
 
 
-def test_publication_imports_into_the_same_portfolio_service(
+def test_publication_imports_without_a_strategy_service(
     configuration, owner_protocol, monkeypatch
 ):
     path = configuration.release_store_root / "input.json"
@@ -363,7 +363,7 @@ def test_publication_imports_into_the_same_portfolio_service(
         calls.append((selected, name))
         return descriptor
 
-    monkeypatch.setattr(app.state.portfolio_jobs, "import_data", importing)
+    monkeypatch.setattr(app.state.product.datasets, "import_file", importing)
     with TestClient(app) as client:
         response = client.post(P + "/releases", json=SELECTION | {"name": "Chosen window"})
         assert response.status_code == 201, response.text

@@ -149,7 +149,7 @@ def main(argv=None):
 
         from ashare_quant.api import create_app
         from ashare_quant.deployment.runtime import deployment_lock, require_initialized
-        from ashare_quant.tasks.daily.executor import Configuration
+        from ashare_quant.tasks.executor import Configuration
 
         require_initialized(config)
         with deployment_lock(config):

@@ -6,14 +6,14 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import sha
 from ashare_quant.storage.store import Store
-from ashare_quant.tasks.daily.executor import Configuration
-from ashare_quant.tasks.daily.service import Jobs
 from ashare_quant.tasks.worker import work_one
 from tests.daily_tasks.conftest import create, request
+from tests.support.app import create_app
+from tests.support.daily.executor import Configuration
+from tests.support.daily.service import Jobs
 
 
 def complete(jobs, job_id):

@@ -35,10 +35,11 @@ class ServicePolicy(Contract):
 
 class ServiceStatus(Contract):
     contract_version: Literal["m2-job-service.v1"] = "m2-job-service.v1"
-    job_contract_version: Literal["m2-jobs.v6"] = "m2-jobs.v6"
+    job_contract_version: Literal["research-jobs.v1"] = "research-jobs.v1"
     policy: ServicePolicy
     policy_sha256: str
     counts: dict[str, int]
+    historical_counts: dict[str, int] = Field(default_factory=dict)
     unaccepted_task_directories: int = 0
     recovery_required: int
     available_pending: int

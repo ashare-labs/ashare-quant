@@ -15,7 +15,7 @@ from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
 from ashare_quant.diagnostics.contracts import DiagnosticQuery
 from ashare_quant.diagnostics.service import Diagnostics
-from ashare_quant.providers.daily.owner_wire import verify_runtime
+from tests.support.legacy_provider.owner_wire import verify_runtime
 
 
 @pytest.fixture(scope="module")
@@ -168,7 +168,7 @@ def test_transport_protocol_mismatch_is_not_reported_as_owner_data(monkeypatch, 
 
 
 def complete_query(**update):
-    example = Path(__file__).parents[2] / "examples/diagnostics/preflight-600000.json"
+    example = Path(__file__).parents[2] / "tests/fixtures/research/diagnostics/preflight-600000.json"
     return DiagnosticQuery.model_validate(json.loads(example.read_text()) | update)
 
 
