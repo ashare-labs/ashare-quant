@@ -696,12 +696,11 @@
             "type": "object"
           },
           "securities": {
+            "default": [],
             "items": {
               "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
               "type": "string"
             },
-            "maxItems": 8,
-            "minItems": 1,
             "title": "Securities",
             "type": "array"
           },
@@ -723,8 +722,7 @@
           },
           "warmup_sessions": {
             "default": 20,
-            "maximum": 120.0,
-            "minimum": 1.0,
+            "minimum": 0.0,
             "title": "Warmup Sessions",
             "type": "integer"
           }
@@ -734,7 +732,6 @@
           "name",
           "idempotency_key",
           "source",
-          "securities",
           "start_date",
           "end_date",
           "accept_research_model",
@@ -980,8 +977,11 @@
             "$ref": "#/components/schemas/PythonCreate"
           },
           "schema_version": {
-            "const": "python-minute-job.v1",
-            "default": "python-minute-job.v1",
+            "default": "python-demand-job.v2",
+            "enum": [
+              "python-minute-job.v1",
+              "python-demand-job.v2"
+            ],
             "title": "Schema Version",
             "type": "string"
           },
@@ -1184,6 +1184,18 @@
             "title": "Admission Wait Seconds",
             "type": "number"
           },
+          "artifact_bytes": {
+            "default": 536870912,
+            "minimum": 1048576.0,
+            "title": "Artifact Bytes",
+            "type": "integer"
+          },
+          "cached_rows": {
+            "default": 250000,
+            "minimum": 1.0,
+            "title": "Cached Rows",
+            "type": "integer"
+          },
           "callback_seconds": {
             "default": 5,
             "maximum": 9.223372036854776e+18,
@@ -1259,6 +1271,18 @@
             "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Preparation Seconds",
+            "type": "integer"
+          },
+          "query_rows": {
+            "default": 100000,
+            "minimum": 1.0,
+            "title": "Query Rows",
+            "type": "integer"
+          },
+          "read_rows": {
+            "default": 1000000,
+            "minimum": 1.0,
+            "title": "Read Rows",
             "type": "integer"
           },
           "rss_bytes": {
@@ -1493,7 +1517,7 @@
   },
   "info": {
     "title": "A宽 research tasks",
-    "version": "0.12.0.dev21"
+    "version": "0.12.0.dev22"
   },
   "openapi": "3.1.0",
   "paths": {

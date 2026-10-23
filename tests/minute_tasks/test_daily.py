@@ -188,6 +188,7 @@ def fixed_release(tmp_path, request):
                                 "cash_per_share": "0.1",
                                 "bonus_share_ratio": "0",
                                 "capitalization_share_ratio": "0",
+                                **omissions.get("action", {}),
                             }
                         )
                     ),

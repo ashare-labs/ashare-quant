@@ -2634,12 +2634,11 @@
             "type": "object"
           },
           "securities": {
+            "default": [],
             "items": {
               "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
               "type": "string"
             },
-            "maxItems": 8,
-            "minItems": 1,
             "title": "Securities",
             "type": "array"
           },
@@ -2661,8 +2660,7 @@
           },
           "warmup_sessions": {
             "default": 20,
-            "maximum": 120.0,
-            "minimum": 1.0,
+            "minimum": 0.0,
             "title": "Warmup Sessions",
             "type": "integer"
           }
@@ -2672,7 +2670,6 @@
           "name",
           "idempotency_key",
           "source",
-          "securities",
           "start_date",
           "end_date",
           "accept_research_model",
@@ -2918,8 +2915,11 @@
             "$ref": "#/components/schemas/PythonCreate"
           },
           "schema_version": {
-            "const": "python-minute-job.v1",
-            "default": "python-minute-job.v1",
+            "default": "python-demand-job.v2",
+            "enum": [
+              "python-minute-job.v1",
+              "python-demand-job.v2"
+            ],
             "title": "Schema Version",
             "type": "string"
           },
@@ -3254,7 +3254,7 @@
                 "type": "null"
               }
             ],
-            "default": "c518cf58799aa6e57f1a8a98e0578df668296432",
+            "default": "de9f34ee6a0bd52277e2fcf33b8494f1ff92cb0e",
             "title": "Commit"
           },
           "name": {
@@ -3272,16 +3272,16 @@
                 "type": "null"
               }
             ],
-            "default": "eafd8cdb7fb3a42fbf7fc50ac8490e03b41e8dd6",
+            "default": "e6d00743b7557cbad789d9820aa6a62fba45a883",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev20",
+            "default": "0.10.0.dev21",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "4fbab2a558a2935a79a014fadc55db0394daa804a8c25b4c902dbbdbe762b49e",
+            "default": "1ea2cd9328d0c111089b04e7db93e099bf641f20e51933702e222fec1ea154b7",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -3434,7 +3434,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev21",
+            "default": "0.12.0.dev22",
             "title": "Backend Version",
             "type": "string"
           },
@@ -3700,6 +3700,18 @@
             "title": "Admission Wait Seconds",
             "type": "number"
           },
+          "artifact_bytes": {
+            "default": 536870912,
+            "minimum": 1048576.0,
+            "title": "Artifact Bytes",
+            "type": "integer"
+          },
+          "cached_rows": {
+            "default": 250000,
+            "minimum": 1.0,
+            "title": "Cached Rows",
+            "type": "integer"
+          },
           "callback_seconds": {
             "default": 5,
             "maximum": 9.223372036854776e+18,
@@ -3775,6 +3787,18 @@
             "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Preparation Seconds",
+            "type": "integer"
+          },
+          "query_rows": {
+            "default": 100000,
+            "minimum": 1.0,
+            "title": "Query Rows",
+            "type": "integer"
+          },
+          "read_rows": {
+            "default": 1000000,
+            "minimum": 1.0,
+            "title": "Read Rows",
             "type": "integer"
           },
           "rss_bytes": {
@@ -4235,7 +4259,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev21"
+    "version": "0.12.0.dev22"
   },
   "openapi": "3.1.0",
   "paths": {

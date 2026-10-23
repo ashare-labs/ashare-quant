@@ -379,6 +379,14 @@ class Mod(AbstractMod):
             EVENT.PRE_AFTER_TRADING: "after",
         }[event.event_type]
         self.emit("clock", phase=self.phase)
+        if getattr(self.data, "demand", False):
+            # Retained positions and orders still need today's execution facts,
+            # even after a strategy removes them from its active subscription.
+            required = {p.order_book_id for p in self.env.portfolio.stock_account.get_positions()
+                        if p.quantity or getattr(p, "pending_stock", 0)}
+            required.update(o.order_book_id for o in self.env.broker.get_open_orders())
+            for sid in sorted(required):
+                self.data.component(sid, self.day)
         if self.phase == "before" and self.jq_lifecycle:
             for order in list(self.env.broker.get_open_orders()):
                 require(order.datetime.date() < self.at.date(), "JQ_ROLLOVER_ORDER_DATE")
@@ -425,6 +433,9 @@ class Mod(AbstractMod):
         # Non-BAR clocks must also mark already visible prices; no extra BAR or
         # matching event is published, and no parallel equity calculation exists.
         for pos in self.env.portfolio.stock_account.get_positions():
+            if (getattr(self.data, "demand", False) and not pos.quantity
+                    and not getattr(pos, "pending_stock", 0)):
+                continue  # A cash-only entitlement does not need a new market price.
             price = self.data.valuation_price(pos.order_book_id, self.at)
             previous = pos.last_price
             pos.update_last_price(price)

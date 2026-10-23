@@ -288,3 +288,47 @@ def handle_data(context,data):
         job = execute(client, jobs, body)
         assert job["status"] == "succeeded", job.get("error")
         assert client.get(job["result"]["href"]).json()["summary"]["trade_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "fixed_release",
+    [
+        {
+            "action": {
+                "announcement_date": "2024-03-01",
+                "record_date": "2024-03-25",
+                "ex_date": "2024-03-26",
+                "payment_date": "2024-03-28",
+            }
+        }
+    ],
+    indirect=True,
+)
+def test_unsubscribed_held_security_still_records_and_receives_distributions(daily_jobs):
+    app, jobs, body = daily_jobs
+    body.pop("securities")
+    body.update(
+        start_date="2024-03-22",
+        end_date="2024-03-28",
+        source="""from jqdata import *
+def initialize(context):
+    g.entered = False
+def handle_data(context,data):
+    if not g.entered:
+        order_target('600000.XSHG',100)
+        set_universe([])
+        g.entered = True
+""",
+    )
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "succeeded", job.get("error")
+        result = client.get(job["result"]["href"]).json()
+        assert result["summary"]["trade_count"] == 1
+        trade = result["native"]["trades"][0]
+        assert result["native"]["final_account"]["available_cash"] == pytest.approx(
+            100000 - 100 * trade["price"] - trade["commission"] + 10
+        )
+        entries = list(result["native"]["corporate_entitlements"]["600000.XSHG"].values())
+        assert len(entries) == 1 and entries[0]["basis"] == 100
+        assert "2024-03-28" in entries[0]["stages"].values()
