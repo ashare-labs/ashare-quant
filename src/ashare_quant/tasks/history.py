@@ -145,11 +145,13 @@ class History(TaskService):
                 require(seal["job_id"] == job_id and seal["manifest_sha256"] == digest(manifest)
                         and {"manifest.json", "session.json", "result.json", "receipt.json", "proof.json", "native.chk"} <= seal["files"].keys(),
                         "HISTORY_EVIDENCE_CONFLICT")
+                require(seal["files"]["result.json"]["sha256"] == reference["snapshot_sha256"]
+                        and seal["files"]["manifest.json"]["sha256"] == sha(canonical(manifest)),
+                        "HISTORY_EVIDENCE_CONFLICT", "Publication pins differ from the accepted task/result")
                 for filename, pin in seal["files"].items():
                     hashed, size = evidence_hash(sealed, filename)
                     require(hashed == pin["sha256"] and size == pin["size"],
                             "HISTORY_EVIDENCE_CONFLICT", "Sealed evidence differs")
-                require(evidence_file(sealed, "manifest.json") == canonical(manifest), "HISTORY_IDENTITY_CONFLICT")
                 result_root, result_name = sealed, "result.json"
             with verified_copy(result_root, result_name, reference["snapshot_sha256"], self.repo.policy) as stream:
                 require(project_json(stream, {"job_id"})["job_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")

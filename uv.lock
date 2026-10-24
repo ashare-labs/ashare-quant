@@ -87,7 +87,7 @@ provides-extras = ["factor-evaluation", "local-data"]
 
 [[package]]
 name = "ashare-quant"
-version = "0.12.0.dev24"
+version = "0.12.0.dev25"
 source = { editable = "." }
 dependencies = [
     { name = "ashare-data" },
