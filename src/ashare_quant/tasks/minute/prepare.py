@@ -31,8 +31,8 @@ def require(condition, code, message, details=None):
         raise DomainError(code, message, 422, details=details)
 
 
-def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20):
-    release = MarketRelease(
+def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20, *, release=None):
+    release = release or MarketRelease(
         pin["root"], pin["release_id"], expected_manifest_sha256=pin["manifest_sha256"]
     )
     with release.metadata() as db:
@@ -64,6 +64,7 @@ def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20):
 def prepare_market(pin, request, *, owner=None, daily=None, corporate=None):
     """Shared source observations for both Python frequencies; no execution or collection."""
     ids = list(request.securities)
+    owner = owner or ReleasedDailyProduct({"market_release": pin})
     days, cal = scope(
         pin,
         ids,
@@ -71,10 +72,9 @@ def prepare_market(pin, request, *, owner=None, daily=None, corporate=None):
         str(request.end_date),
         request.frequency,
         request.warmup_sessions,
+        release=owner.release,
     )
     calendar = cal
-    cfg = {"market_release": pin}
-    owner = owner or ReleasedDailyProduct(cfg)
     release = owner.release
     daily = daily if daily is not None else owner.prices(ids, cal[0], days[-1])
     bykey = {(r["security"], r["date"]): dict(r) for r in daily["rows"]}
@@ -325,6 +325,7 @@ def prepare(pin, request, root, history_factors=None, *, owner=None, corporate=N
                 sid,
                 query_days[0] + "T09:30:00+08:00",
                 query_days[-1] + "T15:00:00+08:00",
+                release=release,
             )
             sha = digest(response)
             source = dict(

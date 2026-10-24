@@ -7,6 +7,7 @@ from pydantic import Field, field_validator
 
 from ashare_quant.contracts import Contract, DomainError
 from ashare_quant.strategies.files import MAX_SOURCE_BYTES, StrategyFiles, parts, source_bytes
+from ashare_quant.strategies.identity import StrategyID
 
 
 class StrategyPath(Contract):
@@ -32,13 +33,18 @@ class StrategySave(StrategyPath):
         return value
 
 
-class StrategySource(StrategyPath):
+class StrategyFilePath(StrategyPath):
+    strategy_id: StrategyID
+
+
+class StrategySource(StrategyFilePath):
     source: str
 
 
 class StrategyEntry(StrategyPath):
     name: str
     kind: Literal["directory", "file"]
+    strategy_id: StrategyID | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class StrategyDirectory(Contract):
@@ -74,5 +80,5 @@ def mount(app, product):
         return files(request, query=True).read(path)
 
     @app.put(prefix + "/files")
-    def save_strategy_file(body: StrategySave, request: Request) -> StrategyPath:
+    def save_strategy_file(body: StrategySave, request: Request) -> StrategyFilePath:
         return files(request).save(body.path, body.source, overwrite=body.overwrite)

@@ -67,6 +67,12 @@ class PythonJobs(TaskService):
                 "PYTHON_ENVIRONMENT_CHANGED",
                 "Service or data configuration changed. Reload and explicitly submit in the new environment",
             )
+            if request.strategy_id is not None:
+                from ashare_quant.strategies.files import StrategyFiles
+
+                # The client explicitly supplies the saved file identity. Unsaved edits
+                # may differ; this task freezes its submitted source independently.
+                StrategyFiles(self.product.configured().control_db.parent).read(request.strategy_id)
             self.repo.capacity()
             require(
                 self.unaccepted_directories() < self.repo.policy.max_pending,

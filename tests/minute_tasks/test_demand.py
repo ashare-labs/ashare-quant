@@ -10,6 +10,107 @@ from tests.minute_tasks.test_daily import execute
 from tests.minute_tasks.test_daily import fixed_release as fixed_release
 
 
+def test_catalogue_reports_calendar_envelope_without_claiming_price_coverage(daily_jobs, fixed_release):
+    app, _, _ = daily_jobs
+    release, days = fixed_release
+    with TestClient(app) as client:
+        info = client.get('/api/v1/python/catalogue').json()['data_availability']
+        assert info['release_id'] == release.release_id
+        assert info['calendar_start'] == days[0] and info['calendar_end'] == days[-1]
+        assert info['first_execution_session'] == days[1]
+        assert info['last_execution_session'] == days[-2]
+        assert 'calendar envelope only' in info['coverage_semantics']
+
+
+def test_execution_reuses_frozen_objects_and_reference_queries(daily_jobs, fixed_release, tmp_path, monkeypatch):
+    from ashare_data.product.released_references import ReleasedReferences
+    from ashare_data.storage.market_release import MarketRelease
+    from ashare_quant.tasks.minute.contracts import PythonCreate
+    from ashare_quant.tasks.minute.demand import DemandInputs
+
+    _, _, body = daily_jobs
+    release, _ = fixed_release
+    constructions, queries = [], []
+    original_init, original_query = MarketRelease.__init__, ReleasedReferences.query
+
+    def opened(self, *args, **kwargs):
+        constructions.append(args)
+        original_init(self, *args, **kwargs)
+
+    def queried(self, table, condition, parameters):
+        queries.append((table, condition, tuple(parameters)))
+        return original_query(self, table, condition, parameters)
+
+    monkeypatch.setattr(MarketRelease, "__init__", opened)
+    monkeypatch.setattr(ReleasedReferences, "query", queried)
+    data = DemandInputs(release.receipt(), PythonCreate.model_validate(body), tmp_path)
+    try:
+        data.component("600000.XSHG", data.days[0])
+        first_queries = list(queries)
+        for day in data.days[1:6]:
+            data.component("600000.XSHG", day)
+        assert len(constructions) == 1
+        assert queries == first_queries
+        assert data.reference_rows > 0
+        assert sum(r["rows"] for r in data.reads if r["api"] == "execution_references") == data.reference_rows
+        # Another security has its own requested facts, never the first security's result.
+        data.component("000001.XSHE", data.days[0])
+        assert len(queries) > len(first_queries)
+    finally:
+        data.close()
+
+
+@pytest.mark.parametrize("fixed_release", [{"minutes": True}], indirect=True)
+def test_minute_open_schedule_uses_existing_clock_without_future_prices(daily_jobs, fixed_release):
+    app, jobs, body = daily_jobs
+    _, days = fixed_release
+    body.update(frequency="1m", start_date=days[20], end_date=days[22], source="""from jqdata import *
+def initialize(context):
+    set_universe(['600000.XSHG'])
+    run_daily(trade, time='open')
+def trade(context):
+    assert context.current_dt.strftime('%H:%M') == '09:30'
+    history = attribute_history('600000.XSHG', 10, '1d', ['close'], fq=None)
+    assert history.index[-1].date() == context.previous_date
+    aligned = globals()['history'](10, '1d', security_list=['600000.XSHG'], fq=None)
+    assert aligned.iloc[-1, 0] == history.close.iloc[-1]
+    assert len(get_bars('600000.XSHG', 10, '1d', ['date','close'], df=True)) == 10
+    minutes = attribute_history('600000.XSHG', 3, '1m', ['close'], skip_paused=False, fq=None)
+    assert minutes.index[-1].date() == context.previous_date
+    order_target('600000.XSHG', 100)
+""")
+    body.pop("securities")
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "succeeded", job.get("error")
+        result = client.get(job["result"]["href"]).json()
+        assert result["summary"]["trade_count"] == 1
+        assert result["native"]["trades"][0]["at"][11:16] == "09:31"
+        config = json.loads((jobs.directory(job["job_id"]) / "native-config.json").read_text())
+        assert config  # Matching policy is also frozen in the native result assumptions.
+
+
+@pytest.mark.parametrize("fixed_release", [{"minutes": True}], indirect=True)
+def test_daily_callbacks_can_request_visible_minutes(daily_jobs):
+    app, jobs, body = daily_jobs
+    body.update(end_date=body["start_date"], source="""from jqdata import *
+def initialize(context):
+    set_universe(['600000.XSHG'])
+def handle_data(context, data):
+    values = attribute_history('000001.XSHE', 10, '1m', ['close'], fq=None)
+    assert values.index[-1].date() == context.previous_date
+    aligned = history(10, '1m', security_list=['000001.XSHE'], fq=None)
+    assert aligned.iloc[-1,0] == values.close.iloc[-1]
+    bars = get_bars('000001.XSHE',10,'1m',['date','close'],df=True)
+    assert len(bars) == 10 and bars.close.iloc[-1] == values.close.iloc[-1]
+    prices = get_price('000001.XSHE',frequency='minute',count=10,fields=['close'],fq=None)
+    assert prices.close.iloc[-1] == values.close.iloc[-1]
+""")
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "succeeded", job.get("error")
+
+
 @pytest.mark.parametrize(
     "fixed_release", [{"securities": ["600000.XSHG", "000001.XSHE", "600036.XSHG"]}], indirect=True
 )
@@ -83,11 +184,13 @@ def handle_data(context, data):
         ),
     ],
 )
-def test_demand_refuses_future_unknown_calendar_and_insufficient_history(daily_jobs, source, error):
+@pytest.mark.parametrize("frequency", ["1d", "1m"])
+def test_demand_refuses_future_unknown_calendar_and_insufficient_history(daily_jobs, source, error, frequency):
     app, jobs, body = daily_jobs
     body.pop("securities")
     body.pop("warmup_sessions")
     body.update(
+        frequency=frequency,
         end_date=body["start_date"],
         source="def initialize(context): pass\ndef handle_data(context,data):\n    "
         + source
@@ -349,7 +452,7 @@ def test_pool_outside_minute_last_price_does_not_prepare_execution(daily_jobs):
 def initialize(context):
     g.read = False
 def handle_data(context,data):
-    if not g.read:
+    if not g.read and context.current_dt.strftime('%H:%M') >= '09:31':
         last = get_current_data()['000001.XSHE'].last_price
         prices = attribute_history('000001.XSHE',1,'1m',['close'],fq=None)
         assert last == prices.close.iloc[-1]

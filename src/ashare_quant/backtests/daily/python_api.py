@@ -143,6 +143,10 @@ class DailyAPI(API):
         df=True,
         fq="pre",
     ):
+        if getattr(self.host.data, "demand", False) and unit in {"minute", "1m"}:
+            return API(self.host).attribute_history(
+                security, count, unit, fields, skip_paused, df, fq
+            )
         require(type(skip_paused) is bool and type(df) is bool, "JQ_HISTORY_BOOLEAN_REQUIRED")
         frame = self._history(security, count, unit, fields, skip_paused=skip_paused, adjustment=fq)
         return frame if df else {f: frame[f].to_numpy() for f in frame}
@@ -157,6 +161,11 @@ class DailyAPI(API):
         skip_paused=False,
         fq="pre",
     ):
+        if getattr(self.host.data, "demand", False) and unit in {"minute", "1m"}:
+            return API(self.host).history(
+                count, unit, field, self.universe if security_list is None else security_list,
+                df, skip_paused, fq,
+            )
         require(type(df) is bool and type(skip_paused) is bool, "JQ_HISTORY_BOOLEAN_REQUIRED")
         ids = self.securities(self.universe if security_list is None else security_list)
         if getattr(self.host.data, "demand", False):
@@ -185,6 +194,10 @@ class DailyAPI(API):
         fq_ref_date=None,
         df=False,
     ):
+        if getattr(self.host.data, "demand", False) and unit in {"minute", "1m"}:
+            return API(self.host).get_bars(
+                security, count, unit, fields, include_now, end_dt, fq_ref_date, df
+            )
         require(type(include_now) is bool and type(df) is bool, "JQ_BARS_OPTIONS_UNSUPPORTED")
         wanted = list(fields)
         cols = [f for f in wanted if f != "date"]
@@ -218,6 +231,11 @@ class DailyAPI(API):
         panel=False,
         fill_paused=False,
     ):
+        if getattr(self.host.data, "demand", False) and frequency in {"minute", "1m"}:
+            return API(self.host).get_price(
+                security, start_date, end_date, frequency, fields, skip_paused,
+                fq, count, panel, fill_paused,
+            )
         require(
             type(skip_paused) is bool and panel is False and fill_paused is False,
             "JQ_PRICE_REQUIRES_UNFILLED_PANEL_FALSE",

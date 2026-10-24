@@ -2653,6 +2653,19 @@
             "title": "Start Date",
             "type": "string"
           },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
           "trusted_local_code": {
             "const": true,
             "title": "Trusted Local Code",
@@ -3254,7 +3267,7 @@
                 "type": "null"
               }
             ],
-            "default": "de9f34ee6a0bd52277e2fcf33b8494f1ff92cb0e",
+            "default": "145d700fbf53385cdc5790b171b9e3a880b65092",
             "title": "Commit"
           },
           "name": {
@@ -3272,7 +3285,7 @@
                 "type": "null"
               }
             ],
-            "default": "e6d00743b7557cbad789d9820aa6a62fba45a883",
+            "default": "634c04ccdb6f9a5ae46743d689ff23970fb94ae8",
             "title": "Tree"
           },
           "version": {
@@ -3281,7 +3294,7 @@
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "1ea2cd9328d0c111089b04e7db93e099bf641f20e51933702e222fec1ea154b7",
+            "default": "fc868ea835b9c073127537568b5debfeaee541a57da27b870f6dfd39a27ad7fa",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -3981,6 +3994,231 @@
         "title": "StateView",
         "type": "object"
       },
+      "StrategyBacktest": {
+        "additionalProperties": false,
+        "properties": {
+          "can_cancel": {
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_status": {
+            "title": "Display Status",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "execution_reason": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Reason"
+          },
+          "execution_state": {
+            "title": "Execution State",
+            "type": "string"
+          },
+          "frequency": {
+            "title": "Frequency",
+            "type": "string"
+          },
+          "initial_cash": {
+            "title": "Initial Cash",
+            "type": "number"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResultReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_available": {
+            "title": "Result Available",
+            "type": "boolean"
+          },
+          "result_error": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Error"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "stored_status": {
+            "title": "Stored Status",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "strategy_id",
+          "name",
+          "start_date",
+          "end_date",
+          "frequency",
+          "initial_cash",
+          "created_at",
+          "updated_at",
+          "status",
+          "stored_status",
+          "display_status",
+          "execution_state",
+          "execution_reason",
+          "can_cancel",
+          "error",
+          "result",
+          "result_available",
+          "result_error",
+          "summary"
+        ],
+        "title": "StrategyBacktest",
+        "type": "object"
+      },
+      "StrategyBacktests": {
+        "additionalProperties": false,
+        "properties": {
+          "identity_model": {
+            "default": "saved_relative_path",
+            "title": "Identity Model",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyBacktest"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unassigned_count": {
+            "title": "Unassigned Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "total",
+          "unassigned_count",
+          "offset",
+          "limit",
+          "items"
+        ],
+        "title": "StrategyBacktests",
+        "type": "object"
+      },
       "StrategyCreate": {
         "additionalProperties": false,
         "properties": {
@@ -4073,6 +4311,19 @@
             "minLength": 1,
             "title": "Path",
             "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
           }
         },
         "required": [
@@ -4081,6 +4332,29 @@
           "kind"
         ],
         "title": "StrategyEntry",
+        "type": "object"
+      },
+      "StrategyFilePath": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "strategy_id": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "strategy_id"
+        ],
+        "title": "StrategyFilePath",
         "type": "object"
       },
       "StrategyPath": {
@@ -4138,10 +4412,17 @@
           "source": {
             "title": "Source",
             "type": "string"
+          },
+          "strategy_id": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Strategy Id",
+            "type": "string"
           }
         },
         "required": [
           "path",
+          "strategy_id",
           "source"
         ],
         "title": "StrategySource",
@@ -7148,6 +7429,135 @@
         "summary": "Publish"
       }
     },
+    "/api/v1/python/backtests": {
+      "get": {
+        "operationId": "strategy_backtests_api_v1_python_backtests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyBacktests"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Strategy Backtests Api V1 Python Backtests Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Strategy Backtests"
+      }
+    },
     "/api/v1/python/catalogue": {
       "get": {
         "operationId": "catalogue_api_v1_python_catalogue_get",
@@ -7544,7 +7954,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StrategyPath"
+                  "$ref": "#/components/schemas/StrategyFilePath"
                 }
               }
             },

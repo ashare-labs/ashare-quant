@@ -28,6 +28,10 @@ def child_limits(policy, parent_pid, action, error_path=None):
     started = time.monotonic()
 
     def terminate(reason, observed=None):
+        limit = seconds if reason == "wall_seconds" else policy.get(reason)
+        if reason == "cpu_seconds" and observed is None:
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            observed = usage.ru_utime + usage.ru_stime
         if error_path:
             try:
                 with open(error_path, "x") as output:
@@ -36,8 +40,10 @@ def child_limits(policy, parent_pid, action, error_path=None):
                             "code": "M2_JOB_RESOURCE_LIMIT"
                             if reason != "parent_lost"
                             else "M2_JOB_PARENT_LOST",
-                            "message": "Owned child stopped by its resource watchdog",
-                            "details": {"resource": reason, "observed": observed},
+                            "message": f"Task reached configured {reason} limit ({limit}); "
+                            "no complete result was published" if reason != "parent_lost"
+                            else "Task's supervising process ended",
+                            "details": {"resource": reason, "observed": observed, "limit": limit},
                         },
                         output,
                     )

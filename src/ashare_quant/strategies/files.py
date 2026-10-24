@@ -142,7 +142,8 @@ class StrategyFiles:
                             kind = "file"
                         else:
                             continue
-                        entries.append({"name": name, "path": relative, "kind": kind})
+                        entries.append({"name": name, "path": relative, "kind": kind,
+                                        **({"strategy_id": relative} if kind == "file" else {})})
             except FileNotFoundError:
                 if members or not self.state_root.is_dir():
                     raise
@@ -173,7 +174,7 @@ class StrategyFiles:
             source = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise DomainError("STRATEGY_SOURCE_ENCODING", "File is not valid UTF-8", 422) from exc
-        return {"path": path, "source": source}
+        return {"path": path, "strategy_id": path, "source": source}
 
     def save(self, path, source, *, overwrite=False):
         members = parts(path, file=True)
@@ -189,4 +190,4 @@ class StrategyFiles:
                     raise DomainError("STRATEGY_FILE_EXISTS", "File exists; explicitly set overwrite=true", 409)
                 regular(info)
             atomic(members[-1], raw, dir_fd=directory, overwrite=overwrite)
-        return {"path": path}
+        return {"path": path, "strategy_id": path}

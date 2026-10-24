@@ -4,6 +4,7 @@ from fastapi import Request
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.strategies.files_api import mount as mount_files
+from ashare_quant.strategies.backtests import mount as mount_backtests
 from ashare_quant.tasks.api import ActionRequest
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.minute.contracts import (
@@ -20,6 +21,7 @@ def mount(app, store, configuration=None):
     jobs = PythonJobs(store, configuration, app.state.product)
     app.state.python_jobs = jobs
     mount_files(app, app.state.product)
+    mount_backtests(app)
     prefix = "/api/v1/python"
 
     def closed(request):
@@ -30,8 +32,27 @@ def mount(app, store, configuration=None):
     def catalogue(request: Request) -> dict:
         closed(request)
         factors = jobs.history_factors
+        environment = jobs.environment()
+
+        def availability(owner):
+            release = getattr(owner, "release", None)
+            if release is None:
+                return None
+            with release.metadata() as db:
+                first = [r[0] for r in db.execute("SELECT date FROM calendar ORDER BY date LIMIT 2")]
+                last = [r[0] for r in db.execute("SELECT date FROM calendar ORDER BY date DESC LIMIT 2")]
+            return {
+                "release_id": release.release_id, "manifest_sha256": release.sha256,
+                "calendar_start": first[0] if first else None,
+                "calendar_end": last[0] if last else None,
+                "first_execution_session": first[1] if len(first) > 1 else None,
+                "last_execution_session": last[1] if len(last) > 1 else None,
+                "coverage_semantics": "calendar envelope only; security, field and history coverage checked on actual demand",
+            }
+
         return {
-            "environment_id": jobs.environment(),
+            "environment_id": environment,
+            "data_availability": jobs.product.call(availability),
             "frequency": "1m",
             "frequencies": ["1m", "1d"],
             "daily": {

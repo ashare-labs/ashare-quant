@@ -422,12 +422,17 @@ class API:
         df=True,
         fq="pre",
     ):
+        if getattr(self.host.data, "demand", False) and unit in {"daily", "1d"}:
+            from ashare_quant.backtests.daily.python_api import DailyAPI
+            return DailyAPI(self.host).attribute_history(
+                security, count, unit, fields, skip_paused, df, fq
+            )
         require(fq is None, "JQ_ADJUSTMENT_UNSUPPORTED:use_fq_None_for_raw_research")
         require(type(skip_paused) is bool and type(df) is bool, "JQ_HISTORY_BOOLEAN_REQUIRED")
         # No artificial bars on suspended dates. skip_paused=False cannot promise
         # JQ forward-filled suspension values, so reject when suspension is present.
         require(
-            skip_paused
+            getattr(self.host.data, "demand", False) or skip_paused
             or not any(
                 self.host.data.states[security, d]["suspended"]
                 for d in self.host.data.days
@@ -448,6 +453,12 @@ class API:
         skip_paused=False,
         fq="pre",
     ):
+        if getattr(self.host.data, "demand", False) and unit in {"daily", "1d"}:
+            from ashare_quant.backtests.daily.python_api import DailyAPI
+            return DailyAPI(self.host).history(
+                count, unit, field, self.universe if security_list is None else security_list,
+                df, skip_paused, fq,
+            )
         require(
             fq is None and type(df) is bool and skip_paused is False,
             "JQ_HISTORY_REQUIRES_RAW_UNFILLED_ALIGNED_INPUT",
@@ -478,6 +489,11 @@ class API:
         fq_ref_date=None,
         df=False,
     ):
+        if getattr(self.host.data, "demand", False) and unit in {"daily", "1d"}:
+            from ashare_quant.backtests.daily.python_api import DailyAPI
+            return DailyAPI(self.host).get_bars(
+                security, count, unit, fields, include_now, end_dt, fq_ref_date, df
+            )
         require(
             fq_ref_date is None and type(include_now) is bool and type(df) is bool,
             "JQ_BARS_OPTIONS_UNSUPPORTED",

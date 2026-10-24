@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from ashare_quant.contracts import Contract
+from ashare_quant.strategies.identity import StrategyID
 from ashare_quant.tasks.contracts import JobID, JobView, JSONObject, Security, Sha
 
 
@@ -14,6 +15,8 @@ class PythonCreate(Contract):
     name: str = Field(min_length=1, max_length=80)
     idempotency_key: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_-]+$")
     source: str = Field(min_length=1, max_length=262144)
+    # Omit absent identities on serialization so old frozen manifests remain byte-identical.
+    strategy_id: StrategyID | None = Field(default=None, exclude_if=lambda value: value is None)
     parameters: JSONObject = Field(default_factory=dict)
     frequency: Literal["1m", "1d"] = "1m"
     # Accepted for old clients; history is resolved at its actual API call.

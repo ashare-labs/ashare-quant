@@ -66,3 +66,7 @@
 运行时继续显式提交源码与配置至现有 `POST /api/v1/python/jobs`；该接口已有的
 `strategy.py`、`submission.json`、manifest 和结果冻结保持原语义，保存文件不会修改历史回测快照。
 没有新增重命名、删除、版本管理、自动运行或第二套任务平台。
+
+文件 entry、读取与保存响应现同时返回 `strategy_id`，值为完整相对文件路径。
+该值可随回测提交建立明确归属，语义和分页接口见 [策略所属回测](strategy-backtests.md)。
+目录响应不增加策略身份；保存请求仍只使用原 path/source/overwrite 字段。

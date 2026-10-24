@@ -21,8 +21,8 @@ from ashare_quant.tasks.minute.prepare import prepare_market, require
 from ashare_quant.tasks.policy import ServicePolicy
 
 
-def run_scope(pin, start, end):
-    release = MarketRelease(
+def run_scope(pin, start, end, *, release=None):
+    release = release or MarketRelease(
         pin["root"], pin["release_id"], expected_manifest_sha256=pin["manifest_sha256"]
     )
     with release.metadata() as db:
@@ -30,15 +30,44 @@ def run_scope(pin, start, end):
     require(
         calendar and calendar[0] <= start <= end <= calendar[-1],
         "PYTHON_CALENDAR_GAP",
-        "Requested interval extends outside the frozen calendar",
+        f"Requested interval {start} to {end} extends outside the frozen calendar "
+        f"({calendar[0] if calendar else 'empty'} to {calendar[-1] if calendar else 'empty'})",
+        {"requested_start": start, "requested_end": end,
+         "calendar_start": calendar[0] if calendar else None,
+         "calendar_end": calendar[-1] if calendar else None,
+         "release_id": release.release_id},
     )
     days = [d for d in calendar if start <= d <= end]
     require(
         days and calendar.index(days[0]) > 0 and calendar.index(days[-1]) + 1 < len(calendar),
         "PYTHON_CALENDAR_GAP",
-        "Execution needs a previous and a following session",
+        "Execution needs a previous and a following session in the frozen calendar; "
+        f"usable session boundaries are {calendar[1] if len(calendar) > 2 else None} "
+        f"to {calendar[-2] if len(calendar) > 2 else None}",
     )
     return days, calendar
+
+
+class ReferenceSnapshot(ReleasedReferences):
+    """Task-local results of actual frozen reference queries, charged to its budget."""
+
+    def __init__(self, data):
+        super().__init__(data.pin, data.pin, release=data.owner.release)
+        self.data, self.cache = data, {}
+
+    def query(self, table, condition, parameters):
+        key = table, condition, tuple(parameters)
+        if key not in self.cache:
+            rows = super().query(table, condition, parameters)
+            self.data.check_budget(len(rows))
+            self.data.reference_rows += len(rows)
+            self.data._retain(
+                {"api": "execution_references", "table": table,
+                 "query_sha256": digest(key), "rows_sha256": digest(rows), "rows": len(rows)},
+                len(rows),
+            )
+            self.cache[key] = rows
+        return self.cache[key]
 
 
 class DemandInputs:
@@ -55,7 +84,9 @@ class DemandInputs:
         self.pin, self.request, self.root = pin, request, Path(root)
         self.policy = policy or ServicePolicy()
         self.owner = ReleasedDailyProduct({"market_release": pin})
-        self.days, self.calendar = run_scope(pin, str(request.start_date), str(request.end_date))
+        self.days, self.calendar = run_scope(
+            pin, str(request.start_date), str(request.end_date), release=self.owner.release
+        )
         self.frequency = request.frequency
         self.generic_research = self.frequency == "1m"
         self.previous = {d: self.calendar[self.calendar.index(d) - 1] for d in self.days}
@@ -63,6 +94,7 @@ class DemandInputs:
         self.register(request.securities)
         self.rows, self.minutes, self.components, self.corporate = {}, {}, {}, {}
         self.reads, self.queries, self.read_count = [], [], 0
+        self.references, self.reference_rows = None, 0
         self.bars, self.gaps = {}, {}
         self.corporate_actions, self.actions = [], []
         self.factors = frozen_factors(self.root, factors)
@@ -120,6 +152,7 @@ class DemandInputs:
             + sum(len(v) for v in self.minutes.values())
             + len(self.bars)
             + len(self.gaps)
+            + self.reference_rows
             <= self.policy.cached_rows,
             "PYTHON_DATA_BUDGET",
             "Cache exceeds configured cached_rows",
@@ -192,7 +225,7 @@ class DemandInputs:
         require(
             row is not None,
             "PYTHON_DAILY_GAP",
-            "Requested daily observation is missing",
+            f"Requested daily observation is missing: {sid} on {day}",
             {"security": sid, "date": day},
         )
         return row
@@ -294,7 +327,8 @@ class DemandInputs:
     def _minute_day(self, sid, day):
         if (sid, day) not in self.minutes:
             response = minute_prices(
-                {"market_release": self.pin}, sid, day + "T09:30:00+08:00", day + "T15:00:00+08:00"
+                {"market_release": self.pin}, sid, day + "T09:30:00+08:00", day + "T15:00:00+08:00",
+                release=self.owner.release,
             )
             rows = {}
             for original in response["rows"]:
@@ -417,18 +451,16 @@ class DemandInputs:
         key = sid + "|" + day
         start = day if self.frequency == "1d" else self.previous[day]
         if key not in self.corporate:
-            reader = ReleasedReferences(self.pin, self.pin)
-            try:
-                view = ReleasedCorporateView(reader, [sid], start, day)
-                corp = view.export_aq(
-                    [sid],
-                    start=start,
-                    end=day,
-                    tax_model="gross_cash_no_tax",
-                    accept_source_scoped_coverage=True,
-                )
-            finally:
-                reader.close()
+            if self.references is None:
+                self.references = ReferenceSnapshot(self)
+            view = ReleasedCorporateView(self.references, [sid], start, day)
+            corp = view.export_aq(
+                [sid],
+                start=start,
+                end=day,
+                tax_model="gross_cash_no_tax",
+                accept_source_scoped_coverage=True,
+            )
             doc = {"corporate_schedule": corp, "corporate_account_model": MODEL}
             actions = schedule_rows(doc, [sid], {"start": start, "end": day}, self.calendar)
             self.corporate[key] = corp
@@ -465,7 +497,8 @@ class DemandInputs:
                 require(
                     all(r is not None for r in rows),
                     "PYTHON_DAILY_GAP",
-                    "Execution needs the current and previous observed daily bar",
+                    f"Execution needs daily bars for {sid} on {prev} and {day}; "
+                    "at least one observation is missing",
                     {"security": sid, "date": day},
                 )
                 daily = {
@@ -570,7 +603,7 @@ class DemandInputs:
         expected = (
             ("daily_open", "daily", "daily")
             if self.frequency == "1d"
-            else ("next_open", "closed_bars", "strict_minute")
+            else ("next_open", "jq_minute", "strict_minute")
         )
         require(
             tuple(config[k] for k in ("matching", "lifecycle", "capacity_policy")) == expected,
@@ -612,3 +645,8 @@ class DemandInputs:
         }
         atomic(self.root / "preparation.json", report)
         return report
+
+    def close(self):
+        if self.references is not None:
+            self.references.close()
+            self.references = None

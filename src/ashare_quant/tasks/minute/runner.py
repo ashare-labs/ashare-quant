@@ -51,6 +51,9 @@ def run(args):
         demand = session.get("data_access") == "demand.v2"
         if request.frequency == "1d":
             config.update(matching="daily_open", lifecycle="daily", capacity_policy="daily")
+        elif demand:
+            # Use the existing JQ callback clock, independently of next-open matching.
+            config["lifecycle"] = "jq_minute"
         if demand:
             from ashare_quant.tasks.minute.demand import DemandInputs
             from ashare_quant.tasks.policy import ServicePolicy
@@ -76,17 +79,21 @@ def run(args):
                 "source": args["source_sha256"],
             }
         )
-        result = run_native(
-            root,
-            data,
-            regular(root / "strategy.py"),
-            config,
-            identity,
-            parameters=request.parameters,
-        )
-        if demand:
-            report = data.finalize()
-            result["data_input_sha256"] = report["input_sha256"]
+        try:
+            result = run_native(
+                root,
+                data,
+                regular(root / "strategy.py"),
+                config,
+                identity,
+                parameters=request.parameters,
+            )
+            if demand:
+                report = data.finalize()
+                result["data_input_sha256"] = report["input_sha256"]
+        finally:
+            if demand:
+                data.close()
         atomic(root / "result.json", result)
         atomic(root / "completed.json", {"result_sha256": digest(result)})
         complete = True

@@ -1,9 +1,9 @@
 {
   "backend_version": "0.12.0.dev22",
-  "source_sha256": "def1bc654296129fe51e12b442af35ce63d1e519f8ee5ef849762490e350e796",
+  "source_sha256": "d649239da91844e84711f16df7b9f33c22278874c94478138b27a73395c3d03b",
   "contracts": {
-    "api.openapi.json": "dac1043ceff2578e27cb6415fde9b00a266ae06db74e6e723debdc794eaa17cf",
-    "tasks.openapi.json": "839affe3c05250984c9785d21a5bd230d122b538586e59f9737357e3e4266ac2",
+    "api.openapi.json": "018a4b91ba9197339a80f6437304cdd397bcf1fb828842dba50ec5e28bc71187",
+    "tasks.openapi.json": "ee2ab16fdd0585ee108487b52f021ed710909ca001a321cfe012aa6658499e0c",
     "paper.openapi.json": "ac137208e7d9b8e141c8aae3b8f94bee9f789dc91d6ee0ee0a737dd2b68abdf9"
   },
   "independent_review_status": "not_reviewed"

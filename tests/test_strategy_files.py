@@ -71,15 +71,15 @@ def test_directory_and_utf8_round_trip_survive_new_process(client, configuration
     path = "研究/日频/动量.py"
     source = "# 中文和 emoji 📈\r\nraise RuntimeError('must never run on save')\r\n"
     result = client.put(PREFIX + "/files", json={"path": path, "source": source})
-    assert result.status_code == 200 and result.json() == {"path": path}
+    assert result.status_code == 200 and result.json() == {"path": path, "strategy_id": path}
     assert (root / path).read_bytes() == source.encode("utf-8")
-    assert client.get(PREFIX + "/files", params={"path": path}).json() == {"path": path, "source": source}
+    assert client.get(PREFIX + "/files", params={"path": path}).json() == {"path": path, "strategy_id": path, "source": source}
     (root / "研究/日频/not-a-strategy.txt").write_text("ignored")
     assert client.get(PREFIX + "/directories", params={"path": "研究"}).json()["entries"] == [
         {"name": "日频", "path": "研究/日频", "kind": "directory"},
     ]
     assert client.get(PREFIX + "/directories", params={"path": "研究/日频"}).json()["entries"] == [
-        {"name": "动量.py", "path": path, "kind": "file"},
+        {"name": "动量.py", "path": path, "strategy_id": path, "kind": "file"},
     ]
     program = """
 import json, sys
@@ -95,7 +95,7 @@ with TestClient(create_app(product_configuration=resolve(sys.argv[1]))) as clien
         [sys.executable, "-B", "-c", program, str(configuration.deployment), path],
         check=True, capture_output=True, text=True,
     )
-    assert json.loads(reopened.stdout) == {"path": path, "source": source}
+    assert json.loads(reopened.stdout) == {"path": path, "strategy_id": path, "source": source}
     assert client.app.state.python_jobs.repo.rows() == []
     assert client.app.state.store.strategies() == []
 

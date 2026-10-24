@@ -45,6 +45,7 @@ def test_product_has_no_demo_admission_or_predefined_strategy_catalogue(tmp_path
 def test_python_catalogue_contains_only_capabilities(tmp_path, monkeypatch):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     monkeypatch.setattr(app.state.python_jobs, "environment", lambda: "a" * 64)
+    monkeypatch.setattr(app.state.python_jobs.product, "call", lambda operation: None)
     with TestClient(app) as client:
         value = client.get("/api/v1/python/catalogue").json()
         assert value["frequencies"] == ["1m", "1d"]
