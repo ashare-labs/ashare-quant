@@ -10,6 +10,27 @@ from ashare_quant.tasks.repository import Repository as Base
 class Repository(Base):
     view_type = PythonJobView
 
+    def existing(self, request):
+        with self.store.connection() as db:
+            row = db.execute(
+                "SELECT * FROM tasks WHERE idempotency_key=?", (request.idempotency_key,)
+            ).fetchone()
+        if row:
+            # Acceptance pins this alias, so retries do not resolve a file that
+            # may since have been deleted or replaced. Legacy IDs stay exact.
+            frozen = json.loads(row["manifest"])
+            if (frozen.get("schema_version") == "python-demand-job.v2"
+                    and "submitted_strategy_id" in frozen["session"]):
+                manifest = self.manifest(row)
+                if request.strategy_id == manifest.session["submitted_strategy_id"]:
+                    request = request.model_copy(update={"strategy_id": manifest.request.strategy_id})
+            require(
+                row["request_hash"] == digest(request), "M2_JOB_IDEMPOTENCY_CONFLICT",
+                "Key already identifies another immutable request",
+            )
+            return dict(row)
+        return None
+
     @staticmethod
     def manifest(row):
         value = PythonManifest.model_validate_json(row["manifest"])

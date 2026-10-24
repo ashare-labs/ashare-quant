@@ -45,6 +45,8 @@
 CPU 等资源终止错误包含资源名、配置上限及可取得的实际值，不返回部分成功结果。
 已保存策略可附带可选 `strategy_id`，按 [策略所属回测](strategy-backtests.md) 查询跨运行时记录。
 
-历史因子配置沿用 `ASHARE_QUANT_PYTHON_HISTORY_FACTORS`，绑定内容为 `{"root":"/path/to/factor-store","dataset_id":"完整 SHA256"}`。不允许 latest，任务接受时固定并验证快照。数据包精确版本、源码提交和 wheel 摘要以 `providers/data-runtime.json`、`uv.lock` 为准。
+历史因子配置沿用 `ASHARE_QUANT_PYTHON_HISTORY_FACTORS`，绑定内容为 `{"root":"/path/to/factor-store","dataset_id":"完整 SHA256"}`。不允许 latest，日频和分钟任务接受时均固定并验证同一配置的快照；调度频率不会决定是否可读复权日线。未配置时仍明确拒绝复权查询。数据包精确版本、源码提交和 wheel 摘要以 `providers/data-runtime.json`、`uv.lock` 为准。
+
+证券目录分页在同一个固定发布读取器内复用最近一个日期及搜索条件的历史成员计算，避免每页重复扫描；改变日期或搜索条件会重新计算。返回值不共享可变对象，发布元数据完整性继续校验，不扩大历史目录的证据边界。
 
 任务产物保留接受清单、源码、发布身份、实际读取的输入/回执、预算、原生事件、结果和完成证明。结果发布同时验证输入摘要与原生结果绑定。真实市场发布覆盖、目录的历史语义和原有回溯模型限制均随结果保留。

@@ -95,6 +95,19 @@ def open_directory(parent, name, *, create=False):
     return os.open(name, DIRECTORY_FLAGS, dir_fd=parent)
 
 
+def stored_name(parent, requested, info):
+    """Use the actual directory entry, not a case/Unicode normalization guess."""
+    names = os.listdir(parent)
+    for name in ([requested] if requested in names else names):
+        try:
+            current = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        if os.path.samestat(current, info):
+            return name
+    raise DomainError("STRATEGY_PATH_CHANGED", "Path changed during access; reopen it", 409)
+
+
 class StrategyFiles:
     def __init__(self, state_root):
         self.state_root = Path(state_root)
@@ -103,7 +116,7 @@ class StrategyFiles:
         self.root = self.state_root / "strategies"
 
     @contextmanager
-    def directory(self, members, *, create=False, create_root=False):
+    def directory(self, members, *, create=False, create_root=False, resolved=None):
         # Walk from / without following links, including ancestors of the configured root.
         fd = os.open(self.state_root.anchor, DIRECTORY_FLAGS)
         try:
@@ -116,6 +129,12 @@ class StrategyFiles:
             fd = child
             for member in members:
                 child = open_directory(fd, member, create=create)
+                if resolved is not None:
+                    try:
+                        resolved.append(stored_name(fd, member, os.fstat(child)))
+                    except BaseException:
+                        os.close(child)
+                        raise
                 os.close(fd)
                 fd = child
             yield fd
@@ -124,12 +143,12 @@ class StrategyFiles:
 
     def list(self, path=""):
         members = parts(path)
-        entries = []
+        entries, resolved = [], []
         with operation(path, "list"):
             try:
-                with self.directory(members) as fd:
+                with self.directory(members, resolved=resolved) as fd:
                     for name in os.listdir(fd):
-                        relative = "/".join([*members, name])
+                        relative = "/".join([*resolved, name])
                         try:
                             parts(relative)
                             info = os.stat(name, dir_fd=fd, follow_symlinks=False)
@@ -148,25 +167,30 @@ class StrategyFiles:
                 if members or not self.state_root.is_dir():
                     raise
                 # An unused deployment has an empty strategy directory; GET creates nothing.
-        return {"root": str(self.root), "path": path,
+        return {"root": str(self.root), "path": "/".join(resolved),
                 "entries": sorted(entries, key=lambda item: (item["kind"] != "directory", item["name"]))}
 
     def mkdir(self, path):
         members = parts(path)
         if not members:
             raise DomainError("STRATEGY_PATH_INVALID", "Specify a nonempty directory path", 422)
-        with operation(path, "mkdir"), self.directory(members, create=True):
-            return {"path": path}
+        resolved = []
+        with operation(path, "mkdir"), self.directory(members, create=True, resolved=resolved):
+            return {"path": "/".join(resolved)}
 
     def read(self, path):
         members = parts(path, file=True)
-        with operation(path, "read"), self.directory(members[:-1]) as directory:
+        resolved = []
+        with operation(path, "read"), self.directory(members[:-1], resolved=resolved) as directory:
             # Nonblocking open plus fstat prevents a FIFO or device masquerading as a file.
             regular(os.stat(members[-1], dir_fd=directory, follow_symlinks=False))
             fd = os.open(members[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                          dir_fd=directory)
             with os.fdopen(fd, "rb") as stream:
-                regular(os.fstat(stream.fileno()))
+                info = os.fstat(stream.fileno())
+                regular(info)
+                path = "/".join([*resolved, stored_name(directory, members[-1], info)])
+                parts(path, file=True)
                 raw = stream.read(MAX_SOURCE_BYTES + 1)
         if len(raw) > MAX_SOURCE_BYTES:
             raise DomainError("STRATEGY_SOURCE_SIZE", "Source must fit 256 KiB of UTF-8", 422)
@@ -179,7 +203,11 @@ class StrategyFiles:
     def save(self, path, source, *, overwrite=False):
         members = parts(path, file=True)
         raw = source_bytes(source)
-        with operation(path, "save"), self.directory(members[:-1], create_root=True) as directory:
+        resolved = []
+        with operation(path, "save"), self.directory(
+            members[:-1], create_root=True, resolved=resolved,
+        ) as directory:
+            name = members[-1]
             try:
                 info = os.stat(members[-1], dir_fd=directory, follow_symlinks=False)
             except FileNotFoundError:
@@ -189,5 +217,9 @@ class StrategyFiles:
                     # A concurrent create may still have its temporary hard link attached.
                     raise DomainError("STRATEGY_FILE_EXISTS", "File exists; explicitly set overwrite=true", 409)
                 regular(info)
-            atomic(members[-1], raw, dir_fd=directory, overwrite=overwrite)
+                name = stored_name(directory, name, info)
+                parts("/".join([*resolved, name]), file=True)
+            atomic(name, raw, dir_fd=directory, overwrite=overwrite)
+            actual = stored_name(directory, name, os.stat(name, dir_fd=directory, follow_symlinks=False))
+            path = "/".join([*resolved, actual])
         return {"path": path, "strategy_id": path}

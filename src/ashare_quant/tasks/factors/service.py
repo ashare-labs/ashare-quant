@@ -1,7 +1,9 @@
 """Freeze a bounded selection before admitting it to the existing worker queue."""
 
 import json
+import stat
 import uuid
+from functools import lru_cache
 
 from ashare_quant import __version__
 from ashare_quant.contracts import DomainError
@@ -21,6 +23,17 @@ from ashare_quant.tasks.factors.executor import Executor
 from ashare_quant.tasks.factors.repository import Repository
 
 
+def input_signature(path):
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise DomainError("M2_JOB_ARTIFACT_UNAVAILABLE", "Required local artifact is unavailable", 409) from exc
+    require(stat.S_ISREG(info.st_mode), "M2_JOB_ARTIFACT_UNAVAILABLE",
+            "Required local artifact is missing or linked")
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+            info.st_ctime_ns, info.st_mode, info.st_nlink)
+
+
 class FactorJobs(TaskService):
     active_queue = True
 
@@ -29,6 +42,9 @@ class FactorJobs(TaskService):
         self.repo = Repository(store, self.repo.policy, execution_source=self.source)
         self.executor = Executor(self.root, self.config, self.repo.policy)
         self.sources = Sources(sources, product)
+        # Cache verification metadata, never the potentially 32 MiB input bytes.
+        # Each service instance starts empty; execution always verifies afresh.
+        self._verified_input = lru_cache(maxsize=1024)(self._verify_input)
 
     def for_job(self, row):
         if json.loads(row["manifest"]).get("schema_version") == "factor-job.v1":
@@ -125,6 +141,12 @@ class FactorJobs(TaskService):
             atomic(root / "accepted-manifest.json", manifest)
             return self.view(self.repo.insert(manifest))
 
+    @staticmethod
+    def _verify_input(path, expected, signature):
+        require(sha(regular(path)) == expected, "FACTOR_INPUT_CHANGED", "Frozen input changed")
+        require(input_signature(path) == signature, "FACTOR_INPUT_CHANGED",
+                "Frozen input changed during verification")
+
     def check(self, row, *, execution=False):
         self.guard()
         manifest = self.repo.manifest(row)
@@ -136,12 +158,14 @@ class FactorJobs(TaskService):
             )
         root = self.directory(row["job_id"])
         require(regular(root / "accepted-manifest.json") == canonical(manifest))
+        verify = (self._verified_input if not execution and row["status"] in
+                  {"succeeded", "failed", "cancelled"} else self._verify_input)
         for name, expected in manifest.files.items():
-            require(
-                sha(regular(root / name)) == expected,
-                "FACTOR_INPUT_CHANGED",
-                "Frozen input changed",
-            )
+            path = root / name
+            signature = input_signature(path)
+            verify(path, expected, signature)
+            require(input_signature(path) == signature, "FACTOR_INPUT_CHANGED",
+                    "Frozen input changed during verification")
         if execution:
             require(
                 row["attempt_count"] == 0,

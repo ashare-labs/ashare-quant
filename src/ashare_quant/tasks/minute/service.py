@@ -67,12 +67,14 @@ class PythonJobs(TaskService):
                 "PYTHON_ENVIRONMENT_CHANGED",
                 "Service or data configuration changed. Reload and explicitly submit in the new environment",
             )
+            submitted_strategy_id = request.strategy_id
             if request.strategy_id is not None:
                 from ashare_quant.strategies.files import StrategyFiles
 
                 # The client explicitly supplies the saved file identity. Unsaved edits
                 # may differ; this task freezes its submitted source independently.
-                StrategyFiles(self.product.configured().control_db.parent).read(request.strategy_id)
+                saved = StrategyFiles(self.product.configured().control_db.parent).read(request.strategy_id)
+                request = request.model_copy(update={"strategy_id": saved["strategy_id"]})
             self.repo.capacity()
             require(
                 self.unaccepted_directories() < self.repo.policy.max_pending,
@@ -146,10 +148,10 @@ class PythonJobs(TaskService):
                 "execution": "fresh_process_no_python_resume",
                 "data_access": "demand.v2",
                 "data_budget": self.repo.policy.model_dump(mode="json"),
-                "history_factors": freeze_factors(self.history_factors, root)
-                if request.frequency == "1d"
-                else None,
+                "history_factors": freeze_factors(self.history_factors, root),
             }
+            if submitted_strategy_id != request.strategy_id:
+                session["submitted_strategy_id"] = submitted_strategy_id
             files = {
                 "submission.json": canonical(request),
                 "strategy.py": request.source.encode(),

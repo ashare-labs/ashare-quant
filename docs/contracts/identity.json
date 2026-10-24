@@ -1,8 +1,8 @@
 {
   "backend_version": "0.12.0.dev22",
-  "source_sha256": "3a13d3dc5327d5496a9c87c620e114d27e1a1e6732dc80c75fd85f0800e548f0",
+  "source_sha256": "465d6d0230540d20bc1a82071e18c615f2e977e163491d5763c790a112d8ea6f",
   "contracts": {
-    "api.openapi.json": "018a4b91ba9197339a80f6437304cdd397bcf1fb828842dba50ec5e28bc71187",
+    "api.openapi.json": "fe779458e85a3f22a093e111bcade51b05743026a8d5b34b27c6cf589cec18e7",
     "tasks.openapi.json": "ee2ab16fdd0585ee108487b52f021ed710909ca001a321cfe012aa6658499e0c",
     "paper.openapi.json": "ac137208e7d9b8e141c8aae3b8f94bee9f789dc91d6ee0ee0a737dd2b68abdf9"
   },

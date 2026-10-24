@@ -494,7 +494,11 @@ def test_daily_history_refuses_future_missing_and_unprovided_adjustment(
         assert job["status"] == "failed" and reason in job["error"]["message"], job.get("error")
 
 
-def test_daily_adjusted_history_uses_frozen_owner_snapshot(daily_jobs, tmp_path, monkeypatch):
+@pytest.mark.parametrize("frequency", ["1d", "1m"])
+@pytest.mark.parametrize("fixed_release", [{"minutes": True}], indirect=True)
+def test_daily_adjusted_history_uses_frozen_owner_snapshot(
+    daily_jobs, tmp_path, monkeypatch, frequency,
+):
     from ashare_data import Store
     from ashare_data.providers.cmes_factors import import_cmes_factors
 
@@ -507,7 +511,7 @@ def test_daily_adjusted_history_uses_frozen_owner_snapshot(daily_jobs, tmp_path,
         with zipfile.ZipFile(path, "w") as archive:
             for member in ("SH.600000.csv", "SZ.000001.csv"):
                 archive.writestr(
-                    member, f"date,{mode}_factor\n1900-01-01,{initial}\n2024-02-01,{updated}\n"
+                    member, f"date,{mode}_factor\n1900-01-01,{initial}\n2024-01-30,{updated}\n"
                 )
         paths.append(path)
     store = Store.init(tmp_path / "factor-source")
@@ -522,9 +526,11 @@ def test_daily_adjusted_history_uses_frozen_owner_snapshot(daily_jobs, tmp_path,
     binding.write_text(json.dumps({"root": str(store.root), "dataset_id": identity}))
     monkeypatch.setenv("ASHARE_QUANT_PYTHON_HISTORY_FACTORS", str(binding))
     jobs.history_factors = configured_factors()
+    body.update(frequency=frequency, end_date="2024-02-01")
     body["source"] = """from jqdata import *
-def initialize(context): pass
-def handle_data(context, data):
+def initialize(context):
+    run_daily(read_daily, time='open')
+def read_daily(context):
     sid = context.securities[0]
     raw = attribute_history(sid, 10, fields=['close', 'volume', 'money'], fq=None)
     pre = attribute_history(sid, 10, fields=['close', 'volume', 'money'], fq='pre')
@@ -532,10 +538,10 @@ def handle_data(context, data):
     assert pre['volume'].equals(raw['volume']) and post['money'].equals(raw['money'])
     assert pre.index[-1].date() < context.current_dt.date()
     assert pre.attrs['adjustment']['basis_date'] == str(pre.index[-1].date())
-    # The snapshot contains a future event. It must not affect January signals.
-    if str(pre.index[-1].date()) < '2024-02-01':
+    # The snapshot contains a future event. It must not affect earlier signals.
+    if str(pre.index[-1].date()) < '2024-01-30':
         assert pre['close'].equals(raw['close'])
-    elif str(pre.index[0].date()) < '2024-02-01':
+    elif str(pre.index[0].date()) < '2024-01-30':
         assert abs(pre['close'].iloc[0] * 2 - raw['close'].iloc[0]) < 1e-8
     h = history(10, security_list=[sid], fq='pre')
     bars = get_bars(sid, 10, fields=['close'], fq_ref_date=context.previous_date, df=True)
