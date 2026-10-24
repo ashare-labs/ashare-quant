@@ -10,11 +10,18 @@ from ashare_quant.strategies.identity import StrategyID
 from ashare_quant.tasks.contracts import JobID, JobView, JSONObject, Security, Sha
 
 
+class PythonProject(Contract):
+    project_id: str = Field(pattern=r"^aqproj-[0-9a-f]{32}$")
+    entrypoint: str = Field(min_length=1)
+    files: dict[str, str] = Field(min_length=1)
+
+
 class PythonCreate(Contract):
     environment_id: Sha
     name: str = Field(min_length=1, max_length=80)
     idempotency_key: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_-]+$")
-    source: str = Field(min_length=1, max_length=262144)
+    source: str | None = Field(default=None, min_length=1, exclude_if=lambda value: value is None)
+    project: PythonProject | None = Field(default=None, exclude_if=lambda value: value is None)
     # Omit absent identities on serialization so old frozen manifests remain byte-identical.
     strategy_id: StrategyID | None = Field(default=None, exclude_if=lambda value: value is None)
     parameters: JSONObject = Field(default_factory=dict)
@@ -30,6 +37,12 @@ class PythonCreate(Contract):
 
     @model_validator(mode="after")
     def bounds(self):
+        if (self.source is None) == (self.project is None):
+            raise ValueError("Supply exactly one of source or project")
+        if self.project is not None and self.strategy_id != self.project.project_id:
+            raise ValueError("strategy_id must match project.project_id")
+        if self.project is None and self.strategy_id and self.strategy_id.startswith("aqproj-"):
+            raise ValueError("Project identities require a complete project snapshot")
         if self.start_date > self.end_date or len(set(self.securities)) != len(self.securities):
             raise ValueError("Use ordered dates and unique securities")
         return self
@@ -42,7 +55,7 @@ class PythonScope(Contract):
 
 
 class PythonManifest(Contract):
-    schema_version: Literal["python-minute-job.v1", "python-demand-job.v2"] = "python-demand-job.v2"
+    schema_version: Literal["python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3"] = "python-demand-job.v2"
     job_id: JobID
     request: PythonCreate
     source_sha256: Sha

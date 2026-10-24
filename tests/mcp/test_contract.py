@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from ashare_quant.mcp.client import Backend, ResearchError, Settings
 from ashare_quant.mcp.contracts import DailySelection, MinuteSelection, StrategySubmission
-from ashare_quant.mcp.projection import page
+from ashare_quant.mcp.projection import digest, job_view, page
 from ashare_quant.mcp.server import create_server
 from tests.mcp.fixture import submission
 
@@ -62,6 +62,23 @@ def test_bounded_inputs_and_required_consent():
         )
 
 
+def test_project_submission_and_projection_bind_the_complete_source_map():
+    body = submission("a" * 64)
+    body.pop("source")
+    identity = "aqproj-" + "1" * 32
+    project = {"project_id": identity, "entrypoint": "main.py",
+               "files": {"main.py": "from .helper import value\n", "helper.py": "value = 1\n"}}
+    body.update(strategy_id=identity, project=project)
+    frozen = StrategySubmission.model_validate(body).model_dump(mode="json")
+    assert "source" not in frozen and frozen["project"] == project
+    view = job_view({"request": frozen})["submission"]
+    assert view["strategy_id"] == identity
+    assert view["project"] == {"project_id": identity, "entrypoint": "main.py",
+                               "file_count": 2, "source_sha256": digest(project)}
+    changed = project | {"files": project["files"] | {"helper.py": "value = 2\n"}}
+    assert job_view({"request": frozen | {"project": changed}})["submission"]["project"] != view["project"]
+
+
 def test_pages_are_complete_and_tied_to_snapshot_and_query():
     rows = [{"row": n} for n in range(453)]
     seen, cursor = [], None
@@ -112,8 +129,9 @@ def test_sdk_schema_and_missing_air_contracts_are_honest():
                     "trusted_local_code",
                     "accept_research_model",
                     "environment_id",
-                    "source",
                 } <= set(fields["required"])
+                assert {"source", "project", "strategy_id"} <= fields["properties"].keys()
+                assert not {"source", "project"}.intersection(fields["required"])
                 assert fields["additionalProperties"] is False
                 assert tools["submit_strategy"].annotations.read_only_hint is False
                 caps = (await c.call_tool("research_capabilities")).structured_content

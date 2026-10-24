@@ -45,6 +45,9 @@ def run(args):
         )
         request = PythonCreate.model_validate_json(regular(root / "submission.json"))
         require(digest(request) == session["request_sha256"], "PYTHON_REQUEST_CHANGED")
+        project = request.project
+        if project is not None:
+            require(digest(project) == session.get("project_sha256"), "PYTHON_PROJECT_CHANGED")
         atomic(root / "phase.json", {"phase": "preparing"})
         print("Preparing frozen market data", flush=True)
         config = {**DEFAULTS, "initial_cash": request.initial_cash}
@@ -83,10 +86,11 @@ def run(args):
             result = run_native(
                 root,
                 data,
-                regular(root / "strategy.py"),
+                None if project is not None else regular(root / "strategy.py"),
                 config,
                 identity,
                 parameters=request.parameters,
+                project=project,
             )
             if demand:
                 report = data.finalize()
@@ -112,19 +116,30 @@ def run(args):
     atomic(root / (args["invocation"] + ".proof.json"), proof)
 
 
+def source_location(exc, root):
+    """Return the deepest strategy frame, including SyntaxError's source location."""
+    root = Path(root)
+    locations = [(frame.filename, frame.lineno) for frame in traceback.extract_tb(exc.__traceback__)]
+    if isinstance(exc, SyntaxError) and exc.filename:
+        locations.append((exc.filename, exc.lineno))
+    for filename, line in reversed(locations):
+        path = Path(filename)
+        if path == root / "strategy.py":
+            return "strategy.py", line
+        if path.is_relative_to(root / "source"):
+            return path.relative_to(root / "source").as_posix(), line
+    return None, None
+
+
 if __name__ == "__main__":
     try:
         run(TASK_ARGUMENTS)  # noqa: F821
     except BaseException as exc:
         args = TASK_ARGUMENTS  # noqa: F821
         underlying = getattr(getattr(exc, "error", None), "exc_val", exc)
-        frames = traceback.extract_tb(underlying.__traceback__)
-        location = next(
-            (f for f in reversed(frames) if Path(f.filename) == Path(args["root"]) / "strategy.py"),
-            None,
-        )
+        source_file, source_line = source_location(underlying, args["root"])
         cause_code = getattr(underlying, "code", None)
-        message = f"strategy.py 第 {location.lineno} 行：" if location else ""
+        message = f"{source_file} 第 {source_line} 行：" if source_file else ""
         message += (f"{cause_code}: " if cause_code else "") + str(underlying)
         atomic(
             Path(args["root"]) / (args["invocation"] + ".runner-error.json"),
@@ -135,7 +150,8 @@ if __name__ == "__main__":
                 "cause_code": cause_code,
                 "message": message[:2000],
                 "details": getattr(underlying, "details", None),
-                "source_line": location.lineno if location else None,
+                "source_file": source_file,
+                "source_line": source_line,
                 "type": type(exc).__name__,
                 "traceback": traceback.format_exc()[-6000:],
             },

@@ -25,6 +25,7 @@ FAMILIES = {
     "portfolio-job-manifest.v1": "portfolio",
     "python-minute-job.v1": "python",
     "python-demand-job.v2": "python",
+    "python-project-job.v3": "python",
     "factor-job.v1": "factors",
 }
 
@@ -54,6 +55,10 @@ class History(TaskService):
             for name, expected in manifest.get("files", {}).items():
                 require(evidence_hash(root, name)[0] == expected,
                         "HISTORY_EVIDENCE_CONFLICT", "Frozen input differs")
+            if manifest["schema_version"] == "python-project-job.v3":
+                from ashare_quant.tasks.project_evidence import verify_project
+
+                verify_project(root, manifest)
             return manifest
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise DomainError("HISTORY_EVIDENCE_CONFLICT", "Frozen task is unavailable or malformed", 409) from exc
@@ -127,7 +132,7 @@ class History(TaskService):
             reference = json.loads(row["result"])
             require(reference["result_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
             root = self.directory(job_id)
-            if manifest["schema_version"] in {"python-minute-job.v1", "python-demand-job.v2", "factor-job.v1"}:
+            if manifest["schema_version"] in {"python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3", "factor-job.v1"}:
                 require(reference["evidence_manifest_sha256"] == digest(manifest),
                         "HISTORY_IDENTITY_CONFLICT")
                 result_root, result_name = root, "published.json"

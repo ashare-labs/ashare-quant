@@ -1,17 +1,22 @@
 """Plain UTF-8 strategy files inside the configured control database's state root."""
 
 import errno
+import fcntl
 import os
 import stat
+import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import AtomicWriteUncertain, atomic
 from ashare_quant.storage.errors import storage_error
+from ashare_quant.tasks.policy import ServicePolicy
 
-MAX_SOURCE_BYTES = 262144  # Same source budget as Python job admission.
+MAX_SOURCE_BYTES = ServicePolicy().file_bytes
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+PROJECT_DESCRIPTOR = "aquant.toml"
+INTERNAL_PREFIX = ".aquant-"
 
 
 def parts(path, *, file=False):
@@ -24,12 +29,14 @@ def parts(path, *, file=False):
         len(encoded) > 1024
         or any(c in path for c in ("\\", ":"))
         or any(ord(c) < 32 or ord(c) == 127 for c in path)
-        or any(p in {"", ".", ".."} or len(p.encode("utf-8")) > 255 for p in members)
+        or any(p in {"", ".", ".."} or name_key(p).startswith(INTERNAL_PREFIX)
+               or name_key(p) == PROJECT_DESCRIPTOR
+               or len(p.encode("utf-8")) > 255 for p in members)
         or (file and (not members or not members[-1].endswith(".py")))
     ):
         raise DomainError(
             "STRATEGY_PATH_INVALID", "Use a relative directory path or a lowercase .py filename; "
-            "absolute paths, empty components, dot components and backslashes are forbidden", 422,
+            "absolute paths, empty/dot components, backslashes and system-reserved names are forbidden", 422,
         )
     return members
 
@@ -43,13 +50,14 @@ def regular(info):
         raise DomainError("STRATEGY_PATH_UNSAFE", "Linked strategy files are not supported", 403)
 
 
-def source_bytes(source):
+def source_bytes(source, *, max_bytes=MAX_SOURCE_BYTES):
     try:
         raw = source.encode("utf-8")
     except UnicodeEncodeError as exc:
         raise DomainError("STRATEGY_SOURCE_ENCODING", "Source is not valid UTF-8", 422) from exc
-    if len(raw) > MAX_SOURCE_BYTES:
-        raise DomainError("STRATEGY_SOURCE_SIZE", "Source must fit 256 KiB of UTF-8", 422)
+    if max_bytes is not None and len(raw) > max_bytes:
+        raise DomainError("STRATEGY_SOURCE_SIZE", "Source exceeds the service file_bytes budget", 422,
+                          details={"file_bytes": max_bytes})
     return raw
 
 
@@ -108,15 +116,59 @@ def stored_name(parent, requested, info):
     raise DomainError("STRATEGY_PATH_CHANGED", "Path changed during access; reopen it", 409)
 
 
+def name_key(name):
+    """Reject names that would alias on common case/Unicode-normalizing filesystems."""
+    return unicodedata.normalize("NFKC", unicodedata.normalize("NFKC", name).casefold())
+
+
+def unique_name(parent, requested, *, existing=None):
+    for name in os.listdir(parent):
+        if name_key(name) == name_key(requested) and name != existing:
+            if name == requested:
+                raise DomainError("STRATEGY_FILE_EXISTS", "A file or directory already uses this name", 409)
+            raise DomainError("STRATEGY_NAME_CONFLICT", "A case or Unicode equivalent name exists", 409,
+                              details={"name": requested, "existing": name})
+
+
+def classification(fd):
+    try:
+        os.stat(PROJECT_DESCRIPTOR, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    raise DomainError("STRATEGY_PROJECT_REQUIRED", "Use the whole-project interface for project files", 409)
+
+
 class StrategyFiles:
-    def __init__(self, state_root):
+    def __init__(self, state_root, *, file_bytes=None):
         self.state_root = Path(state_root)
         if not self.state_root.is_absolute():
             raise ValueError("Strategy storage requires the resolved deployment state root")
         self.root = self.state_root / "strategies"
+        self.file_bytes = MAX_SOURCE_BYTES if file_bytes is None else file_bytes
 
     @contextmanager
-    def directory(self, members, *, create=False, create_root=False, resolved=None):
+    def state(self):
+        fd = os.open(self.state_root.anchor, DIRECTORY_FLAGS)
+        try:
+            for member in self.state_root.parts[1:]:
+                child = open_directory(fd, member)
+                os.close(fd)
+                fd = child
+            yield fd
+        finally:
+            os.close(fd)
+
+    @contextmanager
+    def lock(self, *, exclusive=False):
+        # The existing deployment directory is the lock inode; reads create no files.
+        # Single-file writers share this lock, retaining their atomic create semantics.
+        with self.state() as fd:
+            fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+            yield
+
+    @contextmanager
+    def directory(self, members, *, create=False, create_root=False, resolved=None,
+                  project=False):
         # Walk from / without following links, including ancestors of the configured root.
         fd = os.open(self.state_root.anchor, DIRECTORY_FLAGS)
         try:
@@ -128,6 +180,15 @@ class StrategyFiles:
             os.close(fd)
             fd = child
             for member in members:
+                classification(fd)
+                if create:
+                    try:
+                        info = os.stat(member, dir_fd=fd, follow_symlinks=False)
+                    except FileNotFoundError:
+                        unique_name(fd, member)
+                    else:
+                        actual = stored_name(fd, member, info)
+                        unique_name(fd, member, existing=actual)
                 child = open_directory(fd, member, create=create)
                 if resolved is not None:
                     try:
@@ -137,6 +198,8 @@ class StrategyFiles:
                         raise
                 os.close(fd)
                 fd = child
+            if not project:
+                classification(fd)
             yield fd
         finally:
             os.close(fd)
@@ -144,7 +207,7 @@ class StrategyFiles:
     def list(self, path=""):
         members = parts(path)
         entries, resolved = [], []
-        with operation(path, "list"):
+        with operation(path, "list"), self.lock():
             try:
                 with self.directory(members, resolved=resolved) as fd:
                     for name in os.listdir(fd):
@@ -156,13 +219,22 @@ class StrategyFiles:
                             continue
                         if stat.S_ISDIR(info.st_mode):
                             kind = "directory"
+                            from ashare_quant.strategies.projects import descriptor
+                            child = open_directory(fd, name)
+                            try:
+                                metadata = descriptor(child, optional=True, file_bytes=self.file_bytes)
+                            finally:
+                                os.close(child)
+                            if metadata is not None:
+                                kind = "project"
                         elif (stat.S_ISREG(info.st_mode) and info.st_nlink == 1
                               and name.endswith(".py")):
                             kind = "file"
                         else:
                             continue
                         entries.append({"name": name, "path": relative, "kind": kind,
-                                        **({"strategy_id": relative} if kind == "file" else {})})
+                                        **({"strategy_id": relative} if kind == "file" else {}),
+                                        **({"strategy_id": metadata["project_id"]} if kind == "project" else {})})
             except FileNotFoundError:
                 if members or not self.state_root.is_dir():
                     raise
@@ -175,13 +247,13 @@ class StrategyFiles:
         if not members:
             raise DomainError("STRATEGY_PATH_INVALID", "Specify a nonempty directory path", 422)
         resolved = []
-        with operation(path, "mkdir"), self.directory(members, create=True, resolved=resolved):
+        with operation(path, "mkdir"), self.lock(), self.directory(members, create=True, resolved=resolved):
             return {"path": "/".join(resolved)}
 
     def read(self, path):
         members = parts(path, file=True)
         resolved = []
-        with operation(path, "read"), self.directory(members[:-1], resolved=resolved) as directory:
+        with operation(path, "read"), self.lock(), self.directory(members[:-1], resolved=resolved) as directory:
             # Nonblocking open plus fstat prevents a FIFO or device masquerading as a file.
             regular(os.stat(members[-1], dir_fd=directory, follow_symlinks=False))
             fd = os.open(members[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
@@ -191,9 +263,10 @@ class StrategyFiles:
                 regular(info)
                 path = "/".join([*resolved, stored_name(directory, members[-1], info)])
                 parts(path, file=True)
-                raw = stream.read(MAX_SOURCE_BYTES + 1)
-        if len(raw) > MAX_SOURCE_BYTES:
-            raise DomainError("STRATEGY_SOURCE_SIZE", "Source must fit 256 KiB of UTF-8", 422)
+                raw = stream.read(self.file_bytes + 1)
+        if len(raw) > self.file_bytes:
+            raise DomainError("STRATEGY_SOURCE_SIZE", "Source exceeds the service file_bytes budget", 422,
+                              details={"file_bytes": self.file_bytes})
         try:
             source = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -202,16 +275,16 @@ class StrategyFiles:
 
     def save(self, path, source, *, overwrite=False):
         members = parts(path, file=True)
-        raw = source_bytes(source)
+        raw = source_bytes(source, max_bytes=self.file_bytes)
         resolved = []
-        with operation(path, "save"), self.directory(
+        with operation(path, "save"), self.lock(), self.directory(
             members[:-1], create_root=True, resolved=resolved,
         ) as directory:
             name = members[-1]
             try:
                 info = os.stat(members[-1], dir_fd=directory, follow_symlinks=False)
             except FileNotFoundError:
-                pass
+                unique_name(directory, name)
             else:
                 if not overwrite and stat.S_ISREG(info.st_mode):
                     # A concurrent create may still have its temporary hard link attached.

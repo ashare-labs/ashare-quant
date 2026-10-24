@@ -2630,6 +2630,144 @@
         "title": "ProductSelection",
         "type": "object"
       },
+      "ProjectCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "entrypoint": {
+            "default": "main.py",
+            "title": "Entrypoint",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ProjectCreate",
+        "type": "object"
+      },
+      "ProjectMove": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Destination",
+            "type": "string"
+          },
+          "expected_revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Revision",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "strategy_id": {
+            "pattern": "^aqproj-[0-9a-f]{32}$",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "destination",
+          "strategy_id",
+          "expected_revision"
+        ],
+        "title": "ProjectMove",
+        "type": "object"
+      },
+      "ProjectSave": {
+        "additionalProperties": false,
+        "properties": {
+          "entrypoint": {
+            "default": "main.py",
+            "title": "Entrypoint",
+            "type": "string"
+          },
+          "expected_revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Revision",
+            "type": "string"
+          },
+          "files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "object"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "strategy_id": {
+            "pattern": "^aqproj-[0-9a-f]{32}$",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "strategy_id",
+          "files",
+          "expected_revision"
+        ],
+        "title": "ProjectSave",
+        "type": "object"
+      },
+      "ProjectSource": {
+        "additionalProperties": false,
+        "properties": {
+          "entrypoint": {
+            "default": "main.py",
+            "title": "Entrypoint",
+            "type": "string"
+          },
+          "files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "object"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Revision",
+            "type": "string"
+          },
+          "strategy_id": {
+            "pattern": "^aqproj-[0-9a-f]{32}$",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "strategy_id",
+          "files",
+          "revision"
+        ],
+        "title": "ProjectSource",
+        "type": "object"
+      },
       "PythonCreate": {
         "additionalProperties": false,
         "properties": {
@@ -2684,6 +2822,16 @@
             "title": "Parameters",
             "type": "object"
           },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PythonProject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "securities": {
             "default": [],
             "items": {
@@ -2694,10 +2842,16 @@
             "type": "array"
           },
           "source": {
-            "maxLength": 262144,
-            "minLength": 1,
-            "title": "Source",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "start_date": {
             "format": "date",
@@ -2733,7 +2887,6 @@
           "environment_id",
           "name",
           "idempotency_key",
-          "source",
           "start_date",
           "end_date",
           "accept_research_model",
@@ -2982,7 +3135,8 @@
             "default": "python-demand-job.v2",
             "enum": [
               "python-minute-job.v1",
-              "python-demand-job.v2"
+              "python-demand-job.v2",
+              "python-project-job.v3"
             ],
             "title": "Schema Version",
             "type": "string"
@@ -3030,6 +3184,36 @@
           "files"
         ],
         "title": "PythonManifest",
+        "type": "object"
+      },
+      "PythonProject": {
+        "additionalProperties": false,
+        "properties": {
+          "entrypoint": {
+            "minLength": 1,
+            "title": "Entrypoint",
+            "type": "string"
+          },
+          "files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "minProperties": 1,
+            "title": "Files",
+            "type": "object"
+          },
+          "project_id": {
+            "pattern": "^aqproj-[0-9a-f]{32}$",
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "entrypoint",
+          "files"
+        ],
+        "title": "PythonProject",
         "type": "object"
       },
       "PythonResult": {
@@ -3498,7 +3682,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev26",
+            "default": "0.12.0.dev27",
             "title": "Backend Version",
             "type": "string"
           },
@@ -4536,7 +4720,8 @@
           "kind": {
             "enum": [
               "directory",
-              "file"
+              "file",
+              "project"
             ],
             "title": "Kind",
             "type": "string"
@@ -4627,7 +4812,6 @@
             "type": "string"
           },
           "source": {
-            "maxLength": 262144,
             "title": "Source",
             "type": "string"
           }
@@ -4779,7 +4963,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev26"
+    "version": "0.12.0.dev27"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9253,6 +9437,413 @@
           }
         },
         "summary": "Resume"
+      }
+    },
+    "/api/v1/python/projects": {
+      "get": {
+        "operationId": "read_strategy_project_api_v1_python_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^aqproj-[0-9a-f]{32}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Read Strategy Project Api V1 Python Projects Get"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read Strategy Project"
+      },
+      "post": {
+        "operationId": "create_strategy_project_api_v1_python_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Create Strategy Project Api V1 Python Projects Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Strategy Project"
+      },
+      "put": {
+        "operationId": "save_strategy_project_api_v1_python_projects_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectSave"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Save Strategy Project Api V1 Python Projects Put"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Save Strategy Project"
+      }
+    },
+    "/api/v1/python/projects/move": {
+      "post": {
+        "operationId": "move_strategy_project_api_v1_python_projects_move_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectMove"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationResponse"
+                    }
+                  ],
+                  "title": "Response 422 Move Strategy Project Api V1 Python Projects Move Post"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Move Strategy Project"
       }
     },
     "/api/v1/runs": {

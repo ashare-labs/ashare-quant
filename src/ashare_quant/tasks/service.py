@@ -14,7 +14,7 @@ class Jobs(TaskService):
             schema = json.loads(row["manifest"])["schema_version"]
         except (ValueError, KeyError, TypeError) as exc:
             raise DomainError("M2_JOB_IDENTITY_CONFLICT", "Stored task is malformed", 409) from exc
-        if schema in {"python-minute-job.v1", "python-demand-job.v2"}:
+        if schema in {"python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3"}:
             from ashare_quant.tasks.minute.service import PythonJobs
 
             return PythonJobs(self.repo.store, self.config)

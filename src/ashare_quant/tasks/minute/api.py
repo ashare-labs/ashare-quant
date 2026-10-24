@@ -57,6 +57,12 @@ def mount(app, store, configuration=None):
             "environment_id": environment,
             "strategy_api": {"module": "aquant", "distribution": "ashare-quant",
                              "binding": "runtime_only", "legacy_module_supported": False},
+            "strategy_project": {
+                "descriptor": "aquant.toml", "format_version": 1,
+                "default_entrypoint": "main.py", "identity": "stable_project_id",
+                "source_files": "relative_python_paths", "imports": "package_relative",
+                "submission": "complete_snapshot", "dependencies": "existing_runtime_environment",
+            },
             "data_availability": jobs.product.call(availability),
             "frequency": "1m",
             "frequencies": ["1m", "1d"],

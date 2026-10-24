@@ -92,7 +92,9 @@ def listing(history, strategy_id, limit, offset):
             "result_available": available, "result_error": result_error,
             "analysis_error": analysis_error, "summary": summary,
         })
-    return {"strategy_id": strategy_id, "total": len(selected), "offset": offset, "limit": limit,
+    return {"strategy_id": strategy_id,
+            "identity_model": "stable_project_id" if strategy_id and strategy_id.startswith("aqproj-") else "saved_relative_path",
+            "total": len(selected), "offset": offset, "limit": limit,
             "unassigned_count": unassigned, "items": items}
 
 

@@ -33,7 +33,7 @@ class PythonJobs(TaskService):
         self.history_factors = configured_factors()
 
     def for_job(self, row):
-        if json.loads(row["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2"}:
+        if json.loads(row["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3"}:
             return self
         from ashare_quant.tasks.service import Jobs
 
@@ -70,7 +70,20 @@ class PythonJobs(TaskService):
                 "Service or data configuration changed. Reload and explicitly submit in the new environment",
             )
             submitted_strategy_id = request.strategy_id
-            if request.strategy_id is not None:
+            if request.project is not None:
+                from ashare_quant.strategies.projects import ProjectFiles, validate_project_sources
+
+                sources = validate_project_sources(
+                    request.project.entrypoint, request.project.files,
+                    file_bytes=self.repo.policy.file_bytes, total_bytes=self.repo.policy.artifact_bytes,
+                )
+                ProjectFiles(
+                    self.product.configured().control_db.parent,
+                    file_bytes=self.repo.policy.file_bytes, total_bytes=self.repo.policy.artifact_bytes,
+                ).read_id(request.project.project_id)
+            else:
+                sources = {"strategy.py": request.source}
+            if request.project is None and request.strategy_id is not None:
                 from ashare_quant.strategies.files import StrategyFiles
 
                 # The client explicitly supplies the saved file identity. Unsaved edits
@@ -84,25 +97,23 @@ class PythonJobs(TaskService):
                 "Inspect unaccepted task directories before submitting more",
             )
             admit_storage(self)
-            require(
-                len(request.source.encode()) <= 262144
-                and len(canonical(request.parameters)) <= 16384,
-                "PYTHON_SOURCE_SIZE",
-                "Source must fit 256 KiB and parameters 16 KiB",
-            )
-            try:
-                tree = ast.parse(request.source, filename="strategy.py")
-                from ashare_quant.strategies.imports import MIGRATION_MESSAGE, legacy_nodes
+            require(len(canonical(request.parameters)) <= 16384,
+                    "PYTHON_PARAMETER_SIZE", "Parameters must fit 16 KiB")
+            for name, source in sources.items():
+                require(len(source.encode()) <= self.repo.policy.file_bytes,
+                        "PYTHON_SOURCE_SIZE", "Source exceeds the configured file_bytes resource budget")
+                try:
+                    tree = ast.parse(source, filename=name)
+                    from ashare_quant.strategies.imports import MIGRATION_MESSAGE, legacy_nodes
 
-                if list(legacy_nodes(tree)):
-                    raise DomainError("AQUANT_LEGACY_IMPORT", MIGRATION_MESSAGE, 422)
-            except SyntaxError as exc:
-                raise DomainError(
-                    "PYTHON_SYNTAX_ERROR",
-                    f"Line {exc.lineno}: {exc.msg}",
-                    422,
-                    details={"line": exc.lineno, "column": exc.offset},
-                ) from exc
+                    if list(legacy_nodes(tree)):
+                        raise DomainError("AQUANT_LEGACY_IMPORT", MIGRATION_MESSAGE, 422,
+                                          details={"source_file": name})
+                except SyntaxError as exc:
+                    raise DomainError(
+                        "PYTHON_SYNTAX_ERROR", f"{name}:{exc.lineno}: {exc.msg}", 422,
+                        details={"line": exc.lineno, "column": exc.offset, "source_file": name},
+                    ) from exc
             require(
                 self.product is not None,
                 "PYTHON_DATA_NOT_CONFIGURED",
@@ -152,14 +163,16 @@ class PythonJobs(TaskService):
                 session["benchmark_release"] = benchmark
             if submitted_strategy_id != request.strategy_id:
                 session["submitted_strategy_id"] = submitted_strategy_id
+            if request.project is not None:
+                session["project_sha256"] = digest(request.project)
             files = {
                 "submission.json": canonical(request),
-                "strategy.py": request.source.encode(),
                 "session.json": canonical(session),
+                **{("source/" + name if request.project is not None else name): source.encode()
+                   for name, source in sources.items()},
             }
-            for name, raw in files.items():
-                atomic(root / name, raw)
             manifest = PythonManifest(
+                schema_version="python-project-job.v3" if request.project is not None else "python-demand-job.v2",
                 job_id=job_id,
                 request=request,
                 source_sha256=self.source,
@@ -173,6 +186,11 @@ class PythonJobs(TaskService):
                 session_file_sha256=sha(files["session.json"]),
                 files={name: sha(raw) for name, raw in files.items()},
             )
+            check_task_storage(root, self.repo.policy,
+                               additional_bytes=sum(map(len, files.values())) + len(canonical(manifest)))
+            for name, raw in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                atomic(root / name, raw)
             atomic(root / "accepted-manifest.json", manifest)
             check_task_storage(root, self.repo.policy)
             return self.view(self.repo.insert(manifest))
@@ -194,6 +212,10 @@ class PythonJobs(TaskService):
                 "PYTHON_INPUT_CHANGED",
                 "Frozen source or configuration changed",
             )
+        if manifest.schema_version == "python-project-job.v3":
+            from ashare_quant.tasks.project_evidence import verify_project
+
+            verify_project(root, manifest.model_dump(mode="json"))
         # Arbitrary Python has no checkpoint/resume contract. A lost worker must
         # never silently replay an already started strategy.
         if execution and row["status"] in {"queued", "running", "cancelling"}:
@@ -218,7 +240,7 @@ class PythonJobs(TaskService):
             items=tuple(
                 self.view(r)
                 for r in self.repo.rows()
-                if json.loads(r["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2"}
+                if json.loads(r["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3"}
             )
         )
 
@@ -262,7 +284,7 @@ class PythonJobs(TaskService):
             preparation["input_sha256"] == digest(json.loads(regular(root / "input.json"))),
             "PYTHON_INPUT_CHANGED",
         )
-        if manifest.schema_version == "python-demand-job.v2":
+        if manifest.schema_version in {"python-demand-job.v2", "python-project-job.v3"}:
             require(native.get("data_input_sha256") == preparation["input_sha256"],
                     "PYTHON_INPUT_CHANGED", "Completed result does not bind its actual data reads")
         events = []

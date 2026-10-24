@@ -18,7 +18,7 @@ from ashare_quant.deployment import resolve
 from ashare_quant.paper.service import PaperService
 from ashare_quant.storage import artifacts
 from ashare_quant.storage.store import Store
-from ashare_quant.strategies.files import MAX_SOURCE_BYTES, StrategyFiles
+from ashare_quant.strategies.files import StrategyFiles
 
 PREFIX = "/api/v1/python"
 
@@ -219,15 +219,17 @@ def test_nonregular_and_non_utf8_files_are_not_read(files):
     assert (files.root / "bad.py").read_bytes() == b"\xff"
 
 
-def test_source_limit_counts_utf8_bytes_and_bounds_reads(files):
-    source = "#" * MAX_SOURCE_BYTES
+def test_source_limit_counts_utf8_bytes_and_bounds_reads(tmp_path):
+    limit = 4096
+    files = StrategyFiles(tmp_path.resolve(), file_bytes=limit)
+    source = "#" * limit
     files.save("limit.py", source)
     assert files.read("limit.py")["source"] == source
     with pytest.raises(DomainError) as refused:
-        files.save("limit.py", "中" * (MAX_SOURCE_BYTES // 3 + 1), overwrite=True)
+        files.save("limit.py", "中" * (limit // 3 + 1), overwrite=True)
     assert refused.value.code == "STRATEGY_SOURCE_SIZE"
     assert files.read("limit.py")["source"] == source
-    (files.root / "limit.py").write_bytes(b"#" * (MAX_SOURCE_BYTES + 1))
+    (files.root / "limit.py").write_bytes(b"#" * (limit + 1))
     with pytest.raises(DomainError) as refused:
         files.read("limit.py")
     assert refused.value.code == "STRATEGY_SOURCE_SIZE"

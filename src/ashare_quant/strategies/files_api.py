@@ -3,11 +3,12 @@
 from typing import Literal
 
 from fastapi import Query, Request
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from ashare_quant.contracts import Contract, DomainError
-from ashare_quant.strategies.files import MAX_SOURCE_BYTES, StrategyFiles, parts, source_bytes
-from ashare_quant.strategies.identity import StrategyID
+from ashare_quant.strategies.files import StrategyFiles, parts, source_bytes
+from ashare_quant.strategies.identity import PROJECT_ID_PATTERN, StrategyID
+from ashare_quant.strategies.projects import ProjectFiles, validate_project_sources
 
 
 class StrategyPath(Contract):
@@ -22,14 +23,14 @@ class StrategyPath(Contract):
 
 
 class StrategySave(StrategyPath):
-    source: str = Field(max_length=MAX_SOURCE_BYTES)
+    source: str
     overwrite: bool = Field(default=False, strict=True)
 
     @field_validator("source", mode="before")
     @classmethod
     def utf8_source(cls, value):
         if isinstance(value, str):
-            source_bytes(value)
+            source_bytes(value, max_bytes=None)
         return value
 
 
@@ -43,7 +44,7 @@ class StrategySource(StrategyFilePath):
 
 class StrategyEntry(StrategyPath):
     name: str
-    kind: Literal["directory", "file"]
+    kind: Literal["directory", "file", "project"]
     strategy_id: StrategyID | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
@@ -53,15 +54,63 @@ class StrategyDirectory(Contract):
     entries: list[StrategyEntry]
 
 
+class ProjectCreate(StrategyPath):
+    entrypoint: str = "main.py"
+
+    @field_validator("entrypoint")
+    @classmethod
+    def entry_source(cls, value):
+        validate_project_sources(value, {value: ""})
+        return value
+
+
+class ProjectSource(ProjectCreate):
+    strategy_id: str = Field(pattern=PROJECT_ID_PATTERN)
+    files: dict[str, str]
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ProjectSave(ProjectCreate):
+    strategy_id: str = Field(pattern=PROJECT_ID_PATTERN)
+    files: dict[str, str]
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def source_mapping(self):
+        validate_project_sources(self.entrypoint, self.files)
+        return self
+
+
+class ProjectMove(StrategyPath):
+    destination: str = Field(min_length=1, max_length=1024)
+    strategy_id: str = Field(pattern=PROJECT_ID_PATTERN)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("destination")
+    @classmethod
+    def destination_path(cls, value):
+        parts(value)
+        return value
+
+
 def mount(app, product):
     prefix = "/api/v1/python"
 
-    def files(request, *, query=False):
-        allowed = {"path"} if query else set()
+    def validate_query(request, allowed):
         if (set(request.query_params) - allowed
-                or len(request.query_params.getlist("path")) > 1):
+                or any(len(request.query_params.getlist(field)) > 1 for field in allowed)):
             raise DomainError("STRATEGY_QUERY_UNSUPPORTED", "Use only the documented fields", 422)
-        return StrategyFiles(product.configured().control_db.parent)
+
+    def files(request, *, query=False):
+        validate_query(request, {"path"} if query else set())
+        return StrategyFiles(product.configured().control_db.parent,
+                             file_bytes=app.state.python_jobs.repo.policy.file_bytes)
+
+    def projects(request, *, query=False):
+        validate_query(request, {"path", "strategy_id"} if query else set())
+        policy = app.state.python_jobs.repo.policy
+        return ProjectFiles(product.configured().control_db.parent,
+                            file_bytes=policy.file_bytes, total_bytes=policy.artifact_bytes)
 
     @app.get(prefix + "/directories")
     def list_strategy_directory(
@@ -82,3 +131,25 @@ def mount(app, product):
     @app.put(prefix + "/files")
     def save_strategy_file(body: StrategySave, request: Request) -> StrategyFilePath:
         return files(request).save(body.path, body.source, overwrite=body.overwrite)
+
+    @app.get(prefix + "/projects")
+    def read_strategy_project(
+        request: Request, path: str | None = Query(default=None, min_length=1, max_length=1024),
+        strategy_id: str | None = Query(default=None, pattern=PROJECT_ID_PATTERN),
+    ) -> ProjectSource:
+        manager = projects(request, query=True)
+        if (path is None) == (strategy_id is None):
+            raise DomainError("STRATEGY_QUERY_UNSUPPORTED", "Specify exactly one of path or strategy_id", 422)
+        return manager.read(path) if path is not None else manager.read_id(strategy_id)
+
+    @app.post(prefix + "/projects")
+    def create_strategy_project(body: ProjectCreate, request: Request) -> ProjectSource:
+        return projects(request).create(body.path, body.entrypoint)
+
+    @app.put(prefix + "/projects")
+    def save_strategy_project(body: ProjectSave, request: Request) -> ProjectSource:
+        return projects(request).save(**body.model_dump())
+
+    @app.post(prefix + "/projects/move")
+    def move_strategy_project(body: ProjectMove, request: Request) -> ProjectSource:
+        return projects(request).move(**body.model_dump())

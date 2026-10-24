@@ -6,6 +6,11 @@
 
 已有本机策略文件接口仍按 [文件保存契约](strategy-files.md) 工作。保存文件和创建回测分别保留自己的结果；运行冻结提交的源码，历史结果不随文件编辑而改变。
 
+策略可保持单文件，也可使用 [多文件项目](strategy-projects.md)：默认 `main.py` 入口、辅助 `.py`
+和子目录。项目内用 `from .signals import choose` 等包内相对导入；每个文件均可显式
+`from aquant import ...`，获得同一次回测的 API 和 `g`。第三方依赖仍来自现有运行环境。
+编辑器的 Python 高亮、文件切换与可折叠文件树位于原左侧代码区，右侧运行配置和结果导航不变。
+
 ## 证券和数据需求
 
 - `get_all_securities(['stock'], date=context.previous_date)` 返回冻结发布中该日期有记录支持的证券目录，索引为代码。按已记录的上市、退市和代码自身有效区间筛选，未知区间单列在 `DataFrame.attrs['receipt']`。名称是当前发布记录，`name_is_historical=False`；不承诺完整历史集合、历史名称、历史指数成分或严格 PIT。
@@ -62,7 +67,7 @@
 
 ## 冻结、重试和旧任务
 
-`POST /api/v1/python/jobs` 的 `securities` 为可选兼容字段，旧客户端提供时仅作为初始订阅；`warmup_sessions` 继续接受以保留旧请求身份，新任务历史不受其值限制。新任务清单为 `python-demand-job.v2`，旧 `python-minute-job.v1` 及已发布结果仍可只读校验。中断的任意 Python 不自动重跑或断点恢复。
+`POST /api/v1/python/jobs` 的 `securities` 为可选兼容字段，旧客户端提供时仅作为初始订阅；`warmup_sessions` 继续接受以保留旧请求身份，新任务历史不受其值限制。单文件新任务清单为 `python-demand-job.v2`，项目为 `python-project-job.v3`，旧 `python-minute-job.v1` 及已发布结果仍可只读校验。中断的任意 Python 不自动重跑或断点恢复。
 
 `/python/catalogue` 返回环境身份、`external_securities_required=False` 和统一预算。客户端须在提交前保存完整原请求，网络重试复用同一幂等键和环境身份；返回/刷新只读任务，不能自动产生新任务。可信本机代码和回溯模型两项确认仍进入请求；这不是恶意代码沙箱。
 

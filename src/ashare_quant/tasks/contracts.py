@@ -10,7 +10,7 @@ Sha = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Security = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]
 JSONObject = dict[str, JsonValue]
 JobID = Annotated[str, Field(pattern=r"^m2job-[0-9a-f]{32}$")]
-ACTIVE_SCHEMAS = ("python-minute-job.v1", "python-demand-job.v2", "factor-job.v1")
+ACTIVE_SCHEMAS = ("python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3", "factor-job.v1")
 JobStatus = Literal["queued", "running", "cancelling", "cancelled", "failed", "succeeded"]
 
 class ResultReference(Contract):

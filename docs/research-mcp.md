@@ -64,6 +64,8 @@ HTTP endpoint 是 `http://127.0.0.1:8766/mcp`。CLI 固定绑定 loopback，没�
 1. 调用 `research_capabilities`，记录产品 `configuration_id` 和分钟 Python `environment_id`；读取当前模型限制。
 2. 用 `discover_data` 发现已发布证券，带相同 `configuration_id` 做 `inspect_data` / `read_minute_prices`。coverage 的 ready 指认证覆盖是否满足，不能替代对分钟回溯模型的明确接受。
 3. 用户确认信任源码和研究模型后，传 `submission` 对象给 `submit_strategy`。字段与后端 `PythonCreate` 一致：`environment_id`、`name`、`idempotency_key`、`source`、`parameters`、`securities`、`start_date`、`end_date`、`initial_cash`、`trusted_local_code: true`、`accept_research_model: true`。两个确认字段没有默认值，适配器不会自动同意。
+   多文件项目用 `project={project_id,entrypoint,files}` 替换 `source`，并传相等的 `strategy_id`。
+   必须提交完整源码快照；不能只交入口或从当前目录补读遗漏模块。项目身份须已经保存且唯一。
 4. 日频显式传 `frequency="1d"` 和 `warmup_sessions`，仍须用户两项确认。保存立即返回的 `job_id`，用 `research_job(family="python_minute" 或 "python_daily", job_id=...)` 跟踪 worker。`research_logs` 获取后端日志；失败状态保留 code/message/source_line 等诊断。
 5. 完成后先 `research_result`（默认 summary），再按需要指定 `section` 为 `trades`、`positions`、`equity`、`orders` 或 `strategy_logs`，传回 `next_cursor` 读完整页面。
 6. 改参数开始新实验时生成新幂等键，保留相同源码、环境身份及明确确认。切换部署或数据发布后须重新发现和确认环境。

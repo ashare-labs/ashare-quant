@@ -4,6 +4,7 @@ import inspect
 import json
 import sys
 from collections.abc import Mapping
+from contextlib import nullcontext
 from datetime import datetime
 from decimal import Decimal, localcontext
 from fractions import Fraction
@@ -473,9 +474,12 @@ class Mod(AbstractMod):
 
         if self.data.ids:
             subscribe(list(self.data.ids))
-        exec(
-            compile(runtime["source"], str(runtime["root"] / "strategy.py"), "exec"), self.namespace
-        )
+        if runtime.get("project_loader") is not None:
+            self.namespace = runtime["project_loader"].load(self.namespace)
+        else:
+            exec(
+                compile(runtime["source"], str(runtime["root"] / "strategy.py"), "exec"), self.namespace
+            )
         require(callable(self.namespace.get("initialize")), "AQUANT_INITIALIZE_REQUIRED")
         for name in (
             "initialize",
@@ -761,7 +765,7 @@ def load_mod():
     return Mod()
 
 
-def run_native(root, data, source, config, identity, *, parameters=None):
+def run_native(root, data, source, config, identity, *, parameters=None, project=None):
     import logbook
     import rqalpha.main as native
     import rqalpha.utils.config as config_module
@@ -771,6 +775,10 @@ def run_native(root, data, source, config, identity, *, parameters=None):
 
     from ashare_quant.execution.rqalpha.checkpoint import Counter
     from ashare_quant.execution.serialization import atomic_json
+    from ashare_quant.strategies.python.project_loader import FrozenProject
+
+    require((source is None) != (project is None), "PYTHON_SOURCE_REQUIRED")
+    project_loader = FrozenProject(root, project) if project is not None else None
 
     records = []
     for d in data.days:
@@ -785,7 +793,8 @@ def run_native(root, data, source, config, identity, *, parameters=None):
             for i, (kind, at) in enumerate(events)
         )
     runtime.update(
-        root=root, data=data, source=source, config=config, identity=identity, records=records, parameters=parameters or {}
+        root=root, data=data, source=source, config=config, identity=identity, records=records,
+        parameters=parameters or {}, project_loader=project_loader,
     )
     requested = {
         "base": {
@@ -862,11 +871,14 @@ def after_trading(context): runtime["mod"].dispatch("after")
     atomic_json(root / "native-config.json", requested)
     previous_aquant = sys.modules.get("aquant")
     try:
-        with logbook.FileHandler(str(root / "native.log")).applicationbound():
+        with (project_loader if project_loader is not None else nullcontext()), logbook.FileHandler(str(root / "native.log")).applicationbound():
             result = native.run(parsed, source_code=wrapper)
+            if project_loader is not None:
+                project_loader.verify()
         require(result and result.get("pythonminute"), "MINUTE_NATIVE_COMPLETION_MISSING")
         return result["pythonminute"]
     finally:
+        runtime["project_loader"] = None
         if previous_aquant is None:
             sys.modules.pop("aquant", None)
         else:

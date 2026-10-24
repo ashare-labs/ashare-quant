@@ -123,6 +123,7 @@ def job_view(value):
             "name",
             "idempotency_key",
             "environment_id",
+            "strategy_id",
             "start_date",
             "end_date",
             "securities",
@@ -140,6 +141,12 @@ def job_view(value):
         result["submission"]["source_sha256"] = hashlib.sha256(
             request["source"].encode()
         ).hexdigest()
+    if request.get("project") is not None:
+        project = request["project"]
+        result["submission"]["project"] = {
+            "project_id": project["project_id"], "entrypoint": project["entrypoint"],
+            "file_count": len(project["files"]), "source_sha256": digest(project),
+        }
     return result
 
 

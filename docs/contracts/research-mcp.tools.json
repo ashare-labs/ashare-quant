@@ -421,6 +421,36 @@
       "inputSchema": {
         "$defs": {
           "JsonValue": {},
+          "PythonProject": {
+            "additionalProperties": false,
+            "properties": {
+              "entrypoint": {
+                "minLength": 1,
+                "title": "Entrypoint",
+                "type": "string"
+              },
+              "files": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "minProperties": 1,
+                "title": "Files",
+                "type": "object"
+              },
+              "project_id": {
+                "pattern": "^aqproj-[0-9a-f]{32}$",
+                "title": "Project Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id",
+              "entrypoint",
+              "files"
+            ],
+            "title": "PythonProject",
+            "type": "object"
+          },
           "StrategySubmission": {
             "additionalProperties": false,
             "description": "Consent fields remain required Literal[True]; never inferred by this adapter.",
@@ -476,6 +506,17 @@
                 "title": "Parameters",
                 "type": "object"
               },
+              "project": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/PythonProject"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
               "securities": {
                 "default": [],
                 "items": {
@@ -486,10 +527,17 @@
                 "type": "array"
               },
               "source": {
-                "maxLength": 262144,
-                "minLength": 1,
-                "title": "Source",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Source"
               },
               "start_date": {
                 "format": "date",
@@ -526,7 +574,6 @@
               "environment_id",
               "name",
               "idempotency_key",
-              "source",
               "start_date",
               "end_date",
               "accept_research_model",
