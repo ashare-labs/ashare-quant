@@ -48,4 +48,5 @@ def mount(app, store, configuration=None, sources=None):
 
     @app.get(prefix + "/jobs/{job_id}/result")
     def result(job_id: JobID) -> FactorResult:
-        return jobs.result(job_id)
+        jobs.check(jobs.repo.row(job_id))
+        return app.state.history.result_response(job_id)

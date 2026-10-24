@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.identity import package_root
 from ashare_quant.storage.artifacts import lock, worker_slot
 from ashare_quant.storage.upgrade import upgrade_copy
 from ashare_quant.tasks.policy import ServicePolicy
@@ -33,12 +34,13 @@ def row(repo, number):
     return job_id
 
 
-def test_policy_persisted_and_mismatch_rejected(store):
+def test_initial_policy_preserved_and_runtime_override_allowed(store):
     repo = Repository(store, ServicePolicy(max_workers=2, max_pending=3))
     assert Repository(store).policy == repo.policy
-    with pytest.raises(DomainError) as error:
-        Repository(store, ServicePolicy(max_workers=1))
-    assert error.value.code == "M2_JOB_POLICY_CHANGED"
+    changed = Repository(store, ServicePolicy(max_workers=1))
+    assert changed.policy.max_workers == 1
+    assert changed.initial_policy == repo.policy
+    assert Repository(store).policy == repo.policy
     assert repo.status().available_pending == 3
 
 
@@ -243,7 +245,7 @@ def test_child_resource_limits_are_enforced_by_real_process(tmp_path, mode):
     process = subprocess.Popen(
         [sys.executable, "-c", code],
         cwd=tmp_path,
-        env=os.environ | {"TEST_POLICY": policy.model_dump_json()},
+        env=os.environ | {"TEST_POLICY": policy.model_dump_json(), "PYTHONPATH": str(package_root())},
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,

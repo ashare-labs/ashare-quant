@@ -54,6 +54,7 @@ class PythonJobs(TaskService):
                 "data_root": str(config.data_root),
                 "control": str(self.repo.store.path),
                 "history_factors": self.history_factors,
+                "resource_policy_sha256": digest(self.repo.policy),
             }
         )
 
@@ -140,6 +141,7 @@ class PythonJobs(TaskService):
                 "execution": "fresh_process_no_python_resume",
                 "data_access": "demand.v2",
                 "data_budget": self.repo.policy.model_dump(mode="json"),
+                "resource_policy": self.repo.policy.model_dump(mode="json"),
                 "history_factors": freeze_factors(self.history_factors, root),
             }
             if benchmark is not None:
@@ -289,7 +291,8 @@ class PythonJobs(TaskService):
             },
         )
         raw = canonical(value)
-        check_task_storage(root, self.repo.policy, additional_bytes=len(raw))
+        check_task_storage(root, self.repo.policy, additional_bytes=len(raw),
+                           host_policy=getattr(self, "host_policy", None))
         atomic(root / "published.json", raw)
         return ResultReference(
             result_id=manifest.job_id,

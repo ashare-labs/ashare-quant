@@ -72,7 +72,9 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
                 )
             require_initialized(product_configuration)
             if daily_tasks_configuration is None:
-                daily_tasks_configuration = Configuration(product_configuration.owner_store_root)
+                from ashare_quant.tasks.policy import ServicePolicy
+                daily_tasks_configuration = Configuration(product_configuration.owner_store_root,
+                                                          ServicePolicy.environment())
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
         from ashare_quant.tasks.service import Jobs
 

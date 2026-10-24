@@ -15,3 +15,11 @@ Python 与因子共用这些预算。worker 在启动前、执行期间（约每
 `GET /api/v1/history/jobs` 可按 family=daily/portfolio/python/factors 筛选；详情、manifest、logs 和 result 为只读冻结记录。结果核对数据库身份、接受清单、会话及发布摘要；老封存格式还核对 seal 中每份文件。响应中的原源码身份不会改成当前版本，此校验不重新审计历史策略收益。
 
 CLI 提供 `python-create --request`、`task-worker`、`task-service`、`history`、`history-strategies`、`task-status/manifest/logs/result/cancel/resume`。已删除 `task-create`、固定数据导入绑定和预设策略注册命令。详见 [迁移清单](formal-backend-migration.md) 和 [生成契约](contracts/tasks.openapi.json)。
+
+## 配置更新和历史读取
+
+服务策略是当前实例的新任务默认值，不再属于数据库身份。设置 `ASHARE_QUANT_JOB_POLICY` 后重启同一实例即可使用原控制库；原 `task_service` 文档和哈希不改写。每个新Python/因子任务在已验收会话内冻结 `resource_policy`；旧Python任务使用原 `data_budget`，更早未带任务策略的记录使用原库首次策略。已排队或运行的任务继续使用其冻结的执行/数据/产物/重试预算，新的提交使用新默认值；准入并发、总留存和实际磁盘空闲保护取当前实例设置。状态中的 `policy_sha256` 为当前默认摘要，`initial_policy_sha256` 保留原库摘要，`execution_policy_scope=frozen_per_task`。代码、数据发布、任务哈希和数据库schema检查继续生效。
+
+未接入原生引擎的 `module_load_seconds` 和 `callback_seconds` 已从现行配置、生成契约和worker删除，不新增回调超时门槛。旧证据中保留这些字段时可读兼容，配置新实例时须去掉这两个废弃键；原有全任务墙钟、CPU、RSS、文件和输出监督继续生效。
+
+合法发布结果不再受另一个64MiB读取门槛限制，也不依赖当前实例较小的写入预算。HTTP结果在校验完整原始SHA后以64KiB块流式返回，JSON结构不变；临时私有副本在请求结束或断开时关闭，不改原结果。历史输入哈希按块计算。分析/列表只解码账户、摘要、准备信息等必要字段，跳过无关日志；派生指标继续由同一计算器给出。真实临时磁盘不足或内存分配失败单独报告，不伪造成功或删除历史。

@@ -9,7 +9,7 @@
 安装配对的 AD wheel 后，使用 `uv sync --locked --extra native --extra factor-evaluation`。
 评价 extra 引入 AD 的 Alphalens Reloaded 0.5.0 适配器；不安装 extra 时仍能浏览目录和计算因子值。
 AD 固定候选同时包含 CMES 日线、冻结复权因子和评价模块。
-正式部署与 worker 使用相同配置、控制库和已固定后端；升级时按现有恢复流程选择新控制库，不能打开旧库继续执行。
+正式部署与 worker 使用相同配置、控制库和已固定后端；预算设置变化可复用原控制库；历史保持只读可见，旧源码任务仍只能由其原运行时执行。
 
 通过 `ASHARE_QUANT_FACTOR_SOURCES` 指定一个本机 JSON 配置文件（映射 ID 到来源）。
 这是服务端登记，不接受浏览器传入任意文件路径。也会自动发现当前正式产品已绑定的日线发布。
@@ -83,7 +83,7 @@ start_date、end_date、parameters 和 rank_policy。`label_end` 仅在评价时
 月度/滚动稳定性、相邻分组成员换手及成本情景。
 
 评价参数：horizons（1–252 交易日，最多 8 项）、quantiles（2–20）、lag（至少 1）、direction（±1）、
-min_assets（2–100）、cost_bps（单边 bp，最多 8 项）、rolling_window。
+min_assets（至少2的整数，无证券数量上限）、cost_bps（单边 bp，最多 8 项）、rolling_window。
 输入 hash、固定样本标签、信号日期与价格口径由 AQ 固定，浏览器不可覆盖。
 信号区间映射为其中实际交易日，历史预热不进入评价；label_end 只增加已有价格标签。
 
@@ -124,3 +124,5 @@ same-row amount/share-volume adapter and is missing when volume is zero.
 Nonfinite Qlib results are JSON null with `QLIB_NAN` or signed infinity status;
 only finite OK cells enter `ashare_data.factors.evaluation.evaluate`.
 No processor fit, feature normalization beyond official formulas, or model training.
+
+证券选择不再限制100只，评价min_assets仅要求整数且至少2；日期不再限制十年，保留日期顺序和实际来源覆盖。完整选择一次组成截面后统一计算/排名，不分小股票池分别算排名。既有100000证券交易日及32MiB输入资源预算、原生CPU/RSS/时间/文件保护不变，没有用新的证券数或年数阈值替代旧门槛。

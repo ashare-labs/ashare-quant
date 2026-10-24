@@ -167,7 +167,6 @@
           },
           "min_assets": {
             "default": 5,
-            "maximum": 100.0,
             "minimum": 2.0,
             "title": "Min Assets",
             "type": "integer"
@@ -274,7 +273,6 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 100,
             "minItems": 1,
             "title": "Securities",
             "type": "array"
@@ -731,7 +729,7 @@
           "initial_cash": {
             "default": 100000,
             "exclusiveMinimum": 0.0,
-            "maximum": 100000000.0,
+            "maximum": 10000000000.0,
             "title": "Initial Cash",
             "type": "number"
           },
@@ -1420,13 +1418,6 @@
             "title": "Cached Rows",
             "type": "integer"
           },
-          "callback_seconds": {
-            "default": 5,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Callback Seconds",
-            "type": "integer"
-          },
           "cpu_seconds": {
             "default": 120,
             "maximum": 9.223372036854776e+18,
@@ -1473,13 +1464,6 @@
             "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Max Workers",
-            "type": "integer"
-          },
-          "module_load_seconds": {
-            "default": 5,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Module Load Seconds",
             "type": "integer"
           },
           "open_files": {
@@ -1564,12 +1548,22 @@
             "title": "Counts",
             "type": "object"
           },
+          "execution_policy_scope": {
+            "const": "frozen_per_task",
+            "default": "frozen_per_task",
+            "title": "Execution Policy Scope",
+            "type": "string"
+          },
           "historical_counts": {
             "additionalProperties": {
               "type": "integer"
             },
             "title": "Historical Counts",
             "type": "object"
+          },
+          "initial_policy_sha256": {
+            "title": "Initial Policy Sha256",
+            "type": "string"
           },
           "job_contract_version": {
             "const": "research-jobs.v1",
@@ -1609,6 +1603,7 @@
         "required": [
           "policy",
           "policy_sha256",
+          "initial_policy_sha256",
           "counts",
           "recovery_required",
           "available_pending"
@@ -2042,7 +2037,7 @@
   },
   "info": {
     "title": "A宽 research tasks",
-    "version": "0.12.0.dev22"
+    "version": "0.12.0.dev23"
   },
   "openapi": "3.1.0",
   "paths": {

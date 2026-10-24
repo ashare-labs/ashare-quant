@@ -878,7 +878,6 @@
           },
           "min_assets": {
             "default": 5,
-            "maximum": 100.0,
             "minimum": 2.0,
             "title": "Min Assets",
             "type": "integer"
@@ -1142,7 +1141,6 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 100,
             "minItems": 1,
             "title": "Securities",
             "type": "array"
@@ -2669,7 +2667,7 @@
           "initial_cash": {
             "default": 100000,
             "exclusiveMinimum": 0.0,
-            "maximum": 100000000.0,
+            "maximum": 10000000000.0,
             "title": "Initial Cash",
             "type": "number"
           },
@@ -3320,7 +3318,7 @@
                 "type": "null"
               }
             ],
-            "default": "fc5f3b79825aa08374a75b63be6c4cbcc7f36aec",
+            "default": "3eb3f6903baa4bf7c4ce9c80b44d7850b445107e",
             "title": "Commit"
           },
           "name": {
@@ -3338,16 +3336,16 @@
                 "type": "null"
               }
             ],
-            "default": "5e3b165625fb3692b8bef4fd7a8d0659a32c9bbe",
+            "default": "74aaa57f656bb895311348d52e85b0567eef5fe7",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev21",
+            "default": "0.10.0.dev22",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "5cf8d38b9730dd172a0cb47de0361cfeeb7410c4b7d46f75ad8a5c274a7c2900",
+            "default": "f24240ecf375355f8484233cd024eab6177845ca722f60343e32063ddb9268f6",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -3500,7 +3498,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev22",
+            "default": "0.12.0.dev23",
             "title": "Backend Version",
             "type": "string"
           },
@@ -3936,13 +3934,6 @@
             "title": "Cached Rows",
             "type": "integer"
           },
-          "callback_seconds": {
-            "default": 5,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Callback Seconds",
-            "type": "integer"
-          },
           "cpu_seconds": {
             "default": 120,
             "maximum": 9.223372036854776e+18,
@@ -3989,13 +3980,6 @@
             "maximum": 9.223372036854776e+18,
             "minimum": 1.0,
             "title": "Max Workers",
-            "type": "integer"
-          },
-          "module_load_seconds": {
-            "default": 5,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Module Load Seconds",
             "type": "integer"
           },
           "open_files": {
@@ -4080,12 +4064,22 @@
             "title": "Counts",
             "type": "object"
           },
+          "execution_policy_scope": {
+            "const": "frozen_per_task",
+            "default": "frozen_per_task",
+            "title": "Execution Policy Scope",
+            "type": "string"
+          },
           "historical_counts": {
             "additionalProperties": {
               "type": "integer"
             },
             "title": "Historical Counts",
             "type": "object"
+          },
+          "initial_policy_sha256": {
+            "title": "Initial Policy Sha256",
+            "type": "string"
           },
           "job_contract_version": {
             "const": "research-jobs.v1",
@@ -4125,6 +4119,7 @@
         "required": [
           "policy",
           "policy_sha256",
+          "initial_policy_sha256",
           "counts",
           "recovery_required",
           "available_pending"
@@ -4784,7 +4779,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev22"
+    "version": "0.12.0.dev23"
   },
   "openapi": "3.1.0",
   "paths": {

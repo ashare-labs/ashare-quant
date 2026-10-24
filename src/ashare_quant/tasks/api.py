@@ -72,7 +72,7 @@ def mount(app, store, *, jobs=None):
 
     @app.get("/api/v1/history/jobs/{job_id}/result")
     def result(job_id: JobID) -> dict:
-        return history.result(job_id)
+        return history.result_response(job_id)
 
     @app.get("/api/v1/history/jobs/{job_id}/analysis", include_in_schema=False)
     @app.get("/api/v1/history/jobs/{job_id}/result/analysis")

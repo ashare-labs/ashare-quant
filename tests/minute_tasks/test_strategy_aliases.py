@@ -49,7 +49,8 @@ def test_distinct_case_sensitive_slots_are_not_merged(tmp_path):
 
 def test_alias_submission_freezes_canonical_id_and_retries_without_live_file(daily_jobs, tmp_path):
     app, jobs, body = daily_jobs
-    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3")
+    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3",
+        document={"profiles": {"product": {}}}, profile="product")
     files = StrategyFiles(tmp_path)
     files.save("Case.py", "def initialize(context): pass\n")
     if not (files.root / "case.py").exists():
@@ -77,7 +78,8 @@ def test_alias_submission_freezes_canonical_id_and_retries_without_live_file(dai
 
 def test_canonical_acceptance_does_not_let_retry_drop_identity(daily_jobs, tmp_path):
     app, jobs, body = daily_jobs
-    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3")
+    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3",
+        document={"profiles": {"product": {}}}, profile="product")
     files = StrategyFiles(tmp_path)
     files.save("one.py", "")
     body.update(strategy_id="one.py", end_date=body["start_date"])
@@ -88,7 +90,8 @@ def test_canonical_acceptance_does_not_let_retry_drop_identity(daily_jobs, tmp_p
 
 def test_legacy_alias_is_not_rewritten_or_guessed_into_new_identity(daily_jobs, tmp_path, monkeypatch):
     app, jobs, body = daily_jobs
-    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3")
+    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3",
+        document={"profiles": {"product": {}}}, profile="product")
     files = StrategyFiles(tmp_path)
     files.save("Case.py", "")
     if not (files.root / "case.py").exists():

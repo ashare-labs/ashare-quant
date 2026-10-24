@@ -1,12 +1,8 @@
 """Product parameters must not inherit the acceptance example's tiny portfolio."""
 
-import json
-
 import pytest
 from pydantic import ValidationError
 
-import ashare_quant.strategies.python.supervision as supervision
-from ashare_quant.contracts import DomainError
 from ashare_quant.tasks.policy import ServicePolicy
 from tests.support.daily.executor import Configuration
 from tests.support.daily.service import Jobs
@@ -46,23 +42,17 @@ def test_cash_shape_and_positivity_still_apply(cash):
         BandParameters(initial_cash=cash)
 
 
-def test_phase_budget_is_configured_reported_and_enforced(store, tmp_path, monkeypatch):
-    policy = ServicePolicy(execution_seconds=180, cpu_seconds=180, preparation_seconds=90,
-                           callback_seconds=15, module_load_seconds=10, output_bytes=2**21)
+def test_only_effective_attempt_budgets_are_configured_and_reported(store):
+    policy = ServicePolicy(execution_seconds=180, cpu_seconds=180, preparation_seconds=90, output_bytes=2**21)
     jobs = Jobs(store, Configuration(None, policy))
     caps = jobs.catalogue().python_strategies
-    assert (caps.callback_seconds, caps.module_load_seconds, caps.attempt_seconds, caps.output_bytes) == (15, 10, 180, 2**21)
-    phase = tmp_path / "phase.json"
-    phase.write_text(json.dumps(dict(phase="CALLBACK", started_monotonic=100,
-                                    strategy_version_id="a" * 64, logical_at="2020-01-03T09:00:00+08:00",
-                                    input_sha256="b" * 64)))
-    monkeypatch.setattr(supervision.time, "monotonic", lambda: 106)
-    supervision.check_phase(phase, callback_seconds=policy.callback_seconds)
-    monkeypatch.setattr(supervision.time, "monotonic", lambda: 116)
-    with pytest.raises(DomainError) as error:
-        supervision.check_phase(phase, callback_seconds=policy.callback_seconds)
-    assert error.value.code == "PYTHON_PHASE_TIMEOUT"
-    assert error.value.details["limit_seconds"] == 15
+    assert (caps.attempt_seconds, caps.output_bytes) == (180, 2**21)
+    assert not {"module_load_seconds", "callback_seconds"} & policy.model_dump().keys()
+    assert ServicePolicy.from_frozen({**policy.model_dump(), "callback_seconds": 5,
+                                      "module_load_seconds": 5}) == policy
+    for key in ("callback_seconds", "module_load_seconds"):
+        with pytest.raises(ValidationError):
+            ServicePolicy(**{key: 5})
 
 
 def test_model_thresholds_do_not_impose_sample_cash_ceiling():

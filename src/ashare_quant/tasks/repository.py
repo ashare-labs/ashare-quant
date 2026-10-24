@@ -27,15 +27,20 @@ class Repository:
             row = snapshot.execute("SELECT policy,policy_sha256 FROM task_service WHERE singleton=1").fetchone()
             if row:
                 try:
-                    accepted = ServicePolicy.model_validate_json(row[0])
+                    accepted = ServicePolicy.from_frozen(json.loads(row[0]))
                 except ValueError as exc:
                     raise DomainError("M2_JOB_POLICY_CHANGED", "Stored service policy is invalid") from exc
                 require(digest(json.loads(row[0])) == row[1], "M2_JOB_POLICY_CHANGED", "Stored service policy differs")
-                require(policy is None or policy == accepted, "M2_JOB_POLICY_CHANGED",
-                        "Use this database's fixed service policy; choose a new database to change limits")
-                self.policy = accepted
+                self.initial_policy = accepted
+                self.initial_policy_sha256 = row[1]
+                # Operating limits are an immutable setting of this service
+                # instance, not part of the database schema/ledger identity.
+                # Keep the original defaults and hash unchanged for old tasks.
+                self.policy = policy or accepted
             else:
                 self.policy = policy or ServicePolicy()
+                self.initial_policy = self.policy
+                self.initial_policy_sha256 = digest(self.policy)
                 # The exclusive initialization lock still protects the preflight and
                 # first admission. Existing policies never open the original to write.
                 with store._connection(transaction=True) as db:
@@ -72,6 +77,7 @@ class Repository:
                                   " AND status IN ('running','cancelling') AND COALESCE(lease_until,0)<=?",
                                   (*parameters, time.time())).fetchone()[0]
         return ServiceStatus(policy=self.policy, policy_sha256=digest(self.policy), counts=counts,
+                             initial_policy_sha256=self.initial_policy_sha256,
                              historical_counts=historical, recovery_required=recovery,
                              available_pending=max(0, self.policy.max_pending - sum(
                                  counts.get(k, 0) for k in ('queued','running','cancelling'))))

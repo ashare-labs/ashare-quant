@@ -11,11 +11,12 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.strategies.python.supervision import BoundedOutput, check_phase
+from ashare_quant.strategies.python.supervision import BoundedOutput
 from tests.support.app import create_app
 from tests.support.daily.service import Jobs
 from tests.support.legacy_backtests.parameter_policy import RegisteredPythonParameters
 from tests.support.legacy_python.spec import PythonDescriptor
+from tests.support.legacy_python.supervision import check_phase
 
 NORMAL = """from ashare_quant.strategies.api import TargetShares
 print("OWNED_MODULE_LOADED")

@@ -14,7 +14,7 @@ class EvaluationOptions(Contract):
     quantiles: int = Field(default=5, ge=2, le=20)
     lag: int = Field(default=1, ge=1, le=252)
     direction: Literal[-1, 1] = 1
-    min_assets: int = Field(default=5, ge=2, le=100)
+    min_assets: int = Field(default=5, strict=True, ge=2)
     cost_bps: tuple[float, ...] = (0, 5, 10, 20)
     rolling_window: int = Field(default=20, ge=2, le=2520)
 
@@ -40,7 +40,7 @@ class FactorCreate(Contract):
     factor_id: str = Field(pattern=r"^(joinquant|alpha191|qlib_alpha158):[A-Za-z0-9_]+$")
     definition: str = Field(min_length=1, max_length=100)
     source_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
-    securities: tuple[str, ...] = Field(min_length=1, max_length=100)
+    securities: tuple[str, ...] = Field(min_length=1)
     history_start: date
     start_date: date
     end_date: date
@@ -59,8 +59,6 @@ class FactorCreate(Contract):
             self.evaluation is None or self.label_end < self.end_date
         ):
             raise ValueError("Label end requires evaluation and must be on or after signal end")
-        if ((self.label_end or self.end_date) - self.history_start).days > 3653:
-            raise ValueError("Use at most ten years per bounded research run")
         if len(set(self.securities)) != len(self.securities) or any(
             not re.fullmatch(r"(?:[0-9]{6}\.X(?:SHG|SHE)|BJ\.[0-9]{6})", s) for s in self.securities
         ):

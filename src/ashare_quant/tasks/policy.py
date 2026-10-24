@@ -19,8 +19,6 @@ class ServicePolicy(Contract):
     admission_wait_seconds: Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)] = 2
     execution_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 120
     preparation_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 60
-    module_load_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 5
-    callback_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 5
     output_bytes: Annotated[int, Field(strict=True, ge=1024, le=2**63-1)] = 1048576
     file_bytes: Annotated[int, Field(strict=True, ge=1048576, le=2**63-1)] = 67108864
     rss_bytes: Annotated[int, Field(strict=True, ge=16777216, le=2**63-1)] = 1073741824
@@ -41,12 +39,27 @@ class ServicePolicy(Contract):
         value = os.environ.get("ASHARE_QUANT_JOB_POLICY")
         return cls.model_validate(json.loads(value)) if value else None
 
+    @classmethod
+    def from_frozen(cls, value):
+        """Read old evidence without treating unused phase knobs as active limits.
+
+        Its original bytes/hash remain authoritative and are never rewritten.
+        New configuration rejects these removed keys rather than promising a
+        timeout the native callback path does not implement.
+        """
+        if not isinstance(value, dict):
+            return cls.model_validate(value)
+        return cls.model_validate({k: v for k, v in value.items()
+                                   if k not in {"module_load_seconds", "callback_seconds"}})
+
 
 class ServiceStatus(Contract):
     contract_version: Literal["m2-job-service.v1"] = "m2-job-service.v1"
     job_contract_version: Literal["research-jobs.v1"] = "research-jobs.v1"
     policy: ServicePolicy
     policy_sha256: str
+    initial_policy_sha256: str
+    execution_policy_scope: Literal["frozen_per_task"] = "frozen_per_task"
     counts: dict[str, int]
     historical_counts: dict[str, int] = Field(default_factory=dict)
     unaccepted_task_directories: int = 0

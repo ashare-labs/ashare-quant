@@ -1,5 +1,6 @@
 """Shared task queue lifecycle, guarded files, cancellation and resumption."""
 import uuid
+from copy import copy
 
 from pydantic import TypeAdapter
 
@@ -7,6 +8,7 @@ from ashare_quant.identity import source_sha256
 from ashare_quant.storage.artifacts import lock, require
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.executor import Configuration
+from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.repository import Repository
 
 
@@ -25,6 +27,22 @@ class TaskService:
     def executor_args(self, manifest):
         """Optional executor-specific positional arguments; active tasks need none."""
         return ()
+
+    def execution_policy(self, manifest):
+        session = manifest.session if hasattr(manifest, "session") else manifest["session"]
+        value = session.get("resource_policy", session.get("data_budget"))
+        # Older factor/retired manifests predate per-task policy snapshots. Their
+        # database originally forbade any policy change, so its initial policy is
+        # the authoritative fallback, never today's environment override.
+        return ServicePolicy.from_frozen(value) if value is not None else self.repo.initial_policy
+
+    def for_execution(self, manifest):
+        target = copy(self)
+        target.repo = copy(self.repo)
+        target.repo.policy = self.execution_policy(manifest)
+        target.executor = type(self.executor)(self.root, self.config, target.repo.policy)
+        target.host_policy = self.repo.policy
+        return target
 
     def guard(self):
         require(
@@ -64,6 +82,7 @@ class TaskService:
     def resume(self, job_id):
         row = self.repo.row(job_id)
         manifest = self.check(row, execution=True)
+        execution = self.for_execution(manifest)
         with lock(self.root / "creation.lock", timeout=self.repo.policy.admission_wait_seconds), \
                 lock(self.directory(job_id) / "host-writer.lock") as writer:
             row = self.repo.row(job_id)
@@ -78,7 +97,7 @@ class TaskService:
                 self.repo.capacity()
             proof = None
             if row["attempt_count"]:
-                proof = self.executor.immediate(
+                proof = execution.executor.immediate(
                     "inspect",
                     self.directory(job_id),
                     *self.executor_args(manifest),
@@ -86,4 +105,4 @@ class TaskService:
                     manifest.session_file_sha256,
                     lock_fds=(writer.fileno(),),
                 )
-            return self.view(self.repo.resume(job_id, proof))
+            return self.view(execution.repo.resume(job_id, proof))

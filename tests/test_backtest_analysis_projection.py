@@ -44,13 +44,13 @@ def test_list_matches_all_analysis_metrics_without_replaying_or_market_reads(tmp
 
     monkeypatch.setattr(app.state.product, "call", no_market)
     reads = []
-    read_result = app.state.history.result
+    read_result = app.state.history.result_projection
 
     def counted_result(job_id):
         reads.append(job_id)
         return read_result(job_id)
 
-    monkeypatch.setattr(app.state.history, "result", counted_result)
+    monkeypatch.setattr(app.state.history, "result_projection", counted_result)
     with TestClient(app) as client:
         item = listed(client)
         assert reads == [result["job_id"]]  # Don't reload a second result for analysis.

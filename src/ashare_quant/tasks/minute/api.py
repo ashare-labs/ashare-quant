@@ -110,7 +110,8 @@ def mount(app, store, configuration=None):
 
     @app.get(prefix + "/jobs/{job_id}/result")
     def result(job_id: JobID) -> PythonResult:
-        return jobs.result(job_id)
+        jobs.check(jobs.repo.row(job_id))
+        return app.state.history.result_response(job_id)
 
     @app.get(prefix + "/jobs/{job_id}/analysis", include_in_schema=False)
     @app.get(prefix + "/jobs/{job_id}/result/analysis")

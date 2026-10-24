@@ -417,7 +417,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Submit explicitly trusted minute (default 1m) or daily (1d) Python to the shared queue.\n\n        User must explicitly accept trusted_local_code and accept_research_model; never infer them.\n        Daily: 8 stocks, 126 sessions, 186 calendar days, 1–120 warmup sessions; final positions\n        marked at final close. Minute: 23 sessions, 20000 stock-minutes, final positions flat.\n        Reuse the exact body/key after uncertain outcomes; no Python checkpoint resume.\n        ",
+      "description": "Submit explicitly trusted minute (default 1m) or daily (1d) Python to the shared queue.\n\n        User must explicitly accept trusted_local_code and accept_research_model; never infer them.\n        Securities and history are requested by strategy APIs against the frozen release.\n        Use actual data coverage and the published resource policy; initial cash is at most 100亿元 CNY.\n        Reuse the exact body/key after uncertain outcomes; no Python checkpoint resume.\n        ",
       "inputSchema": {
         "$defs": {
           "JsonValue": {},
@@ -459,7 +459,7 @@
               "initial_cash": {
                 "default": 100000,
                 "exclusiveMinimum": 0,
-                "maximum": 100000000,
+                "maximum": 10000000000,
                 "title": "Initial Cash",
                 "type": "number"
               },
@@ -477,12 +477,11 @@
                 "type": "object"
               },
               "securities": {
+                "default": [],
                 "items": {
                   "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
                   "type": "string"
                 },
-                "maxItems": 8,
-                "minItems": 1,
                 "title": "Securities",
                 "type": "array"
               },
@@ -497,6 +496,20 @@
                 "title": "Start Date",
                 "type": "string"
               },
+              "strategy_id": {
+                "anyOf": [
+                  {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Strategy Id"
+              },
               "trusted_local_code": {
                 "const": true,
                 "title": "Trusted Local Code",
@@ -504,8 +517,7 @@
               },
               "warmup_sessions": {
                 "default": 20,
-                "maximum": 120,
-                "minimum": 1,
+                "minimum": 0,
                 "title": "Warmup Sessions",
                 "type": "integer"
               }
@@ -515,7 +527,6 @@
               "name",
               "idempotency_key",
               "source",
-              "securities",
               "start_date",
               "end_date",
               "accept_research_model",
@@ -599,7 +610,6 @@
               },
               "min_assets": {
                 "default": 5,
-                "maximum": 100,
                 "minimum": 2,
                 "title": "Min Assets",
                 "type": "integer"
@@ -709,7 +719,6 @@
                 "items": {
                   "type": "string"
                 },
-                "maxItems": 100,
                 "minItems": 1,
                 "title": "Securities",
                 "type": "array"

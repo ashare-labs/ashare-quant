@@ -4,13 +4,21 @@ Hashes establish consistency with the stored acceptance/publication, not a new
 economic audit or permission to execute a previous runtime.
 """
 
+import errno
 import json
-from pathlib import PurePosixPath
+from contextlib import contextmanager
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.storage.artifacts import canonical, digest, regular, require, sha
+from ashare_quant.storage.artifacts import canonical, digest, require, sha
 from ashare_quant.tasks.base import TaskService
 from ashare_quant.tasks.contracts import execution_presentation
+from ashare_quant.tasks.evidence import (
+    CHUNK_BYTES,
+    evidence_file,
+    evidence_hash,
+    project_json,
+    verified_copy,
+)
 
 FAMILIES = {
     "m2-job-manifest.v6": "daily",
@@ -19,25 +27,6 @@ FAMILIES = {
     "python-demand-job.v2": "python",
     "factor-job.v1": "factors",
 }
-
-
-def evidence_file(root, name):
-    """Only relative, bounded, regular evidence files under the selected task."""
-    require(isinstance(name, str), "HISTORY_EVIDENCE_PATH", "Invalid evidence path")
-    parts = PurePosixPath(name)
-    require(
-        isinstance(name, str) and not parts.is_absolute()
-        and parts.parts and all(p not in {".", ".."} for p in parts.parts)
-        and "\\" not in name,
-        "HISTORY_EVIDENCE_PATH", "Invalid evidence path",
-    )
-    current = root
-    require(not current.is_symlink(), "HISTORY_EVIDENCE_PATH")
-    for part in parts.parts:
-        current = current / part
-        require(not current.is_symlink(), "HISTORY_EVIDENCE_PATH")
-    require(current.stat().st_size <= 64 * 1024 * 1024, "HISTORY_EVIDENCE_SIZE")
-    return regular(current)
 
 
 class History(TaskService):
@@ -63,7 +52,7 @@ class History(TaskService):
                     and json.loads(evidence_file(root, "session.json")) == manifest["session"],
                     "HISTORY_IDENTITY_CONFLICT", "Frozen session differs")
             for name, expected in manifest.get("files", {}).items():
-                require(sha(evidence_file(root, name)) == expected,
+                require(evidence_hash(root, name)[0] == expected,
                         "HISTORY_EVIDENCE_CONFLICT", "Frozen input differs")
             return manifest
         except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -93,18 +82,43 @@ class History(TaskService):
                           if family is None or FAMILIES.get(json.loads(r["manifest"]).get("schema_version")) == family]}
 
     def result(self, job_id):
-        return self._result(job_id)[0]
+        with self.result_stream(job_id) as (stream, _, _):
+            return json.load(stream)
+
+    def result_projection(self, job_id):
+        with self.result_stream(job_id) as (stream, _, _):
+            return project_json(stream, {"job_id", "summary", "preparation", "native"})
+
+    def result_response(self, job_id):
+        from starlette.responses import StreamingResponse
+
+        context = self.result_stream(job_id)
+        stream, _, _ = context.__enter__()  # Fail integrity checks before HTTP 200.
+
+        def chunks():
+            try:
+                while block := stream.read(CHUNK_BYTES):
+                    yield block
+            finally:
+                context.__exit__(None, None, None)
+
+        from starlette.background import BackgroundTask
+
+        return StreamingResponse(chunks(), media_type="application/json",
+                                 background=BackgroundTask(context.__exit__, None, None, None))
 
     def analysis(self, job_id):
         from ashare_quant.tasks.result_analysis import analyze
 
-        result, snapshot_sha256, family = self._result(job_id)
-        if family != "python":
-            raise DomainError("RESULT_ANALYSIS_UNSUPPORTED", "Analysis requires a frozen Python account result", 422)
+        with self.result_stream(job_id) as (stream, snapshot_sha256, family):
+            if family != "python":
+                raise DomainError("RESULT_ANALYSIS_UNSUPPORTED", "Analysis requires a frozen Python account result", 422)
+            result = project_json(stream, {"job_id", "summary", "preparation", "native"})
         return analyze(result, snapshot_sha256)
 
-    def _result(self, job_id):
-        """Read and verify once; share the exact bytes' identity with derived views."""
+    @contextmanager
+    def result_stream(self, job_id):
+        """Verify the entire publication, then expose a private temporary stream."""
         row = self.repo.row(job_id)
         manifest = self.check(row)
         require(row["status"] == "succeeded" and row["result"],
@@ -116,7 +130,7 @@ class History(TaskService):
             if manifest["schema_version"] in {"python-minute-job.v1", "python-demand-job.v2", "factor-job.v1"}:
                 require(reference["evidence_manifest_sha256"] == digest(manifest),
                         "HISTORY_IDENTITY_CONFLICT")
-                raw = evidence_file(root, "published.json")
+                result_root, result_name = root, "published.json"
             else:
                 import re
 
@@ -131,20 +145,22 @@ class History(TaskService):
                 require(seal["job_id"] == job_id and seal["manifest_sha256"] == digest(manifest)
                         and {"manifest.json", "session.json", "result.json", "receipt.json", "proof.json", "native.chk"} <= seal["files"].keys(),
                         "HISTORY_EVIDENCE_CONFLICT")
-                captured = {}
                 for filename, pin in seal["files"].items():
-                    value = evidence_file(sealed, filename)
-                    require(sha(value) == pin["sha256"] and len(value) == pin["size"],
+                    hashed, size = evidence_hash(sealed, filename)
+                    require(hashed == pin["sha256"] and size == pin["size"],
                             "HISTORY_EVIDENCE_CONFLICT", "Sealed evidence differs")
-                    captured[filename] = value
-                require(captured["manifest.json"] == canonical(manifest), "HISTORY_IDENTITY_CONFLICT")
-                raw = captured["result.json"]
-            require(sha(raw) == reference["snapshot_sha256"],
-                    "HISTORY_RESULT_CONFLICT", "Published result differs")
-            result = json.loads(raw)
-            require(result["job_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
-            return result, reference["snapshot_sha256"], FAMILIES[manifest["schema_version"]]
+                require(evidence_file(sealed, "manifest.json") == canonical(manifest), "HISTORY_IDENTITY_CONFLICT")
+                result_root, result_name = sealed, "result.json"
+            with verified_copy(result_root, result_name, reference["snapshot_sha256"], self.repo.policy) as stream:
+                require(project_json(stream, {"job_id"})["job_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
+                yield stream, reference["snapshot_sha256"], FAMILIES[manifest["schema_version"]]
+        except MemoryError as exc:
+            raise DomainError("HISTORY_MEMORY_UNAVAILABLE", "Insufficient memory to read selected result fields", 503) from exc
         except (OSError, ValueError, KeyError, TypeError) as exc:
+            if isinstance(exc, OSError) and exc.errno in {errno.ENOSPC, errno.EDQUOT}:
+                raise DomainError("STORAGE_FULL", "Insufficient space for a verified result read", 507) from exc
+            if isinstance(exc, OSError) and exc.errno == errno.ENOMEM:
+                raise DomainError("HISTORY_MEMORY_UNAVAILABLE", "Insufficient memory to read selected result fields", 503) from exc
             raise DomainError("HISTORY_RESULT_CONFLICT", "Published result is unavailable or malformed", 409) from exc
 
     def strategies(self):

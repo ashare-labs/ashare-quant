@@ -180,8 +180,6 @@ class Jobs(TaskService):
         self.guard()
         return JobCatalogue(
             python_strategies=PythonCapabilities(
-                module_load_seconds=self.repo.policy.module_load_seconds,
-                callback_seconds=self.repo.policy.callback_seconds,
                 attempt_seconds=self.repo.policy.execution_seconds,
                 output_bytes=self.repo.policy.output_bytes,
             ),

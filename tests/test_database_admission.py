@@ -110,7 +110,7 @@ def test_reopen_with_fixed_policy_never_opens_original_sqlite(tmp_path, monkeypa
     assert inventory(tmp_path) == before
 
 
-def test_policy_refusal_does_not_write_database_or_sidecars(tmp_path):
+def test_policy_override_does_not_write_database_or_sidecars(tmp_path):
     from tests.support.daily.executor import Configuration
 
     path = tmp_path / "control.sqlite3"
@@ -118,7 +118,8 @@ def test_policy_refusal_does_not_write_database_or_sidecars(tmp_path):
     before = inventory(tmp_path)
     app = create_app(str(path), daily_tasks_configuration=Configuration(None, ServicePolicy(max_workers=2)))
     with TestClient(app) as client:
-        assert client.get("/api/v1/health").json()["error"]["code"] == "M2_JOB_POLICY_CHANGED"
+        assert client.get("/api/v1/health").status_code == 200
+        assert app.state.daily_tasks.repo.policy.max_workers == 2
     assert inventory(tmp_path) == before
 
 
@@ -220,7 +221,7 @@ def test_initialization_excludes_live_store_transaction_until_check_finishes(tmp
     assert committed.is_set()
 
 
-def test_concurrent_processes_admit_one_immutable_policy(tmp_path):
+def test_concurrent_processes_keep_one_initial_policy_and_independent_defaults(tmp_path):
     path = tmp_path / "control.sqlite3"
     gate = tmp_path / "go"
     script = r'''
@@ -250,10 +251,10 @@ except DomainError as exc: print(json.dumps({'error':exc.code}))
             if process.poll() is None:
                 process.kill()
                 process.wait(timeout=2)
-    assert sum("accepted" in r for r in results) == 1
-    assert {r.get("error") for r in results} == {None, "M2_JOB_POLICY_CHANGED"}
+    assert {r["accepted"] for r in results} == {1, 2}
     policy = Repository(Store(path)).policy.max_workers
-    assert {r["accepted"] for r in results if "accepted" in r} == {policy}
+    assert policy in {1, 2}
+    assert Repository(Store(path), ServicePolicy(max_workers=3)).initial_policy.max_workers == policy
 
 
 @pytest.mark.parametrize("replacement", [False, True])

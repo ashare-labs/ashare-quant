@@ -64,7 +64,7 @@ def listing(history, strategy_id, limit, offset):
         summary, result_error, analysis_error, available = None, None, None, False
         if view["result"] is not None and view["stored_status"] == "succeeded":
             try:
-                result = history.result(row["job_id"])
+                result = history.result_projection(row["job_id"])
                 summary = result.get("summary")
                 available = True
             except DomainError as exc:

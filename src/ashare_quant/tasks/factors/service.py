@@ -61,6 +61,7 @@ class FactorJobs(TaskService):
                 source=self.source,
                 sources=self.sources.identity(),
                 control=str(self.repo.store.path),
+                resource_policy_sha256=digest(self.repo.policy),
             )
         )
 
@@ -107,6 +108,7 @@ class FactorJobs(TaskService):
                 request_sha256=digest(request),
                 input_sha256=digest(frozen),
                 source_sha256=self.source,
+                resource_policy=self.repo.policy.model_dump(mode="json"),
             )
             files = {
                 "submission.json": canonical(request),
@@ -220,7 +222,8 @@ class FactorJobs(TaskService):
             "Result differs from its frozen request/input",
         )
         raw = canonical(value)
-        check_task_storage(root, self.repo.policy, additional_bytes=len(raw))
+        check_task_storage(root, self.repo.policy, additional_bytes=len(raw),
+                           host_policy=getattr(self, "host_policy", None))
         atomic(root / "published.json", raw)
         return ResultReference(
             result_id=manifest.job_id,

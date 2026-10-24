@@ -255,8 +255,8 @@ def create_server(backend):
         """Submit explicitly trusted minute (default 1m) or daily (1d) Python to the shared queue.
 
         User must explicitly accept trusted_local_code and accept_research_model; never infer them.
-        Daily: 8 stocks, 126 sessions, 186 calendar days, 1–120 warmup sessions; final positions
-        marked at final close. Minute: 23 sessions, 20000 stock-minutes, final positions flat.
+        Securities and history are requested by strategy APIs against the frozen release.
+        Use actual data coverage and the published resource policy; initial cash is at most 100亿元 CNY.
         Reuse the exact body/key after uncertain outcomes; no Python checkpoint resume.
         """
         family = "python_daily" if submission.frequency == "1d" else "python_minute"

@@ -58,7 +58,7 @@ def run(args):
             from ashare_quant.tasks.minute.demand import DemandInputs
             from ashare_quant.tasks.policy import ServicePolicy
             data = DemandInputs(session["release"], request, root,
-                                ServicePolicy.model_validate(session["data_budget"]),
+                                ServicePolicy.from_frozen(session["data_budget"]),
                                 session.get("history_factors"), session.get("benchmark_release"))
         else:
             prepare(session["release"], request, root, session.get("history_factors"))

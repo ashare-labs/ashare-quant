@@ -6,7 +6,7 @@ import time
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import lock, regular, worker_slot
-from ashare_quant.strategies.python.supervision import BoundedOutput, check_phase
+from ashare_quant.strategies.python.supervision import BoundedOutput
 from ashare_quant.tasks.process import stop
 from ashare_quant.tasks.storage_budget import check_task_storage
 
@@ -39,6 +39,7 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
                         try:
                             target = jobs.for_job(row)
                             manifest = target.check(row, execution=True)
+                            target = target.for_execution(manifest)
                         except DomainError as exc:
                             refused = jobs.repo.claim(candidate)
                             if refused:
@@ -49,7 +50,7 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
                                 )
                                 return candidate
                             raise
-                        claimed = jobs.repo.claim(candidate)
+                        claimed = target.repo.claim(candidate)
                         if claimed is None:
                             continue
                         _work(
@@ -84,11 +85,14 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
         if stage:
             stage(name, jobs, row, process)
 
+    def storage():
+        check_task_storage(root, jobs.repo.policy, host_policy=getattr(jobs, "host_policy", None))
+
     try:
         notify("claimed")
         cancelled = jobs.repo.heartbeat(job_id, token)
         if not cancelled:
-            check_task_storage(root, jobs.repo.policy)
+            storage()
             command = jobs.executor.command(
                 "run",
                 root,
@@ -120,13 +124,8 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                             raise DomainError(
                                 "PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit"
                             )
-                        check_phase(
-                            root / (invocation + ".python-phase.json"),
-                            module_load_seconds=jobs.repo.policy.module_load_seconds,
-                            callback_seconds=jobs.repo.policy.callback_seconds,
-                        )
                         if time.monotonic() - heartbeat >= 0.25:
-                            check_task_storage(root, jobs.repo.policy)
+                            storage()
                             if jobs.repo.heartbeat(job_id, token):
                                 stop(process)
                                 cancelled = True
@@ -148,7 +147,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                 if capture.exceeded.is_set():
                     raise DomainError("PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit")
             notify("child_exited")
-            check_task_storage(root, jobs.repo.policy)
+            storage()
             if process.returncode == 0:
                 proof = json.loads(regular(root / (invocation + ".proof.json")))
             elif not cancelled:
@@ -186,7 +185,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                 root, manifest, invocation, row["attempt_count"], jobs.repo.logs(job_id)
             )
             notify("after_publish")
-            check_task_storage(root, jobs.repo.policy)
+            storage()
             jobs.guard()
         elif not cancelled and error is None:
             error = {

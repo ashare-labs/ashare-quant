@@ -24,7 +24,7 @@ class PythonCreate(Contract):
     securities: tuple[Security, ...] = ()
     start_date: date
     end_date: date
-    initial_cash: float = Field(default=100000, gt=0, le=100000000, allow_inf_nan=False)
+    initial_cash: float = Field(default=100000, strict=True, gt=0, le=10_000_000_000, allow_inf_nan=False)
     accept_research_model: Literal[True]
     trusted_local_code: Literal[True]
 

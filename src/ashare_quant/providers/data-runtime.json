@@ -1,5 +1,5 @@
 {
-  "commit": "fc5f3b79825aa08374a75b63be6c4cbcc7f36aec",
+  "commit": "3eb3f6903baa4bf7c4ce9c80b44d7850b445107e",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "ea8e64b2a0b85c28d3399732652280e190cdecb826b2d68c9e96b33437f63948",
+    "__init__.py": "cf35206310789d2d449d69cffe49b9064062c451e0d5b33b8486cecf71fcdc0d",
     "cli/__init__.py": "8d193e425e38420b7f34075c9b681b22b7eebcade388cdc0a0fdc01c8813ef57",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/cmes.py": "57e825138a429ed75d37f7bcc6257bd3f10aabe335d548c1aff1e679620de507",
@@ -35,7 +35,7 @@
     "factors/catalog.py": "83b85fadb272da1afb39231ddf278ca6185f9b731760f419cc6a49c81a54b970",
     "factors/evaluation/__init__.py": "0472a3af20925f167bb691b686c8d8b1963a3f9de7a58f26e111c15768aecb30",
     "factors/evaluation/_inputs.py": "0851d1a27ace0f222b8b7782893b898c3e9a248d9c21bf125d50f7d41812b73e",
-    "factors/evaluation/config.py": "bd84ffc83c0094cb597119a2e840bfd1d1d237bad99c7476ba6544f18dfc8476",
+    "factors/evaluation/config.py": "6663b42f94665d0d36dae8bdd91f736826af47224f7b482a850fdb9aa9c374ff",
     "factors/joinquant/__init__.py": "f43c16a6ae7d99e69ca42527691b04d8cac29ac8372c50517ec3a759c7f5b47c",
     "factors/joinquant/amount.py": "9e0ca301a7f19a87d69735863c95f3ab5dcb74ab81741dc18d097f991aebaba6",
     "factors/joinquant/amount_comparison.py": "12ea7d293cd64846b41804e58f7c65ef2e0e8c2ebc7b13112e7b6259f8d6662e",
@@ -100,7 +100,7 @@
     "product/__init__.py": "dd8503a22cea3bb2a3ecf2ec60b2b40202a05b128c3f606add4ca5873af99350",
     "product/__main__.py": "fbbdea96c092f994a0969df076858d9d25eab9b2b7be7efb43e98f89ef4f1ba1",
     "product/configuration.py": "93fa1bd7a6b17c78ff8745827ae5a67abf627b807fce7f5f9ff519a8d4161c48",
-    "product/daily.py": "c279e4c8f5067a209406231f7cc41e35e6788e5c32303b7e1bbdbf11c88524b1",
+    "product/daily.py": "7bdf0e4ee5dc7e42479d182aa326199ffc1318d69c598e7091af3507ffd0e3e4",
     "product/financial_release.py": "d19796149c9e5a1d4c457ba66efd2b8222d54cc610b4d5e83994461176fbef46",
     "product/market_release.py": "a92ffc5b5fc35210b7eb7ef7d10939c6ed22a8e617b75bf14dfe50841fd9c847",
     "product/minute.py": "df6f904fbd47f5d3e396a2e4406dd89f640a5e6367b1bdb99db8cdac155529b8",
@@ -188,10 +188,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "8f322e667391ccb8764fa91bb0c0c0aad0bf9a1eba7273c7a9af008df5b55086",
+  "runtime_code_sha256": "6ec4d6ab63fed49196878671d2c44ed60faab4449069c02cecb420a923805ab6",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "5e3b165625fb3692b8bef4fd7a8d0659a32c9bbe",
-  "version": "0.10.0.dev21",
-  "wheel_sha256": "5cf8d38b9730dd172a0cb47de0361cfeeb7410c4b7d46f75ad8a5c274a7c2900"
+  "tree": "74aaa57f656bb895311348d52e85b0567eef5fe7",
+  "version": "0.10.0.dev22",
+  "wheel_sha256": "f24240ecf375355f8484233cd024eab6177845ca722f60343e32063ddb9268f6"
 }

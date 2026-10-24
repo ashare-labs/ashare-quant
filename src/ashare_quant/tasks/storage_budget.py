@@ -39,7 +39,7 @@ def require_free_space(root, policy, *, reserved_bytes=0, additional_bytes=0):
         )
 
 
-def check_task_storage(root, policy, *, additional_bytes=0):
+def check_task_storage(root, policy, *, additional_bytes=0, host_policy=None):
     used = artifact_size(root)
     projected = used + additional_bytes
     if projected > policy.artifact_bytes:
@@ -51,7 +51,7 @@ def check_task_storage(root, policy, *, additional_bytes=0):
             details={"resource": "artifact_bytes", "scope": "per_task", "observed": used,
                      "additional_bytes": additional_bytes, "limit": policy.artifact_bytes},
         )
-    require_free_space(root, policy, additional_bytes=additional_bytes)
+    require_free_space(root, host_policy or policy, additional_bytes=additional_bytes)
 
 
 def admit_storage(jobs):
@@ -59,15 +59,17 @@ def admit_storage(jobs):
     # filesystem space, but must never consume another task's artifact allowance.
     scope, parameters = jobs.repo.queue_scope()
     with jobs.repo.store.connection() as db:
-        pending = [row[0] for row in db.execute(
-            "SELECT job_id FROM tasks WHERE " + scope +
+        pending = [(row[0], row[1]) for row in db.execute(
+            "SELECT job_id,manifest FROM tasks WHERE " + scope +
             " AND status IN ('queued','running','cancelling')", parameters)]
     # One metadata inventory at admission, never a repeated history scan in the
     # worker polling loop. Contents and historical database rows stay untouched.
     sizes = {path.name: artifact_size(path) for path in jobs.root.glob("m2job-*")
              if path.is_dir() and not path.is_symlink()}
-    remaining = sum(max(0, jobs.repo.policy.artifact_bytes - sizes.get(job_id, 0))
-                    for job_id in pending)
+    import json
+
+    remaining = sum(max(0, jobs.execution_policy(json.loads(manifest)).artifact_bytes - sizes.get(job_id, 0))
+                    for job_id, manifest in pending)
     retained = sum(sizes.values())
     projected = retained + remaining + jobs.repo.policy.artifact_bytes
     if projected > jobs.repo.policy.retained_artifact_bytes:
