@@ -1434,6 +1434,12 @@
             "title": "Cpu Seconds",
             "type": "integer"
           },
+          "disk_free_bytes": {
+            "default": 1073741824,
+            "minimum": 1048576.0,
+            "title": "Disk Free Bytes",
+            "type": "integer"
+          },
           "execution_seconds": {
             "default": 120,
             "maximum": 9.223372036854776e+18,
@@ -1509,6 +1515,12 @@
             "title": "Read Rows",
             "type": "integer"
           },
+          "retained_artifact_bytes": {
+            "default": 512000000000,
+            "minimum": 1048576.0,
+            "title": "Retained Artifact Bytes",
+            "type": "integer"
+          },
           "rss_bytes": {
             "default": 1073741824,
             "maximum": 9.223372036854776e+18,
@@ -1529,6 +1541,12 @@
       "ServiceStatus": {
         "additionalProperties": false,
         "properties": {
+          "artifact_budget_scope": {
+            "const": "per_task",
+            "default": "per_task",
+            "title": "Artifact Budget Scope",
+            "type": "string"
+          },
           "available_pending": {
             "title": "Available Pending",
             "type": "integer"

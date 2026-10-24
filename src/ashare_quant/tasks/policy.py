@@ -30,7 +30,11 @@ class ServicePolicy(Contract):
     query_rows: Annotated[int, Field(strict=True, ge=1)] = 100000
     cached_rows: Annotated[int, Field(strict=True, ge=1)] = 250000
     read_rows: Annotated[int, Field(strict=True, ge=1)] = 1000000
+    # Retained bytes per task, not a lifetime quota shared by historical results.
     artifact_bytes: Annotated[int, Field(strict=True, ge=1048576)] = 536870912
+    # Decimal GB, deliberately separate from the per-task binary MiB budget.
+    retained_artifact_bytes: Annotated[int, Field(strict=True, ge=1048576)] = 512000000000
+    disk_free_bytes: Annotated[int, Field(strict=True, ge=1048576)] = 1073741824
 
     @classmethod
     def environment(cls):
@@ -52,3 +56,4 @@ class ServiceStatus(Contract):
     resource_scope: Literal["per_database_local_trusted_processes"] = (
         "per_database_local_trusted_processes"
     )
+    artifact_budget_scope: Literal["per_task"] = "per_task"

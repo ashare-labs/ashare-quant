@@ -21,6 +21,7 @@ from ashare_quant.tasks.factors.contracts import (
 )
 from ashare_quant.tasks.factors.executor import Executor
 from ashare_quant.tasks.factors.repository import Repository
+from ashare_quant.tasks.storage_budget import admit_storage, check_task_storage
 
 
 def input_signature(path):
@@ -95,18 +96,7 @@ class FactorJobs(TaskService):
                 "FACTOR_STORAGE_LIMIT",
                 "Inspect unfinished admission directories",
             )
-            used = sum(
-                p.stat().st_size
-                for d in self.root.glob("m2job-*")
-                if d.is_dir() and not d.is_symlink()
-                for p in d.rglob("*")
-                if p.is_file() and not p.is_symlink()
-            )
-            require(
-                used < 512 * 1024 * 1024,
-                "FACTOR_STORAGE_LIMIT",
-                "Task artifacts reached the local 512 MiB budget",
-            )
+            admit_storage(self)
             frozen = self.sources.freeze(request)
             self.executor.package()
             job_id = "m2job-" + uuid.uuid4().hex
@@ -139,6 +129,7 @@ class FactorJobs(TaskService):
                 files={k: sha(v) for k, v in files.items()},
             )
             atomic(root / "accepted-manifest.json", manifest)
+            check_task_storage(root, self.repo.policy)
             return self.view(self.repo.insert(manifest))
 
     @staticmethod
@@ -215,8 +206,7 @@ class FactorJobs(TaskService):
         require(value.job_id == job_id, "FACTOR_RESULT_CHANGED")
         return value
 
-    @staticmethod
-    def publish(root, manifest, invocation, attempt_count, logs):
+    def publish(self, root, manifest, invocation, attempt_count, logs):
         raw = regular(root / "result.json")
         value = FactorResult.model_validate_json(raw)
         proof = json.loads(regular(root / (invocation + ".proof.json")))
@@ -229,7 +219,9 @@ class FactorJobs(TaskService):
             "FACTOR_RESULT_CHANGED",
             "Result differs from its frozen request/input",
         )
-        atomic(root / "published.json", value)
+        raw = canonical(value)
+        check_task_storage(root, self.repo.policy, additional_bytes=len(raw))
+        atomic(root / "published.json", raw)
         return ResultReference(
             result_id=manifest.job_id,
             href=f"/api/v1/factors/jobs/{manifest.job_id}/result",

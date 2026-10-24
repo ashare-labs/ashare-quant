@@ -17,6 +17,7 @@ from ashare_quant.tasks.minute.contracts import (
 )
 from ashare_quant.tasks.minute.executor import Executor
 from ashare_quant.tasks.minute.repository import Repository
+from ashare_quant.tasks.storage_budget import admit_storage, check_task_storage
 
 
 class PythonJobs(TaskService):
@@ -81,18 +82,7 @@ class PythonJobs(TaskService):
                 "PYTHON_PREPARATION_RESIDUE_LIMIT",
                 "Inspect unaccepted task directories before submitting more",
             )
-            used = sum(
-                p.stat().st_size
-                for directory in self.root.glob("m2job-*")
-                if directory.is_dir() and not directory.is_symlink()
-                for p in directory.rglob("*")
-                if p.is_file() and not p.is_symlink()
-            )
-            require(
-                used < self.repo.policy.artifact_bytes,
-                "PYTHON_TASK_STORAGE_LIMIT",
-                "Local task artifacts reached the configured artifact_bytes budget",
-            )
+            admit_storage(self)
             require(
                 len(request.source.encode()) <= 262144
                 and len(canonical(request.parameters)) <= 16384,
@@ -178,6 +168,7 @@ class PythonJobs(TaskService):
                 files={name: sha(raw) for name, raw in files.items()},
             )
             atomic(root / "accepted-manifest.json", manifest)
+            check_task_storage(root, self.repo.policy)
             return self.view(self.repo.insert(manifest))
 
     def check(self, row, *, execution=False):
@@ -254,8 +245,7 @@ class PythonJobs(TaskService):
         require(value.job_id == job_id, "PYTHON_RESULT_CHANGED")
         return value
 
-    @staticmethod
-    def publish(root, manifest, invocation, attempt_count, logs):
+    def publish(self, root, manifest, invocation, attempt_count, logs):
         native = json.loads(regular(root / "result.json"))
         proof = json.loads(regular(root / (invocation + ".proof.json")))
         require(
@@ -298,7 +288,9 @@ class PythonJobs(TaskService):
                 "order_count": len(native["orders"]),
             },
         )
-        atomic(root / "published.json", value)
+        raw = canonical(value)
+        check_task_storage(root, self.repo.policy, additional_bytes=len(raw))
+        atomic(root / "published.json", raw)
         return ResultReference(
             result_id=manifest.job_id,
             href=f"/api/v1/python/jobs/{manifest.job_id}/result",
