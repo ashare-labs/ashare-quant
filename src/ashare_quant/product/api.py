@@ -1,11 +1,11 @@
 """Local production market endpoints over AD and the shared portfolio queue."""
 
 from datetime import date
-from urllib.parse import urlsplit
 
 from fastapi import Query, Request
 from fastapi.responses import JSONResponse
 
+from ashare_quant.access import trusted_browser_request
 from ashare_quant.contracts import DomainError
 from ashare_quant.product.contracts import (
     ProductConfiguration,
@@ -28,20 +28,7 @@ def mount(app, store, configuration=None):
     async def local_product(request, call_next):
         if request.url.path.startswith(prefix + "/"):
             if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-                origin = request.headers.get("origin")
-                try:
-                    parsed = urlsplit(origin) if origin else None
-                except ValueError:
-                    parsed = None
-                trusted = (
-                    not origin and request.headers.get("sec-fetch-site") != "cross-site"
-                ) or (
-                    parsed and parsed.scheme in {"http", "https"}
-                    and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-                    and not parsed.username and not parsed.password
-                    and parsed.path == "" and not parsed.query and not parsed.fragment
-                )
-                if not trusted:
+                if not trusted_browser_request(request):
                     return JSONResponse(status_code=403, content={"api_version": "v1", "error": {
                         "code": "PRODUCT_ORIGIN_REFUSED",
                         "message": "Use a trusted local client or loopback browser origin",

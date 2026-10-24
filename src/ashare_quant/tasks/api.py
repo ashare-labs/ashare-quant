@@ -1,11 +1,11 @@
 """Shared controls and read-only historical evidence; no predefined strategies."""
 
 from typing import Literal
-from urllib.parse import urlsplit
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from ashare_quant.access import trusted_browser_request
 from ashare_quant.contracts import Contract, DomainError
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.history import History
@@ -26,18 +26,7 @@ def mount(app, store, *, jobs=None):
     async def local_tasks(request, call_next):
         scoped = request.url.path.startswith(("/api/v1/tasks/", "/api/v1/python/", "/api/v1/factors/", "/api/v1/history/"))
         if scoped and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            origin = request.headers.get("origin")
-            try:
-                parsed = urlsplit(origin) if origin else None
-                trusted = (not origin and request.headers.get("sec-fetch-site") != "cross-site") or (
-                    parsed and parsed.scheme in {"http", "https"}
-                    and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-                    and not parsed.username and not parsed.password
-                    and parsed.path == "" and not parsed.query and not parsed.fragment
-                )
-            except ValueError:
-                trusted = False
-            if not trusted:
+            if not trusted_browser_request(request):
                 return JSONResponse(status_code=403, content={"api_version": "v1", "error": {
                     "code": "M2_JOB_ORIGIN_REFUSED", "message": "Use a trusted local client",
                     "details": None}}, headers={"Cache-Control": "no-store"})

@@ -4,12 +4,14 @@ import json
 import os
 import sqlite3
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Path, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from ashare_quant import __version__
+from ashare_quant.access import configured_origins
 from ashare_quant.contracts import (
     Account,
     Capabilities,
@@ -39,14 +41,16 @@ from ashare_quant.storage.errors import storage_error
 from ashare_quant.storage.store import Store
 
 
-def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None, factor_sources=None) -> FastAPI:
+def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None, factor_sources=None, trusted_browser_origins=()) -> FastAPI:
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
                   responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse},
                              409: {"model": ErrorResponse}, 429: {"model": ErrorResponse},
                              503: {"model": ErrorResponse},
                              422: {"model": ErrorResponse | ValidationResponse}})
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+    app.state.trusted_browser_origins = configured_origins(trusted_browser_origins)
+    extra_hosts = sorted({urlsplit(origin).hostname for origin in app.state.trusted_browser_origins})
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver", *extra_hosts])
     try:
         from ashare_quant.deployment.configuration import deployment_path
 
