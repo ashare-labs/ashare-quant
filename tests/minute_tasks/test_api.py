@@ -21,7 +21,8 @@ def setup(tmp_path, monkeypatch, request):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     jobs = app.state.python_jobs
     release = SimpleNamespace(root=tmp_path, release_id=10, sha256="a" * 64)
-    jobs.product = SimpleNamespace(call=lambda f: f(SimpleNamespace(release=release)))
+    jobs.product = SimpleNamespace(call=lambda f: f(SimpleNamespace(release=release)),
+        configured=lambda: SimpleNamespace(document={"profiles": {"product": {}}}, profile="product"))
     monkeypatch.setattr(
         "ashare_quant.tasks.minute.demand.run_scope", lambda *a: (["2024-03-04", "2024-03-05"], [])
     )

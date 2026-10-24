@@ -265,16 +265,18 @@ def resolve(deployment=None, profile="product") -> Configuration:
             for role in ("research", "execution", "market", "corporate")
             if getattr(ref, role) is not None
         ]
-        market = entry.get("market_release")
         market_assets = []
-        if market is not None:
+        for key in ("market_release", "benchmark_release"):
+            market = entry.get(key)
+            if market is None:
+                continue
             asset = by_name[market["asset"]]
             if (
                 asset.kind != "market_release"
                 or type(market["release_id"]) is not int
                 or market["release_id"] < 1
             ):
-                raise ValueError("market_release requires a released market asset and positive ID")
+                raise ValueError(key + " requires a released market asset and positive ID")
             _sha(market["manifest_sha256"])
             market_assets.append(asset.name)
         selected = tuple(

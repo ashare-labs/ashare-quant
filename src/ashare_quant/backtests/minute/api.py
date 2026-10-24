@@ -270,6 +270,14 @@ class API:
         self.context, self.g = Context(host), SimpleNamespace()
         self.universe = list(host.data.ids)
         self.schedules = []
+        self.benchmark = None
+
+    def set_benchmark(self, security):
+        require(self.host.phase == "initialize", "JQ_BENCHMARK_ONLY_IN_INITIALIZE")
+        require(isinstance(security, str) and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security),
+                "JQ_BENCHMARK_SECURITY_REQUIRED:use_one_exchange_qualified_security")
+        self.benchmark = security
+        self.host.emit("benchmark_selected", security=security)
 
     def _order_view(self, order):
         return order_view(
@@ -804,7 +812,7 @@ class API:
 
     def namespace(self):
         names = (
-            "run_daily set_universe set_option set_order_cost set_slippage get_current_data "
+            "run_daily set_universe set_benchmark set_option set_order_cost set_slippage get_current_data "
             "attribute_history history get_bars get_price order order_target order_value "
             "order_target_value get_orders get_open_orders cancel_order get_trades record get_all_securities"
         ).split()
@@ -813,7 +821,7 @@ class API:
             "get_fundamentals query valuation indicator income balance cash_flow "
             "get_index_stocks get_industry_stocks get_security_info "
             "get_trade_days get_extras get_factor_values run_weekly run_monthly "
-            "set_benchmark set_subportfolios set_data_option read_file write_file "
+            "set_subportfolios set_data_option read_file write_file "
             "send_message enable_profile"
         ).split():
             result[name] = unsupported(name)

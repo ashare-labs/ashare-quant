@@ -257,7 +257,8 @@ def daily_jobs(tmp_path, fixed_release, monkeypatch, request):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     jobs = app.state.python_jobs
     # Only the deployment selector is replaced. Preparation queries actual frozen AD objects.
-    jobs.product = SimpleNamespace(call=lambda f: f(SimpleNamespace(release=release)))
+    jobs.product = SimpleNamespace(call=lambda f: f(SimpleNamespace(release=release)),
+        configured=lambda: SimpleNamespace(document={"profiles": {"product": {}}}, profile="product"))
     monkeypatch.setattr(jobs, "environment", lambda: "a" * 64)
     body = dict(
         environment_id="a" * 64,

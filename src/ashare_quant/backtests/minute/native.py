@@ -642,6 +642,9 @@ class Mod(AbstractMod):
             require(
                 not self.account()["positions"], "MINUTE_RESEARCH_MUST_EXIT_WITHIN_ACTION_SCOPE"
             )
+        from ashare_quant.tasks.minute.benchmark import observations
+        benchmark = observations(self.data, self.api.benchmark,
+                                 [row["at"][:10] for row in self.accounts], self.at)
         self.result = {
             "schema": "aq-python-minute-result.v1",
             "identity": runtime["identity"],
@@ -717,6 +720,7 @@ class Mod(AbstractMod):
             "final_account": self.account(),
             "total_pnl": float(p.total_value) - self.config["initial_cash"],
             "total_return": float(p.total_value) / self.config["initial_cash"] - 1,
+            "benchmark": benchmark,
             "preflight": self.data.preflight(),
             **(
                 {

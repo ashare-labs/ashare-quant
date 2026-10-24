@@ -128,6 +128,8 @@ class PythonJobs(TaskService):
                 )
 
             pin = self.product.call(pin_release)
+            from ashare_quant.tasks.minute.benchmark import configured_release
+            benchmark = configured_release(self.product.configured())
             from ashare_quant.tasks.minute.demand import run_scope
 
             days, _ = run_scope(pin, str(request.start_date), str(request.end_date))
@@ -150,6 +152,8 @@ class PythonJobs(TaskService):
                 "data_budget": self.repo.policy.model_dump(mode="json"),
                 "history_factors": freeze_factors(self.history_factors, root),
             }
+            if benchmark is not None:
+                session["benchmark_release"] = benchmark
             if submitted_strategy_id != request.strategy_id:
                 session["submitted_strategy_id"] = submitted_strategy_id
             files = {

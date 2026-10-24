@@ -80,8 +80,9 @@ class DemandInputs:
     state_visibility = "posthoc_daily_replay"
     state_replay_used = True
 
-    def __init__(self, pin, request, root, policy=None, factors=None):
+    def __init__(self, pin, request, root, policy=None, factors=None, benchmark=None):
         self.pin, self.request, self.root = pin, request, Path(root)
+        self.benchmark_pin = benchmark
         self.policy = policy or ServicePolicy()
         self.owner = ReleasedDailyProduct({"market_release": pin})
         self.days, self.calendar = run_scope(
@@ -94,7 +95,7 @@ class DemandInputs:
         self.register(request.securities)
         self.rows, self.minutes, self.components, self.corporate = {}, {}, {}, {}
         self.reads, self.queries, self.read_count = [], [], 0
-        self.references, self.reference_rows = None, 0
+        self.references, self.reference_rows, self.benchmark_rows = None, 0, 0
         self.bars, self.gaps = {}, {}
         self.corporate_actions, self.actions = [], []
         self.factors = frozen_factors(self.root, factors)
@@ -130,6 +131,8 @@ class DemandInputs:
                 "Execution retains the declared main-board daily-preclose limit and source-scoped corporate model",
             ],
         }
+        if benchmark is not None:
+            self.document["benchmark_release"] = benchmark
 
     def check_budget(self, rows):
         require(
@@ -153,6 +156,7 @@ class DemandInputs:
             + len(self.bars)
             + len(self.gaps)
             + self.reference_rows
+            + self.benchmark_rows
             <= self.policy.cached_rows,
             "PYTHON_DATA_BUDGET",
             "Cache exceeds configured cached_rows",
@@ -172,6 +176,9 @@ class DemandInputs:
     def register(self, ids):
         self.securities(list(ids))
         for sid in ids:
+            require(self.owner.release.instruments.get(sid, {}).get("asset_class", "equity") == "equity",
+                    "JQ_NOT_TRADABLE_SECURITY", "The current execution model trades equities only",
+                    {"security": sid})
             if sid not in self.ids:
                 self.ids.append(sid)
 
@@ -179,9 +186,9 @@ class DemandInputs:
         items, offset = [], 0
         while True:
             response = self.owner.catalogue(limit=500, offset=offset, as_of=as_of)
-            items.extend(response["securities"])
+            items.extend(r for r in response["securities"] if r.get("asset_class", "equity") == "equity")
             self.check_budget(len(items))
-            if len(items) >= response["total"]:
+            if offset + len(response["securities"]) >= response["total"]:
                 break
             offset += len(response["securities"])
         receipt = {

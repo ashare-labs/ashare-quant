@@ -3,8 +3,8 @@
 from fastapi import Request
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.strategies.files_api import mount as mount_files
 from ashare_quant.strategies.backtests import mount as mount_backtests
+from ashare_quant.strategies.files_api import mount as mount_files
 from ashare_quant.tasks.api import ActionRequest
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.minute.contracts import (
@@ -33,6 +33,8 @@ def mount(app, store, configuration=None):
         closed(request)
         factors = jobs.history_factors
         environment = jobs.environment()
+        from ashare_quant.tasks.minute.benchmark import configured_release
+        benchmark = configured_release(jobs.product.configured())
 
         def availability(owner):
             release = getattr(owner, "release", None)
@@ -55,6 +57,12 @@ def mount(app, store, configuration=None):
             "data_availability": jobs.product.call(availability),
             "frequency": "1m",
             "frequencies": ["1m", "1d"],
+            "benchmark": {
+                "selection": "set_benchmark_in_initialize",
+                "supplemental_release": benchmark,
+                "price_basis": "published_close_price_return",
+                "missing_reference": "strategy_result_retained; comparison_unavailable",
+            },
             "daily": {
                 "history": "requested_at_runtime",
                 "terminal_positions": "marked_at_final_close",
