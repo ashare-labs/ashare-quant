@@ -91,6 +91,7 @@ version = "0.12.0.dev22"
 source = { editable = "." }
 dependencies = [
     { name = "ashare-data" },
+    { name = "empyrical-reloaded" },
     { name = "fastapi" },
     { name = "jsonpickle" },
     { name = "logbook" },
@@ -185,6 +186,7 @@ requires-dist = [
     { name = "contourpy", marker = "extra == 'native'", specifier = "==1.4.0" },
     { name = "cycler", marker = "extra == 'native'", specifier = "==0.12.1" },
     { name = "duckdb", marker = "extra == 'native'", specifier = "==1.4.3" },
+    { name = "empyrical-reloaded", specifier = "==0.7.0" },
     { name = "et-xmlfile", marker = "extra == 'native'", specifier = "==2.0.0" },
     { name = "fastapi", specifier = "==0.141.1" },
     { name = "fastapi", marker = "extra == 'native'", specifier = "==0.141.1" },

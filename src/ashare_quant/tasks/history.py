@@ -93,6 +93,18 @@ class History(TaskService):
                           if family is None or FAMILIES.get(json.loads(r["manifest"]).get("schema_version")) == family]}
 
     def result(self, job_id):
+        return self._result(job_id)[0]
+
+    def analysis(self, job_id):
+        from ashare_quant.tasks.result_analysis import analyze
+
+        result, snapshot_sha256, family = self._result(job_id)
+        if family != "python":
+            raise DomainError("RESULT_ANALYSIS_UNSUPPORTED", "Analysis requires a frozen Python account result", 422)
+        return analyze(result, snapshot_sha256)
+
+    def _result(self, job_id):
+        """Read and verify once; share the exact bytes' identity with derived views."""
         row = self.repo.row(job_id)
         manifest = self.check(row)
         require(row["status"] == "succeeded" and row["result"],
@@ -131,7 +143,7 @@ class History(TaskService):
                     "HISTORY_RESULT_CONFLICT", "Published result differs")
             result = json.loads(raw)
             require(result["job_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
-            return result
+            return result, reference["snapshot_sha256"], FAMILIES[manifest["schema_version"]]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise DomainError("HISTORY_RESULT_CONFLICT", "Published result is unavailable or malformed", 409) from exc
 

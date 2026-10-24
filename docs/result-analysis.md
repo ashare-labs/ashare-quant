@@ -24,7 +24,9 @@ analysis = analyze_result(
 
 函数使用 **empyrical-reloaded 0.7.0**，调用时校验版本。接线方须将这一版本及其传递依赖纳入产品依赖锁；此模块提交不修改执行线程拥有的 `pyproject.toml`、`uv.lock` 或任务路由。库许可为 Apache-2.0，官方来源为 [empyrical-reloaded](https://github.com/stefan-jansen/empyrical-reloaded)。不安装数据下载 extras，不调用数据下载工具；原版 empyrical 与 reloaded 共用 import 名，不能并装。
 
-当前模块尚不自动挂接 HTTP。建议读取接口在 `/python/jobs/{id}/analysis` 与 `/history/jobs/{id}/analysis` 中调用同一函数，沿用结果的完整性校验；基准必须取执行时冻结的数据。GET 只做派生，不覆盖 `published.json`，不触发回测，不把今天的默认基准写回旧历史。路由、Pydantic/OpenAPI 与依赖锁由拥有该接线的后端变更统一处理。
+HTTP入口为 `/api/v1/python/jobs/{id}/result/analysis` 与 `/api/v1/history/jobs/{id}/result/analysis`，共用这一个计算函数和原历史结果的完整性校验；短路径 `/jobs/{id}/analysis` 是同一读取操作的兼容别名。输出 `source_sha256` 是核验过的原发布文件摘要。重复GET确定且只读，不覆盖 `published.json`、不触发回测、不重读今天的行情或默认基准。仅支持含账户序列的Python回测；其他历史结果仍按原接口可读。
+
+接线采用上面的明确产品约定。依赖及传递闭包已纳入 `pyproject.toml`、`uv.lock` 和运行时快照。`native.benchmark` 的冻结基期/逐日收盘点位投影为输入，身份取完整冻结基准对象摘要；未提供可核实名称时显示证券代码。缺参考数据保留执行时的具体 `BENCHMARK_*` 原因和 `missing_dates`，独立策略指标继续可用。账本不一致时返回结构化409与 `RESULT_ANALYSIS_UNAVAILABLE`，不返回看似正常的虚构统计。
 
 ## 输入
 

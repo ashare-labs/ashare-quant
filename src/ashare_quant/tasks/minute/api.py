@@ -5,6 +5,7 @@ from fastapi import Request
 from ashare_quant.contracts import DomainError
 from ashare_quant.strategies.backtests import mount as mount_backtests
 from ashare_quant.strategies.files_api import mount as mount_files
+from ashare_quant.tasks.analysis_contracts import ResultAnalysis
 from ashare_quant.tasks.api import ActionRequest
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.minute.contracts import (
@@ -110,3 +111,8 @@ def mount(app, store, configuration=None):
     @app.get(prefix + "/jobs/{job_id}/result")
     def result(job_id: JobID) -> PythonResult:
         return jobs.result(job_id)
+
+    @app.get(prefix + "/jobs/{job_id}/analysis", include_in_schema=False)
+    @app.get(prefix + "/jobs/{job_id}/result/analysis")
+    def analysis(job_id: JobID) -> ResultAnalysis:
+        return app.state.history.analysis(job_id)

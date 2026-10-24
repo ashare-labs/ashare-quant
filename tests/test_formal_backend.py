@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -46,6 +47,8 @@ def test_python_catalogue_contains_only_capabilities(tmp_path, monkeypatch):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     monkeypatch.setattr(app.state.python_jobs, "environment", lambda: "a" * 64)
     monkeypatch.setattr(app.state.python_jobs.product, "call", lambda operation: None)
+    monkeypatch.setattr(app.state.python_jobs.product, "configured", lambda: SimpleNamespace(
+        document={"profiles": {"product": {}}}, profile="product"))
     with TestClient(app) as client:
         value = client.get("/api/v1/python/catalogue").json()
         assert value["frequencies"] == ["1m", "1d"]
