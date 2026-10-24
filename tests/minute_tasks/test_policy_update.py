@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
@@ -99,3 +100,20 @@ def test_old_database_with_retired_phase_fields_remains_byte_identical(tmp_path)
         assert "callback_seconds" not in status["policy"]
     assert changed.state.tasks.execution_policy({"session": {}}).execution_seconds == 120
     assert path.read_bytes() == original
+
+
+def test_old_environment_json_does_not_reintroduce_a_startup_gate(tmp_path, monkeypatch):
+    path = tmp_path / "control.sqlite3"
+    create_app(str(path), diagnostics_configuration={})
+    before = path.read_bytes()
+    monkeypatch.setenv("ASHARE_QUANT_JOB_POLICY", json.dumps({
+        "execution_seconds": 180, "module_load_seconds": 1, "callback_seconds": 1}))
+    with pytest.warns(UserWarning, match="Ignored retired"):
+        app = create_app(str(path), diagnostics_configuration={})
+    with TestClient(app) as client:
+        assert client.get("/api/v1/health").status_code == 200
+        policy = client.get("/api/v1/tasks/service").json()["policy"]
+        assert policy["execution_seconds"] == 180
+        assert not {"module_load_seconds", "callback_seconds"} & policy.keys()
+        assert client.get("/api/v1/history/jobs").status_code == 200
+    assert path.read_bytes() == before

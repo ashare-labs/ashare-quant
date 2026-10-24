@@ -1,7 +1,8 @@
-"""Single-host service limits, persisted independently of the stable v6 job contract."""
+"""Instance defaults; each accepted task freezes its execution budgets."""
 
 import json
 import os
+import warnings
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -37,15 +38,22 @@ class ServicePolicy(Contract):
     @classmethod
     def environment(cls):
         value = os.environ.get("ASHARE_QUANT_JOB_POLICY")
-        return cls.model_validate(json.loads(value)) if value else None
+        if not value:
+            return None
+        parsed = json.loads(value)
+        retired = {"module_load_seconds", "callback_seconds"}
+        if isinstance(parsed, dict) and retired.intersection(parsed):
+            warnings.warn("Ignored retired module_load_seconds/callback_seconds settings; "
+                          "callbacks use the whole-task resource budgets", UserWarning, stacklevel=2)
+        return cls.from_frozen(parsed)
 
     @classmethod
     def from_frozen(cls, value):
         """Read old evidence without treating unused phase knobs as active limits.
 
         Its original bytes/hash remain authoritative and are never rewritten.
-        New configuration rejects these removed keys rather than promising a
-        timeout the native callback path does not implement.
+        These fields are absent from the current contract. Existing environment
+        JSON also remains readable, with an explicit retirement warning.
         """
         if not isinstance(value, dict):
             return cls.model_validate(value)
