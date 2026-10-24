@@ -1601,6 +1601,20 @@
       "StrategyBacktest": {
         "additionalProperties": false,
         "properties": {
+          "analysis_error": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Error"
+          },
           "can_cancel": {
             "title": "Can Cancel",
             "type": "boolean"
@@ -1762,6 +1776,7 @@
           "result",
           "result_available",
           "result_error",
+          "analysis_error",
           "summary"
         ],
         "title": "StrategyBacktest",

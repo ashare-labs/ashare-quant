@@ -11,10 +11,11 @@ from tests.analysis.fixtures import browser_fixture
 from tests.test_formal_backend import seed_history
 
 
-def seed_python(app, result):
+def seed_python(app, result, *, request_fields=None):
     job_id = result["job_id"]
     session = {"run_id": "synthetic-frozen-input"}
     request = {"name": "frozen analysis fixture", "idempotency_key": "analysis-test"}
+    request.update(request_fields or {})
     strategy = b"raise AssertionError('historical analysis must not execute this source')\n"
     from ashare_quant.storage.artifacts import sha
 

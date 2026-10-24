@@ -26,6 +26,8 @@ analysis = analyze_result(
 
 HTTP入口为 `/api/v1/python/jobs/{id}/result/analysis` 与 `/api/v1/history/jobs/{id}/result/analysis`，共用这一个计算函数和原历史结果的完整性校验；短路径 `/jobs/{id}/analysis` 是同一读取操作的兼容别名。输出 `source_sha256` 是核验过的原发布文件摘要。重复GET确定且只读，不覆盖 `published.json`、不触发回测、不重读今天的行情或默认基准。仅支持含账户序列的Python回测；其他历史结果仍按原接口可读。
 
+`GET /api/v1/python/backtests` 的每条成功记录在读取已验证冻结结果后，将同一分析的 `metrics[key].value` 投影至 `items[].summary[key]`；保留期初资金、期末权益和成交数等原汇总字段。缺基准等不可用指标保留 null，真实零收益保留 0。整体分析失败由独立的 `analysis_error` 返回，不把仍完整可读的结果误标为不可用；结果完整性失败仍使用 `result_error`。此列表投影不更改 `/result` 返回的原始冻结数据。对比页应读取 `/analysis` 并校验 `job_id` 和原 `result.snapshot_sha256`，不能期望旧 `/result.summary` 含后来新增的指标。
+
 接线采用上面的明确产品约定。依赖及传递闭包已纳入 `pyproject.toml`、`uv.lock` 和运行时快照。`native.benchmark` 的冻结基期/逐日收盘点位投影为输入，身份取完整冻结基准对象摘要；未提供可核实名称时显示证券代码。缺参考数据保留执行时的具体 `BENCHMARK_*` 原因和 `missing_dates`，独立策略指标继续可用。账本不一致时返回结构化409与 `RESULT_ANALYSIS_UNAVAILABLE`，不返回看似正常的虚构统计。
 
 ## 输入

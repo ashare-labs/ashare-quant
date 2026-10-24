@@ -32,6 +32,7 @@ class StrategyBacktest(Contract):
     result: ResultReference | None
     result_available: bool
     result_error: JSONObject | None
+    analysis_error: JSONObject | None
     summary: JSONObject | None
 
 
@@ -60,13 +61,25 @@ def listing(history, strategy_id, limit, offset):
     for row in selected[offset:offset + limit]:
         view = history.view(row)  # Verifies the original immutable task identity.
         request = view["request"]
-        summary, result_error, available = None, None, False
+        summary, result_error, analysis_error, available = None, None, None, False
         if view["result"] is not None and view["stored_status"] == "succeeded":
             try:
-                summary = history.result(row["job_id"]).get("summary")
+                result = history.result(row["job_id"])
+                summary = result.get("summary")
                 available = True
             except DomainError as exc:
                 result_error = {"code": exc.code, "message": exc.message}
+            if available:
+                from ashare_quant.tasks.result_analysis import analyze
+
+                try:
+                    analysis = analyze(result, view["result"]["snapshot_sha256"])
+                    # A read-time projection, never a replacement of published.json.
+                    # Keep every unavailable metric null, including absent benchmarks.
+                    summary = {**(summary or {}),
+                               **{key: value["value"] for key, value in analysis["metrics"].items()}}
+                except DomainError as exc:
+                    analysis_error = exc.body()
         items.append({
             **{k: view[k] for k in ("job_id", "created_at", "updated_at", "status",
                                    "stored_status", "display_status", "execution_state",
@@ -76,7 +89,8 @@ def listing(history, strategy_id, limit, offset):
             "frequency": request.get("frequency", "1m"),
             "can_cancel": view["execution_state"] == "current_runtime"
                           and view["stored_status"] in {"queued", "running"},
-            "result_available": available, "result_error": result_error, "summary": summary,
+            "result_available": available, "result_error": result_error,
+            "analysis_error": analysis_error, "summary": summary,
         })
     return {"strategy_id": strategy_id, "total": len(selected), "offset": offset, "limit": limit,
             "unassigned_count": unassigned, "items": items}

@@ -6,13 +6,15 @@ from fastapi.testclient import TestClient
 
 from ashare_quant.strategies.files import StrategyFiles
 from ashare_quant.tasks.history import History
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs, execute
+from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
+from tests.minute_tasks.test_daily import execute
 from tests.minute_tasks.test_daily import fixed_release as fixed_release
 
 
 def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, tmp_path):
     app, jobs, body = daily_jobs
-    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3")
+    jobs.product.configured = lambda: SimpleNamespace(
+        control_db=tmp_path / "control.sqlite3", document={"profiles": {"product": {}}}, profile="product")
     files = StrategyFiles(tmp_path)
     a, b = "甲/same.py", "乙/same.py"
     for path in (a, b):
@@ -42,7 +44,10 @@ def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, t
         assert result['total'] == 3 and result['unassigned_count'] == 1
         assert {r['stored_status'] for r in result['items']} == {'succeeded','failed','cancelled'}
         success = next(r for r in result['items'] if r['job_id'] == first['job_id'])
-        assert success['summary'] == client.get(first['result']['href']).json()['summary']
+        frozen_summary = client.get(first['result']['href']).json()['summary']
+        assert all(success['summary'][key] == value for key, value in frozen_summary.items())
+        assert success['summary']['benchmark_return'] is None
+        assert success['analysis_error'] is None
         assert success['result_available']
         assert all(r['summary'] is None for r in result['items'] if r['job_id'] != first['job_id'])
         assert client.get('/api/v1/python/backtests',params={"strategy_id":b}).json()['items'][0]['job_id'] == other['job_id']
@@ -57,12 +62,13 @@ def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, t
         assert old['total'] == 3
         assert all(r['execution_state'] == 'runtime_unavailable' and not r['can_cancel'] for r in old['items'])
         assert accepted.read_bytes() == original
-        assert client.get(success['result']['href']).json()['summary'] == success['summary']
+        assert client.get(success['result']['href']).json()['summary'] == frozen_summary
 
 
 def test_strategy_binding_refuses_unknown_paths_without_creating_task(daily_jobs, tmp_path):
     app, jobs, body = daily_jobs
-    jobs.product.configured = lambda: SimpleNamespace(control_db=tmp_path / "control.sqlite3")
+    jobs.product.configured = lambda: SimpleNamespace(
+        control_db=tmp_path / "control.sqlite3", document={"profiles": {"product": {}}}, profile="product")
     with TestClient(app) as client:
         missing = client.post('/api/v1/python/jobs',json={**body,'strategy_id':'absent.py'})
         assert missing.status_code == 404
