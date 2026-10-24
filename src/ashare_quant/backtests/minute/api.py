@@ -2,6 +2,7 @@
 
 import inspect
 import math
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -36,9 +37,39 @@ def validate_callback(callback):
 
 def unsupported(name):
     def fail(*args, **kwargs):
-        raise UnsupportedAPI(f"JQ_API_UNSUPPORTED:{name}; see docs/python-minute.md")
+        raise UnsupportedAPI(f"JQ_API_UNSUPPORTED:{name}; see docs/python-workbench.md")
 
     return fail
+
+
+def validate_reference_calendar(security):
+    # This argument selects a clock, not a data subscription. A Shanghai or
+    # Shenzhen cash-market reference uses the existing A-share session calendar.
+    # Other venues (especially futures/night sessions) need an explicit model.
+    require(
+        security is None or (
+            isinstance(security, str) and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security)
+        ),
+        "JQ_REFERENCE_CALENDAR_UNSUPPORTED:expected_Shanghai_or_Shenzhen_cash_market",
+    )
+
+
+class Positions(dict):
+    """Held positions iterate normally; a valid absent key has a detached zero view."""
+
+    def __init__(self, host):
+        super().__init__()
+        self.host = host
+
+    def __missing__(self, security):
+        require(isinstance(security, str), "JQ_POSITION_SECURITY_REQUIRED")
+        self.host.api.securities(security)
+        # Never create a native position, register a subscription, or insert a
+        # missing key. dict.get/contains/iteration keep actual-holding semantics.
+        return SimpleNamespace(
+            security=security, total_amount=0, closeable_amount=0, avg_cost=0.0,
+            price=0.0, value=0.0, dividend_receivable=0.0, today_amount=0,
+        )
 
 
 class OrderStatus(str, Enum):
@@ -198,6 +229,9 @@ class Quote:
 
     @property
     def day_open(self):
+        if getattr(self._host.data, "demand", False):
+            require(self._host.at.strftime("%H:%M") >= "09:30", "JQ_DAY_OPEN_NOT_VISIBLE")
+            return self._host.data.observed_value(self._sid, self._host.day, "open")
         if self._host.data.session_data is not None:
             return self._host.data.session_data.visible_open(self._sid, self._host.at)
         require(not self._host.data.research, "MINUTE_DAY_OPEN_OUTSIDE_RESEARCH_SESSION")
@@ -248,10 +282,7 @@ class API:
         require(self.host.phase == "initialize", "JQ_SCHEDULE_ONLY_IN_INITIALIZE")
         require(callable(func), "JQ_SCHEDULE_CALLBACK_REQUIRED")
         validate_callback(func)
-        require(
-            reference_security is None or self.securities(reference_security),
-            "JQ_REFERENCE_SECURITY_OUT_OF_SCOPE",
-        )
+        validate_reference_calendar(reference_security)
         aliases = {"open": "09:30", "before_open": "09:00", "after_close": "15:30"}
         clock = aliases.get(time, time)
         if self.host.jq_lifecycle:

@@ -19,7 +19,13 @@ from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import (
     OrderRejected,
 )
 
-from ashare_quant.backtests.minute.api import API, callback_name, order_view, validate_callback
+from ashare_quant.backtests.minute.api import (
+    API,
+    Positions,
+    callback_name,
+    order_view,
+    validate_callback,
+)
 from ashare_quant.backtests.minute.inputs import require, stamp
 from ashare_quant.backtests.minute.lifecycle import JQEventSource, handle_clocks
 from ashare_quant.contracts import SHANGHAI
@@ -566,7 +572,7 @@ class Mod(AbstractMod):
 
     def portfolio_view(self):
         p, account = self.env.portfolio, self.env.portfolio.stock_account
-        positions = {}
+        positions = Positions(self)
         ids = ([p.order_book_id for p in account.get_positions()]
                if getattr(self.data, "demand", False) else self.data.ids)
         for sid in ids:

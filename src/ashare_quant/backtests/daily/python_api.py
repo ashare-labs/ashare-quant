@@ -2,7 +2,13 @@
 
 from datetime import date, datetime
 
-from ashare_quant.backtests.minute.api import API, CurrentQuotes, Quote, validate_callback
+from ashare_quant.backtests.minute.api import (
+    API,
+    CurrentQuotes,
+    Quote,
+    validate_callback,
+    validate_reference_calendar,
+)
 from ashare_quant.backtests.minute.inputs import require, stamp
 
 
@@ -19,10 +25,7 @@ class DailyAPI(API):
     def run_daily(self, func, time="open", reference_security=None):
         require(self.host.phase == "initialize", "JQ_SCHEDULE_ONLY_IN_INITIALIZE")
         validate_callback(func)
-        require(
-            reference_security is None or self.securities(reference_security),
-            "JQ_REFERENCE_SECURITY_OUT_OF_SCOPE",
-        )
+        validate_reference_calendar(reference_security)
         clock = {"open": "09:30", "before_open": "09:00", "after_close": "15:30"}.get(time, time)
         require(
             clock in {"09:00", "09:30", "15:30", "every_bar"},
