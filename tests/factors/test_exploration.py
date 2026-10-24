@@ -63,6 +63,7 @@ def request(app, **changes):
 def test_catalogue_and_conservative_version(app):
     with TestClient(app) as client:
         c = client.get("/api/v1/factors/catalogue").json()
+        assert c["limits"] == dict(max_security_sessions=100000, max_input_bytes=33554432)
         assert len(c["items"]) == 368
         assert len([r for r in c["items"] if r["library"] == "joinquant"]) == 19
         item = next(r for r in c["items"] if r["field"] == "alpha014")

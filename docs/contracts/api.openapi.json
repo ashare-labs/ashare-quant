@@ -3498,7 +3498,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev25",
+            "default": "0.12.0.dev26",
             "title": "Backend Version",
             "type": "string"
           },
@@ -4779,7 +4779,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev25"
+    "version": "0.12.0.dev26"
   },
   "openapi": "3.1.0",
   "paths": {

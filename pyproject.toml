@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ashare-quant"
-version = "0.12.0.dev25"
+version = "0.12.0.dev26"
 description = "A宽 local bounded research backend with portable owner bindings"
 readme = "README.md"
 license-files = ["docs/licensing.md", "docs/rqalpha/RQAlpha-LICENSE.txt"]

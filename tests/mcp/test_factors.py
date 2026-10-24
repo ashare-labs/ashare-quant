@@ -44,9 +44,13 @@ def test_factor_discovery_compute_evaluate_and_frozen_recovery(tmp_path, source)
                     caps = await call(c, "research_capabilities")
                     factor = caps["extensions"]["factors"]
                     assert factor["available"] and factor["evaluation_available"]
+                    assert factor["limits"] == dict(
+                        max_security_sessions=100000, max_input_bytes=33554432
+                    )
                     assert not caps["extensions"]["python_daily"]["available"]
                     env = factor["environment_id"]
                     listing = await call(c, "discover_factors", environment_id=env, query=factor_id)
+                    assert listing["limits"] == factor["limits"]
                     item = listing["page"]["items"][0]
                     assert item["id"] == factor_id and item["definition"] == definition
                     sources = await call(c, "factor_sources", environment_id=env)

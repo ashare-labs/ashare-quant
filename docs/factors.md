@@ -62,7 +62,7 @@ Alpha143 的 seed、Alpha146 的 m 要求显式数值。
 
 请求固定 environment_id、幂等键、factor_id、definition、source_id、证券、history_start、
 start_date、end_date、parameters 和 rank_policy。`label_end` 仅在评价时使用，必须不早于信号结束日。
-每次最多 100 只、100000 个证券交易日、十个日历年、32 MiB 输入；共用队列/资源限制。
+证券数量和日历跨度没有独立上限；按实际输入量保留100000个证券交易日和32 MiB输入预算，并共用队列/资源保护。
 登记后选定输入复制进任务目录并校验摘要；之后来源变更不会改变已接受任务。
 相同幂等键和相同请求返回原任务，不会重复计算。不同请求复用键会拒绝。
 
