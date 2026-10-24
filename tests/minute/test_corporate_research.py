@@ -141,7 +141,7 @@ def test_record_ex_payment_and_zero_capacity_use_native_account(tmp_path):
     opening=data.valuation_mark(SID,stamp("2025-07-03T09:30:00+08:00"))
     assert opening["price"]==9.74 and opening["status"]=="daily_reference_model"
     strategy=tmp_path/"strategy.py"
-    strategy.write_text("""from jqdata import order, run_daily
+    strategy.write_text("""from aquant import order, run_daily
 def initialize(context): run_daily(trade, '09:31')
 def trade(context):
     day=str(context.current_dt.date())

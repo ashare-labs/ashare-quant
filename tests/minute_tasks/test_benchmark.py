@@ -45,7 +45,7 @@ def test_benchmark_and_trading_are_independent_frozen_results(daily_jobs, fixed_
     jobs.product.configured = lambda: SimpleNamespace(
         document={"profiles": {"product": profile}}, profile="product",
         asset=lambda name: SimpleNamespace(path=pin["root"]))
-    body.update(frequency=frequency, securities=[], start_date=dates[1], end_date=dates[-1], source=f'''from jqdata import *
+    body.update(frequency=frequency, securities=[], start_date=dates[1], end_date=dates[-1], source=f'''from aquant import *
 def initialize(c):
     set_benchmark('{selected}')
     assert c.securities == () and c.portfolio.positions == {{}}
@@ -113,11 +113,11 @@ def test_benchmark_future_boundary_and_index_is_not_a_stock_subscription(daily_j
 
 def test_benchmark_selection_is_initialize_only(daily_jobs):
     app, jobs, body = daily_jobs
-    body.update(securities=[], end_date=body['start_date'], source='''from jqdata import *
+    body.update(securities=[], end_date=body['start_date'], source='''from aquant import *
 def initialize(c):
     run_daily(lambda c: set_benchmark('000300.XSHG'), 'open')
 ''')
     with TestClient(app) as client:
         job = execute(client, jobs, body)
         assert job['status'] == 'failed'
-        assert 'JQ_BENCHMARK_ONLY_IN_INITIALIZE' in job['error']['message']
+        assert 'AQUANT_BENCHMARK_ONLY_IN_INITIALIZE' in job['error']['message']

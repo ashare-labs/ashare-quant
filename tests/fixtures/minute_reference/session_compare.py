@@ -246,7 +246,7 @@ def _compare_case(name, root, jq, gap_reference):
         original = (ROOT / "tests/fixtures/minute_reference/gap_probe.py").read_text()
         require(
             (root / "strategy.py").read_text()
-            == original.replace(
+            == original.replace("from jqdata import *", "from aquant import *").replace(
                 "skip_paused=False, df=True)", "skip_paused=False, df=True, fq=None)"
             ),
             "Gap migration changed beyond explicit raw-price argument",

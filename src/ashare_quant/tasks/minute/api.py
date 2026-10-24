@@ -55,6 +55,8 @@ def mount(app, store, configuration=None):
 
         return {
             "environment_id": environment,
+            "strategy_api": {"module": "aquant", "distribution": "ashare-quant",
+                             "binding": "runtime_only", "legacy_module_supported": False},
             "data_availability": jobs.product.call(availability),
             "frequency": "1m",
             "frequencies": ["1m", "1d"],

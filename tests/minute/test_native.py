@@ -35,7 +35,7 @@ assert Decimal(1) / Decimal(7) == expected
 
 def test_equal_decimal_moving_averages_do_not_create_a_trade(run_minute):
     source = """from decimal import Decimal
-from jqdata import order, run_daily
+from aquant import order, run_daily
 def initialize(context):
     run_daily(decide, "09:31")
 def decide(context):
@@ -49,7 +49,7 @@ def decide(context):
 
 
 def test_full_sessions_real_python_lifecycle_and_native_ledger(run_minute):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(context):
     g.count = 0
     context.days = 0
@@ -129,7 +129,7 @@ def test_three_representative_scripts_have_distinct_native_behaviour(run_minute)
 
 
 def test_shared_cash_partial_limit_cancel_day_expiry_and_t1(run_minute):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(context):
     g.day = 0
     run_daily(opening, 'open')
@@ -179,7 +179,7 @@ def after_trading_end(context):
 
 
 def test_history_current_bars_get_price_and_strict_future_request(run_minute):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(context): run_daily(check, '09:35')
 def check(context):
     a = attribute_history('600000.XSHG', 3, '1m', ['close'], fq=None)
@@ -195,7 +195,7 @@ def check(context):
 
 
 def test_future_prices_do_not_change_prefix_and_late_bars_stay_hidden(run_minute, minute_doc):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(context):
     run_daily(buy, 'open')
     run_daily(check, '09:32')
@@ -228,16 +228,16 @@ def check(context):
 @pytest.mark.parametrize(
     "body,error",
     [
-        ("run_daily(lambda c: None, '12:00')", "JQ_SCHEDULE_TIME_UNSUPPORTED"),
-        ("get_fundamentals(None)", "JQ_API_UNSUPPORTED:get_fundamentals"),
-        ("set_option('avoid_future_data', False)", "JQ_OPTION_UNSUPPORTED"),
-        ("set_order_cost(OrderCost(close_tax=0))", "JQ_COST_MUST_MATCH"),
-        ("attribute_history('600000.XSHG', 1)", "JQ_ADJUSTMENT_UNSUPPORTED"),
+        ("run_daily(lambda c: None, '12:00')", "AQUANT_SCHEDULE_TIME_UNSUPPORTED"),
+        ("get_fundamentals(None)", "AQUANT_API_UNSUPPORTED:get_fundamentals"),
+        ("set_option('avoid_future_data', False)", "AQUANT_OPTION_UNSUPPORTED"),
+        ("set_order_cost(OrderCost(close_tax=0))", "AQUANT_COST_MUST_MATCH"),
+        ("attribute_history('600000.XSHG', 1)", "AQUANT_ADJUSTMENT_UNSUPPORTED"),
     ],
 )
 def test_unsupported_requests_are_failures_not_silent_success(run_minute, body, error):
     with pytest.raises(MinuteRunError, match=error):
-        run_minute("from jqdata import *\ndef initialize(context):\n    " + body + "\n")
+        run_minute("from aquant import *\ndef initialize(context):\n    " + body + "\n")
 
 
 def test_completed_reentry_and_failure_preservation(run_minute, tmp_path):
@@ -278,7 +278,7 @@ def test_suspension_zero_volume_limits_and_shared_minute_capacity(run_minute, mi
             row.update(volume="0", amount="0")
         if row["bar_end"] == "2024-03-04T09:32:00+08:00":
             row.update(open="100", high="100", low="100", close="100")
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(context):
     g.day = 0
     run_daily(opening, 'open')
@@ -316,22 +316,22 @@ def replace(context):
     [
         (
             "get_price('600000.XSHG', count=1, frequency='1m', fq=None, end_date=context.current_dt.replace(hour=10))",
-            "JQ_FUTURE_DATA_REQUEST",
+            "AQUANT_FUTURE_DATA_REQUEST",
         ),
-        ("attribute_history('600000.XSHG', 5, '1m', fq=None)", "JQ_INSUFFICIENT_VISIBLE_HISTORY"),
-        ("order('600000.XSHG', 100)", "JQ_ORDER_OUTSIDE_SESSION"),
+        ("attribute_history('600000.XSHG', 5, '1m', fq=None)", "AQUANT_INSUFFICIENT_VISIBLE_HISTORY"),
+        ("order('600000.XSHG', 100)", "AQUANT_ORDER_OUTSIDE_SESSION"),
     ],
 )
 def test_time_and_history_failures_cannot_be_reported_success(run_minute, body, error):
     with pytest.raises(MinuteRunError, match=error):
         run_minute(
-            "from jqdata import *\ndef initialize(context): pass\n"
+            "from aquant import *\ndef initialize(context): pass\n"
             "def before_trading_start(context):\n    " + body + "\n"
         )
 
 
 def test_exception_after_a_fill_retains_trace_and_network_tripwire(run_minute, tmp_path):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(context):
     run_daily(buy, 'open')
     run_daily(fail, '09:32')
@@ -352,6 +352,6 @@ def fail(context): raise RuntimeError('failure-after-native-fill')
 
 def test_original_crlf_script_bytes_are_frozen_and_executed(run_minute, tmp_path):
     _, _, root = run_minute(
-        "from jqdata import *\r\ndef initialize(context):\r\n    g.value = 1\r\n"
+        "from aquant import *\r\ndef initialize(context):\r\n    g.value = 1\r\n"
     )
     assert (root / "strategy.py").read_bytes() == (tmp_path / "run.py").read_bytes()

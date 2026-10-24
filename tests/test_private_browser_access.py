@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 from ashare_quant.access import configured_origins
 from ashare_quant.api import create_app
 
-
 ORIGIN = "http://100.99.71.60:41846"
 
 

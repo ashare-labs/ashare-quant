@@ -25,6 +25,7 @@ def test_catalogue_reports_calendar_envelope_without_claiming_price_coverage(dai
 def test_execution_reuses_frozen_objects_and_reference_queries(daily_jobs, fixed_release, tmp_path, monkeypatch):
     from ashare_data.product.released_references import ReleasedReferences
     from ashare_data.storage.market_release import MarketRelease
+
     from ashare_quant.tasks.minute.contracts import PythonCreate
     from ashare_quant.tasks.minute.demand import DemandInputs
 
@@ -64,7 +65,7 @@ def test_execution_reuses_frozen_objects_and_reference_queries(daily_jobs, fixed
 def test_minute_open_schedule_uses_existing_clock_without_future_prices(daily_jobs, fixed_release):
     app, jobs, body = daily_jobs
     _, days = fixed_release
-    body.update(frequency="1m", start_date=days[20], end_date=days[22], source="""from jqdata import *
+    body.update(frequency="1m", start_date=days[20], end_date=days[22], source="""from aquant import *
 def initialize(context):
     set_universe(['600000.XSHG'])
     run_daily(trade, time='open')
@@ -93,7 +94,7 @@ def trade(context):
 @pytest.mark.parametrize("fixed_release", [{"minutes": True}], indirect=True)
 def test_daily_callbacks_can_request_visible_minutes(daily_jobs):
     app, jobs, body = daily_jobs
-    body.update(end_date=body["start_date"], source="""from jqdata import *
+    body.update(end_date=body["start_date"], source="""from aquant import *
 def initialize(context):
     set_universe(['600000.XSHG'])
 def handle_data(context, data):
@@ -124,7 +125,7 @@ def test_strategy_catalogue_dynamic_subscription_outside_reads_and_sixty_bars(
     body.update(
         start_date=days[65],
         end_date=days[68],
-        source="""from jqdata import *
+        source="""from aquant import *
 def configure(context):
     assert context.securities == ()
     g.initializations = 1
@@ -172,7 +173,7 @@ def handle_data(context, data):
     [
         (
             "get_price('600000.XSHG', end_date='2099-01-01', count=1, fq=None)",
-            "JQ_FUTURE_DATA_REQUEST",
+            "AQUANT_FUTURE_DATA_REQUEST",
         ),
         (
             "get_price('600000.XSHG', start_date='1990-01-01', fields=['close'], fq=None)",
@@ -180,7 +181,7 @@ def handle_data(context, data):
         ),
         (
             "attribute_history('600000.XSHG', 1000, fields=['close'], fq=None)",
-            "JQ_INSUFFICIENT_VISIBLE_HISTORY",
+            "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
         ),
     ],
 )
@@ -241,7 +242,7 @@ def test_close_query_needs_no_ohlcv_state_or_execution_references(daily_jobs):
     body.pop("warmup_sessions")
     body.update(
         end_date=body["start_date"],
-        source="""from jqdata import *
+        source="""from aquant import *
 def initialize(context): pass
 def handle_data(context,data):
     assert len(attribute_history('000001.XSHE',10,fields=['close'],skip_paused=False,fq=None)) == 10
@@ -273,7 +274,7 @@ def test_nine_subscriptions_and_more_than_126_sessions_without_preloading(
     body.update(
         start_date=days[1],
         end_date=days[201],
-        source="""from jqdata import *
+        source="""from aquant import *
 def initialize(context):
     set_universe(list(get_all_securities(['stock'],date=context.previous_date).index))
     assert len(context.securities) == 9
@@ -307,7 +308,7 @@ def test_minute_runtime_history_cross_frequency_dynamic_native_subscription(
         frequency="1m",
         start_date=days[20],
         end_date=days[21],
-        source="""from jqdata import *
+        source="""from aquant import *
 def initialize(context):
     set_universe(['600036.XSHG'])
     g.day = None
@@ -381,7 +382,7 @@ def test_trade_previous_close_does_not_require_unread_previous_fields(daily_jobs
     body.pop("securities")
     body.update(
         end_date=body["start_date"],
-        source="""from jqdata import *
+        source="""from aquant import *
 def initialize(context): pass
 def handle_data(context,data):
     order_target('600000.XSHG',100)
@@ -413,7 +414,7 @@ def test_unsubscribed_held_security_still_records_and_receives_distributions(dai
     body.update(
         start_date="2024-03-22",
         end_date="2024-03-28",
-        source="""from jqdata import *
+        source="""from aquant import *
 def initialize(context):
     g.entered = False
 def handle_data(context,data):
@@ -448,7 +449,7 @@ def test_pool_outside_minute_last_price_does_not_prepare_execution(daily_jobs):
     body.update(
         frequency="1m",
         end_date=body["start_date"],
-        source="""from jqdata import *
+        source="""from aquant import *
 def initialize(context):
     g.read = False
 def handle_data(context,data):

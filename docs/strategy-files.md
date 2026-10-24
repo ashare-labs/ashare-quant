@@ -1,5 +1,7 @@
 # 本机策略文件
 
+已有导入迁移使用 [aquant 迁移工具](aquant-migration.md)，先生成可审核候选，停写后显式应用；文件读写接口不会自动改源码。
+
 策略目录是正式部署 `product` profile 的 `control_db` 所在目录下固定的 `strategies/`。
 例如 `control_db=/data/ashare/state/control.sqlite3` 时，策略根为
 `/data/ashare/state/strategies`。沿用现有 deployment 发现、初始化和配置变更检查，

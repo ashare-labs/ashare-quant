@@ -143,7 +143,7 @@ class SessionData:
         return float(row["price"])
 
     def visible_daily(self, sid, at, start, end):
-        require(start <= end <= str(at.date()), "JQ_FUTURE_DATA_REQUEST")
+        require(start <= end <= str(at.date()), "AQUANT_FUTURE_DATA_REQUEST")
         return [
             r
             for (s, d), r in sorted(self.daily.items())

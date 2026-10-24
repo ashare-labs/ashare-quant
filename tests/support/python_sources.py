@@ -1,6 +1,6 @@
 """An editable example, served as source; never imported as a strategy."""
 
-SOURCE = """from jqdata import *
+SOURCE = """from aquant import *
 
 # 参数来自右侧 JSON；股票池和日期来自本次配置。
 def initialize(context):
@@ -39,7 +39,7 @@ def exit_positions(context):
             order_target(security, 0)
 """
 
-DAILY_SOURCE = '''from jqdata import *
+DAILY_SOURCE = '''from aquant import *
 
 def initialize(context):
     set_universe(context.securities)

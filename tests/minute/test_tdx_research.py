@@ -231,7 +231,7 @@ def test_unknown_fields_envelope_and_open_ended_positions_fail(
 ):
     script = tmp_path / "failure.py"
     script.write_text(
-        "from jqdata import *\n"
+        "from aquant import *\n"
         "def initialize(context): run_daily(go, '09:40')\n"
         f"def go(context): {operation}\n"
     )
@@ -242,7 +242,7 @@ def test_unknown_fields_envelope_and_open_ended_positions_fail(
 
 def test_real_volume_partial_fills_day_expiry_and_lunch_clock(real_input, tmp_path):
     script = tmp_path / "partial.py"
-    script.write_text("""from jqdata import *
+    script.write_text("""from aquant import *
 def initialize(context):
     g.day=0
     run_daily(go, '09:40')

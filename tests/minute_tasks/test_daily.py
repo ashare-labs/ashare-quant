@@ -370,7 +370,7 @@ def test_daily_callback_error_location_and_queued_cancellation(daily_jobs):
 ], indirect=["fixed_release"])
 def test_daily_warmup_only_requires_fields_used_by_history(daily_jobs, skip_paused):
     app, jobs, body = daily_jobs
-    body["source"] = f'''from jqdata import *
+    body["source"] = f'''from aquant import *
 def initialize(context): pass
 def handle_data(context, data):
     for sid in context.securities:
@@ -414,7 +414,7 @@ def test_daily_execution_fields_remain_required(daily_jobs):
 
 def test_custom_daily_history_shapes_close_visibility_and_end_callback(daily_jobs):
     app, jobs, body = daily_jobs
-    body["source"] = """from jqdata import *
+    body["source"] = """from aquant import *
 def initialize(context):
     assert context.run_params.frequency == "daily"
     set_universe(context.securities)
@@ -473,13 +473,13 @@ def test_running_daily_python_can_cancel_without_result_or_resume(daily_jobs):
     [
         (
             "get_price(context.securities[0], end_date='2025-01-01', fq=None)",
-            "JQ_FUTURE_DATA_REQUEST",
+            "AQUANT_FUTURE_DATA_REQUEST",
         ),
         (
             "attribute_history(context.securities[0], 100, fq=None)",
-            "JQ_INSUFFICIENT_VISIBLE_HISTORY",
+            "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
         ),
-        ("attribute_history(context.securities[0], 3)", "JQ_ADJUSTMENT_UNAVAILABLE"),
+        ("attribute_history(context.securities[0], 3)", "AQUANT_ADJUSTMENT_UNAVAILABLE"),
     ],
 )
 def test_daily_history_refuses_future_missing_and_unprovided_adjustment(
@@ -487,7 +487,7 @@ def test_daily_history_refuses_future_missing_and_unprovided_adjustment(
 ):
     app, jobs, body = daily_jobs
     body["source"] = (
-        "from jqdata import *\ndef initialize(context): pass\ndef handle_data(context, data):\n    "
+        "from aquant import *\ndef initialize(context): pass\ndef handle_data(context, data):\n    "
         + statement
     )
     with TestClient(app) as client:
@@ -528,7 +528,7 @@ def test_daily_adjusted_history_uses_frozen_owner_snapshot(
     monkeypatch.setenv("ASHARE_QUANT_PYTHON_HISTORY_FACTORS", str(binding))
     jobs.history_factors = configured_factors()
     body.update(frequency=frequency, end_date="2024-02-01")
-    body["source"] = """from jqdata import *
+    body["source"] = """from aquant import *
 def initialize(context):
     run_daily(read_daily, time='open')
 def read_daily(context):

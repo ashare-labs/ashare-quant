@@ -16,7 +16,7 @@ from tests.minute_tasks.test_daily import fixed_release as fixed_release
 @pytest.mark.parametrize("frequency", ["1d", "1m"])
 def test_100_yi_capital_actual_trade_preserves_fees_and_t_plus_one(daily_jobs, frequency):
     app, jobs, body = daily_jobs
-    body.update(frequency=frequency, initial_cash=10_000_000_000, end_date=body["start_date"], source="""from jqdata import *
+    body.update(frequency=frequency, initial_cash=10_000_000_000, end_date=body["start_date"], source="""from aquant import *
 def initialize(context):
     run_daily(trade, time='open')
 def trade(context):

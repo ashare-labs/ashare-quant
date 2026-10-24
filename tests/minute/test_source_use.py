@@ -55,7 +55,7 @@ def test_conflict_and_gap_keep_holdings_stale_then_recover(tmp_path, price_statu
         for r in doc["minute"]
     )
     strategy = tmp_path / "strategy.py"
-    strategy.write_text("""from jqdata import order, order_target, run_daily, get_current_data, record
+    strategy.write_text("""from aquant import order, order_target, run_daily, get_current_data, record
 def initialize(context):
     run_daily(trade, "09:31")
     run_daily(pending, "09:32")
@@ -160,7 +160,7 @@ def test_new_session_uses_newer_daily_close_before_first_minute(tmp_path, previo
     }
     strategy = tmp_path / "strategy.py"
     strategy.write_text(
-        """from jqdata import g, order, run_daily
+        """from aquant import g, order, run_daily
 def initialize(context):
     g.day = 0
     run_daily(trade, "09:31")

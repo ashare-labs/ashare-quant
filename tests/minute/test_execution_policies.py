@@ -41,7 +41,7 @@ def test_fractional_capacity_cannot_be_promoted_to_a_lot(run_minute, minute_doc,
     one_row(minute_doc, "09:31").update(volume=str(volume), amount=str(volume * 10))
     one_row(minute_doc, "09:32").update(volume="100000", amount="1000000")
     clock = "open" if matching == "next_open" else "09:31"
-    source = f"""from jqdata import *
+    source = f"""from aquant import *
 def initialize(c):
     g.day = 0
     run_daily(buy, {clock!r})
@@ -69,7 +69,7 @@ def buy(c):
 def test_exact_capacity_is_shared_by_orders_but_not_by_stocks(run_minute, minute_doc, matching):
     flat(minute_doc, volume="299500")
     clock = "open" if matching == "next_open" else "09:31"
-    source = f"""from jqdata import *
+    source = f"""from aquant import *
 def initialize(c):
     g.day=0
     run_daily(buy, {clock!r})
@@ -98,7 +98,7 @@ def test_explicit_price_clock_and_synchronous_return(
 ):
     flat(minute_doc)
     one_row(minute_doc, "09:32").update(open="11", high="12", low="9", close="10.5")
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(buy, '09:31')
@@ -129,7 +129,7 @@ def test_native_cash_resize_respects_fee_and_round_lot_for_all_order_apis(
     run_minute, minute_doc, api, value, cash, expected
 ):
     flat(minute_doc)
-    source = f"""from jqdata import *
+    source = f"""from aquant import *
 def initialize(c):
     g.day=0
     run_daily(buy, '09:31')
@@ -157,7 +157,7 @@ def buy(c):
 
 def test_resize_keeps_shared_cash_and_t1_in_native_account(run_minute, minute_doc):
     flat(minute_doc)
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(trade, '09:31')
@@ -194,7 +194,7 @@ def test_resting_limits_strict_cross_price_lunch_cancellation_and_day_expiry(
     flat(minute_doc)
     for clock, low in (("09:32", "9.5"), ("09:33", "9.49"), ("13:01", "9.5"), ("13:02", "9.49")):
         one_row(minute_doc, clock).update(low=low)
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(first,'09:31')
@@ -236,11 +236,11 @@ def after_trading_end(c): assert not get_open_orders()
 def test_current_price_requires_an_actual_visible_closed_bar(run_minute, minute_doc, clock, late):
     if late:
         one_row(minute_doc, "09:31")["available_at"] = "2024-03-04T09:32:00+08:00"
-    source = f"""from jqdata import *
+    source = f"""from aquant import *
 def initialize(c): run_daily(buy,{clock!r})
 def buy(c): order('600000.XSHG',100)
 """
-    with pytest.raises(MinuteRunError, match="JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR"):
+    with pytest.raises(MinuteRunError, match="AQUANT_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR"):
         run_minute(source, config={"matching": "jq_current"})
 
 
@@ -285,7 +285,7 @@ def test_resize_uses_configured_costs_not_the_reference_fee(
     run_minute, minute_doc, commission, minimum, cash, expected
 ):
     flat(minute_doc)
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(buy,'09:31')
@@ -310,7 +310,7 @@ def buy(c):
 def test_cash_resize_does_not_disable_next_bar_cash_risk_check(run_minute, minute_doc):
     flat(minute_doc)
     one_row(minute_doc, "09:32").update(open="11", high="11", low="11", close="11")
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(buy,'09:31')
@@ -328,7 +328,7 @@ def test_partial_order_cumulative_cost_cancel_reorder_and_sell_tax(run_minute, m
     flat(minute_doc)
     for row in minute_doc["minute"]:
         row["low"] = str(float(row["close"]) - 0.1)
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(start,'09:31')
@@ -369,7 +369,7 @@ def test_resting_sell_requires_strict_high_cross_and_fills_at_limit(run_minute, 
     flat(minute_doc)
     one_row(minute_doc, "09:32", day="2024-03-05")["high"] = "10.5"
     one_row(minute_doc, "09:33", day="2024-03-05")["high"] = "10.51"
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(trade,'09:31')

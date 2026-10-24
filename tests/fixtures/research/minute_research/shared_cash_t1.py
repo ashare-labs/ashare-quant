@@ -1,10 +1,10 @@
 """Real-source two-bank example: one cash account, T+1, next-day liquidation.
 
-Uses the supported synchronous jqdata subset. Fees and the research data profile
+Uses the supported synchronous aquant subset. Fees and the research data profile
 are explicit run inputs. This is an execution example, not an investment signal.
 """
 
-from jqdata import (
+from aquant import (
     LimitOrderStyle,
     g,
     get_current_data,

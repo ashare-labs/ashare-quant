@@ -17,7 +17,7 @@ from tests.minute_tasks.test_daily import fixed_release as fixed_release
 @pytest.mark.parametrize("hold", [False, True])
 def test_daily_callback_and_dividend_work_with_both_clocks(daily_jobs, frequency, hold):
     app, jobs, body = daily_jobs
-    body.update(frequency=frequency, start_date="2024-01-29", end_date="2024-02-01", source=f"""from jqdata import *
+    body.update(frequency=frequency, start_date="2024-01-29", end_date="2024-02-01", source=f"""from aquant import *
 def initialize(c):
     set_universe(['600000.XSHG'])
     run_daily(buy, 'open')

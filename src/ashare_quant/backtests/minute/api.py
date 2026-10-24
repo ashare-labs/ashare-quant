@@ -1,5 +1,6 @@
-"""Explicit JQ-style subset; functions delegate orders to native RQAlpha APIs."""
+"""Aquant strategy API; JoinQuant-inspired subset; functions delegate orders to native RQAlpha APIs."""
 
+import builtins
 import inspect
 import math
 import re
@@ -11,6 +12,7 @@ from enum import Enum
 from types import ModuleType, SimpleNamespace
 
 from ashare_quant.backtests.minute.inputs import number, require, stamp
+from ashare_quant.strategies.imports import strategy_import
 
 
 class UnsupportedAPI(NotImplementedError):
@@ -22,7 +24,7 @@ def callback_name(callback):
 
 
 def validate_callback(callback):
-    require(callable(callback), "JQ_CALLBACK_REQUIRED")
+    require(callable(callback), "AQUANT_CALLBACK_REQUIRED")
     targets = (callback, getattr(callback, "__call__", None))
     require(
         not any(
@@ -31,13 +33,13 @@ def validate_callback(callback):
             or inspect.isasyncgenfunction(f)
             for f in targets
         ),
-        f"JQ_CALLBACK_UNSUPPORTED:{callback_name(callback)}:synchronous_function_required",
+        f"AQUANT_CALLBACK_UNSUPPORTED:{callback_name(callback)}:synchronous_function_required",
     )
 
 
 def unsupported(name):
     def fail(*args, **kwargs):
-        raise UnsupportedAPI(f"JQ_API_UNSUPPORTED:{name}; see docs/python-workbench.md")
+        raise UnsupportedAPI(f"AQUANT_API_UNSUPPORTED:{name}; see docs/python-workbench.md")
 
     return fail
 
@@ -50,7 +52,7 @@ def validate_reference_calendar(security):
         security is None or (
             isinstance(security, str) and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security)
         ),
-        "JQ_REFERENCE_CALENDAR_UNSUPPORTED:expected_Shanghai_or_Shenzhen_cash_market",
+        "AQUANT_REFERENCE_CALENDAR_UNSUPPORTED:expected_Shanghai_or_Shenzhen_cash_market",
     )
 
 
@@ -62,7 +64,7 @@ class Positions(dict):
         self.host = host
 
     def __missing__(self, security):
-        require(isinstance(security, str), "JQ_POSITION_SECURITY_REQUIRED")
+        require(isinstance(security, str), "AQUANT_POSITION_SECURITY_REQUIRED")
         self.host.api.securities(security)
         # Never create a native position, register a subscription, or insert a
         # missing key. dict.get/contains/iteration keep actual-holding semantics.
@@ -230,7 +232,7 @@ class Quote:
     @property
     def day_open(self):
         if getattr(self._host.data, "demand", False):
-            require(self._host.at.strftime("%H:%M") >= "09:30", "JQ_DAY_OPEN_NOT_VISIBLE")
+            require(self._host.at.strftime("%H:%M") >= "09:30", "AQUANT_DAY_OPEN_NOT_VISIBLE")
             return self._host.data.observed_value(self._sid, self._host.day, "open")
         if self._host.data.session_data is not None:
             return self._host.data.session_data.visible_open(self._sid, self._host.at)
@@ -244,7 +246,7 @@ class Quote:
         return float(row["open"])
 
     def __getattr__(self, field):
-        raise UnsupportedAPI(f"JQ_CURRENT_DATA_FIELD_UNSUPPORTED:{field}")
+        raise UnsupportedAPI(f"AQUANT_CURRENT_DATA_FIELD_UNSUPPORTED:{field}")
 
 
 class CurrentQuotes(Mapping):
@@ -273,9 +275,9 @@ class API:
         self.benchmark = None
 
     def set_benchmark(self, security):
-        require(self.host.phase == "initialize", "JQ_BENCHMARK_ONLY_IN_INITIALIZE")
+        require(self.host.phase == "initialize", "AQUANT_BENCHMARK_ONLY_IN_INITIALIZE")
         require(isinstance(security, str) and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security),
-                "JQ_BENCHMARK_SECURITY_REQUIRED:use_one_exchange_qualified_security")
+                "AQUANT_BENCHMARK_SECURITY_REQUIRED:use_one_exchange_qualified_security")
         self.benchmark = security
         self.host.emit("benchmark_selected", security=security)
 
@@ -287,8 +289,8 @@ class API:
         )
 
     def run_daily(self, func, time="open", reference_security=None):
-        require(self.host.phase == "initialize", "JQ_SCHEDULE_ONLY_IN_INITIALIZE")
-        require(callable(func), "JQ_SCHEDULE_CALLBACK_REQUIRED")
+        require(self.host.phase == "initialize", "AQUANT_SCHEDULE_ONLY_IN_INITIALIZE")
+        require(callable(func), "AQUANT_SCHEDULE_CALLBACK_REQUIRED")
         validate_callback(func)
         validate_reference_calendar(reference_security)
         aliases = {"open": "09:30", "before_open": "09:00", "after_close": "15:30"}
@@ -298,14 +300,14 @@ class API:
 
             require(
                 isinstance(clock, str) and schedule_clock(clock),
-                f"JQ_SCHEDULE_TIME_UNSUPPORTED:{time}",
+                f"AQUANT_SCHEDULE_TIME_UNSUPPORTED:{time}",
             )
             self.schedules.append((func, clock))
             return
         supported = {"09:00", "15:30", "every_bar"}
         for day in self.host.data.days:
             valid = supported | {t.strftime("%H:%M") for t in self.host.data.clocks[day]}
-            require(clock in valid, f"JQ_SCHEDULE_TIME_UNSUPPORTED:{time}")
+            require(clock in valid, f"AQUANT_SCHEDULE_TIME_UNSUPPORTED:{time}")
         self.schedules.append((func, clock))
 
     def set_universe(self, security_list):
@@ -322,21 +324,21 @@ class API:
     def securities(self, security):
         ids = [security] if isinstance(security, str) else list(security)
         if getattr(self.host.data, "demand", False):
-            require(ids, "JQ_SECURITIES_REQUIRED")
+            require(ids, "AQUANT_SECURITIES_REQUIRED")
             return self.host.data.securities(ids)
         require(
             ids and len(ids) == len(set(ids)) and set(ids) <= set(self.host.data.ids),
-            "JQ_SECURITY_OUT_OF_SCOPE",
+            "AQUANT_SECURITY_OUT_OF_SCOPE",
         )
         return ids
 
     def get_all_securities(self, types=None, date=None):
-        require(getattr(self.host.data, "demand", False), "JQ_DIRECTORY_UNAVAILABLE")
-        require(types is None or types == [] or types == ["stock"], "JQ_DIRECTORY_TYPES_UNSUPPORTED")
+        require(getattr(self.host.data, "demand", False), "AQUANT_DIRECTORY_UNAVAILABLE")
+        require(types is None or types == [] or types == ["stock"], "AQUANT_DIRECTORY_TYPES_UNSUPPORTED")
         as_of = str(self.host.at.date()) if date is None else str(date)[:10]
         from datetime import date as Date
         require(str(Date.fromisoformat(as_of)) == as_of and as_of <= str(self.host.at.date()),
-                "JQ_FUTURE_DATA_REQUEST")
+                "AQUANT_FUTURE_DATA_REQUEST")
         rows, receipt = self.host.data.catalogue(as_of)
         import pandas as pd
         frame = pd.DataFrame([
@@ -353,13 +355,13 @@ class API:
                 and self.host.jq_capacity
                 and type(value) in (int, float)
                 and number(value) == number(self.host.config["volume_percent"]),
-                "JQ_VOLUME_RATIO_MUST_MATCH_EXPLICIT_CAPACITY_POLICY",
+                "AQUANT_VOLUME_RATIO_MUST_MATCH_EXPLICIT_CAPACITY_POLICY",
             )
             self.host.emit("option", name=name, value=value)
             return
         require(
             name in {"use_real_price", "avoid_future_data"} and value is True,
-            f"JQ_OPTION_UNSUPPORTED:{name}={value}",
+            f"AQUANT_OPTION_UNSUPPORTED:{name}={value}",
         )
         self.host.emit("option", name=name, value=value)
 
@@ -373,40 +375,40 @@ class API:
         )
         require(
             type == "stock" and ref is None and cost == expected,
-            "JQ_COST_MUST_MATCH_FROZEN_RUN_CONFIG",
+            "AQUANT_COST_MUST_MATCH_FROZEN_RUN_CONFIG",
         )
         self.host.emit("cost_assertion", cost=vars(cost))
 
     def set_slippage(self, slippage, type="stock", ref=None):
         require(
             type == "stock" and ref is None and slippage == FixedSlippage(0),
-            "JQ_ONLY_ZERO_FIXED_SLIPPAGE",
+            "AQUANT_ONLY_ZERO_FIXED_SLIPPAGE",
         )
 
     def get_current_data(self):
-        require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")
+        require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
         if getattr(self.host.data, "demand", False):
             return CurrentQuotes(self.host)
         return {s: Quote(self.host, s) for s in self.host.data.ids}
 
     def _history(self, sid, count, unit, fields, *, include_now=True, end=None, start=None):
-        require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")
+        require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
         self.securities(sid)
-        require(unit in {"1m", "minute"}, f"JQ_FREQUENCY_UNSUPPORTED:{unit}")
+        require(unit in {"1m", "minute"}, f"AQUANT_FREQUENCY_UNSUPPORTED:{unit}")
         demand = getattr(self.host.data, "demand", False)
         require((demand and count is None and start is not None) or (type(count) is int and count > 0),
-                "JQ_HISTORY_COUNT")
+                "AQUANT_HISTORY_COUNT")
         if demand:
             if count is not None:
                 self.host.data.check_budget(count)
         else:
-            require(count <= 10000, "JQ_HISTORY_COUNT")
+            require(count <= 10000, "AQUANT_HISTORY_COUNT")
         fields = [fields] if isinstance(fields, str) else list(fields)
         require(
             fields
             and len(set(fields)) == len(fields)
             and set(fields) <= {"open", "high", "low", "close", "volume", "money"},
-            "JQ_HISTORY_FIELDS_UNSUPPORTED",
+            "AQUANT_HISTORY_FIELDS_UNSUPPORTED",
         )
         cutoff = self.host.at if end is None else end
         if demand:
@@ -417,7 +419,7 @@ class API:
         else:
             rows = self.host.data.visible(sid, self.host.at, end=cutoff,
                                           include_now=include_now, count=count, preserve_missing=True)
-        require(count is None or len(rows) == count, f"JQ_INSUFFICIENT_VISIBLE_HISTORY:{sid}:{count}:{len(rows)}")
+        require(count is None or len(rows) == count, f"AQUANT_INSUFFICIENT_VISIBLE_HISTORY:{sid}:{count}:{len(rows)}")
         unavailable = [
             {"security": sid, "source_label": r["source_label"], "reason": r["missing_reason"]}
             for r in rows
@@ -466,8 +468,8 @@ class API:
             return DailyAPI(self.host).attribute_history(
                 security, count, unit, fields, skip_paused, df, fq
             )
-        require(fq is None, "JQ_ADJUSTMENT_UNSUPPORTED:use_fq_None_for_raw_research")
-        require(type(skip_paused) is bool and type(df) is bool, "JQ_HISTORY_BOOLEAN_REQUIRED")
+        require(fq is None, "AQUANT_ADJUSTMENT_UNSUPPORTED:use_fq_None_for_raw_research")
+        require(type(skip_paused) is bool and type(df) is bool, "AQUANT_HISTORY_BOOLEAN_REQUIRED")
         # No artificial bars on suspended dates. skip_paused=False cannot promise
         # JQ forward-filled suspension values, so reject when suspension is present.
         require(
@@ -477,7 +479,7 @@ class API:
                 for d in self.host.data.days
                 if d <= str(self.host.at.date())
             ),
-            "JQ_PAUSED_FILL_UNSUPPORTED",
+            "AQUANT_PAUSED_FILL_UNSUPPORTED",
         )
         frame = self._history(security, count, unit, fields)
         return frame if df else {f: frame[f].to_numpy() for f in frame}
@@ -500,17 +502,17 @@ class API:
             )
         require(
             fq is None and type(df) is bool and skip_paused is False,
-            "JQ_HISTORY_REQUIRES_RAW_UNFILLED_ALIGNED_INPUT",
+            "AQUANT_HISTORY_REQUIRES_RAW_UNFILLED_ALIGNED_INPUT",
         )
         ids = self.securities(self.universe if security_list is None else security_list)
         if getattr(self.host.data, "demand", False):
-            require(type(count) is int and count > 0, "JQ_HISTORY_COUNT")
+            require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
             self.host.data.check_budget(len(ids) * count)
         import pandas as pd
 
         frames = {s: self._history(s, count, unit, [field]) for s in ids}
         indexes = [f.index for f in frames.values()]
-        require(all(indexes[0].equals(i) for i in indexes), "JQ_HISTORY_UNALIGNED_SECURITIES")
+        require(all(indexes[0].equals(i) for i in indexes), "AQUANT_HISTORY_UNALIGNED_SECURITIES")
         frame = pd.DataFrame({s: f[field] for s, f in frames.items()})
         frame.attrs["unavailable_minutes"] = [
             gap for f in frames.values() for gap in f.attrs["unavailable_minutes"]
@@ -535,7 +537,7 @@ class API:
             )
         require(
             fq_ref_date is None and type(include_now) is bool and type(df) is bool,
-            "JQ_BARS_OPTIONS_UNSUPPORTED",
+            "AQUANT_BARS_OPTIONS_UNSUPPORTED",
         )
         wanted = list(fields)
         cols = [f for f in wanted if f != "date"]
@@ -554,9 +556,9 @@ class API:
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=self.host.at.tzinfo)
             result = stamp(parsed.isoformat())
-            require(result <= self.host.at, "JQ_FUTURE_DATA_REQUEST")
+            require(result <= self.host.at, "AQUANT_FUTURE_DATA_REQUEST")
             return result
-        raise ValueError("JQ_MINUTE_END_REQUIRES_DATETIME")
+        raise ValueError("AQUANT_MINUTE_END_REQUIRES_DATETIME")
 
     def get_price(
         self,
@@ -579,17 +581,17 @@ class API:
                 fq, count, panel, fill_paused,
             )
         if frequency in {"daily", "1d"} and self.host.jq_lifecycle:
-            require(self.host.data.session_data is not None, "JQ_DAILY_REQUIRES_AD_OBSERVATIONS")
+            require(self.host.data.session_data is not None, "AQUANT_DAILY_REQUIRES_AD_OBSERVATIONS")
             require(
                 fq is None and skip_paused is False and panel is False and fill_paused is False,
-                "JQ_PRICE_REQUIRES_RAW_UNFILLED_PANEL_FALSE",
+                "AQUANT_PRICE_REQUIRES_RAW_UNFILLED_PANEL_FALSE",
             )
             return self._daily_price(security, start_date, end_date, fields, count)
         require((demand and start_date is not None and count is None)
-                or (start_date is None and count is not None), "JQ_PRICE_COUNT_OR_START_REQUIRED")
+                or (start_date is None and count is not None), "AQUANT_PRICE_COUNT_OR_START_REQUIRED")
         require(
             fq is None and skip_paused is False and panel is False and fill_paused is False,
-            "JQ_PRICE_REQUIRES_RAW_UNFILLED_PANEL_FALSE",
+            "AQUANT_PRICE_REQUIRES_RAW_UNFILLED_PANEL_FALSE",
         )
         ids = self.securities(security)
         def boundary(value, start=False):
@@ -597,11 +599,11 @@ class API:
                 return None
             if demand and len(str(value)) == 10:
                 day = str(value)
-                require(day <= str(self.host.at.date()), "JQ_FUTURE_DATA_REQUEST")
+                require(day <= str(self.host.at.date()), "AQUANT_FUTURE_DATA_REQUEST")
                 return min(stamp(day + ('T00:00:00+08:00' if start else 'T15:00:00+08:00')), self.host.at)
             return self.parse_end(value)
         end, start = boundary(end_date), boundary(start_date, True)
-        require(start is None or start <= (end or self.host.at), "JQ_PRICE_DATE_ORDER")
+        require(start is None or start <= (end or self.host.at), "AQUANT_PRICE_DATE_ORDER")
         fields = fields or ["open", "high", "low", "close", "volume", "money"]
         if demand and type(count) is int:
             self.host.data.check_budget(len(ids)*count)
@@ -620,16 +622,16 @@ class API:
         return frame
 
     def _daily_price(self, security, start, end, fields, count):
-        require(self.host.phase != "initialize", "JQ_DATA_UNAVAILABLE_IN_INITIALIZE")
+        require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
         ids = self.securities(security)
         fields = [fields] if isinstance(fields, str) else list(fields or ["close", "volume"])
         require(
             fields and len(set(fields)) == len(fields) and set(fields) <= {"close", "volume"},
-            "JQ_DAILY_FIELDS_UNSUPPORTED",
+            "AQUANT_DAILY_FIELDS_UNSUPPORTED",
         )
         require(
             count is None or (type(count) is int and 0 < count <= 10000 and start is None),
-            "JQ_DAILY_COUNT_OR_START_REQUIRED",
+            "AQUANT_DAILY_COUNT_OR_START_REQUIRED",
         )
 
         def day(value, default):
@@ -639,7 +641,7 @@ class API:
                 return str(self.parse_end(value).date())
             if isinstance(value, date):
                 return value.isoformat()
-            require(isinstance(value, str) and len(value) == 10, "JQ_DAILY_DATE_REQUIRED")
+            require(isinstance(value, str) and len(value) == 10, "AQUANT_DAILY_DATE_REQUIRED")
             return date.fromisoformat(value).isoformat()
 
         start = day(start, self.host.data.calendar[0])
@@ -652,7 +654,7 @@ class API:
             if count is not None:
                 rows = rows[-count:]
             require(
-                rows and (count is None or len(rows) == count), "JQ_INSUFFICIENT_VISIBLE_DAILY_DATA"
+                rows and (count is None or len(rows) == count), "AQUANT_INSUFFICIENT_VISIBLE_DAILY_DATA"
             )
             self.host.emit(
                 "daily_history_read",
@@ -681,14 +683,14 @@ class API:
             require(
                 self.host.phase in {"scheduled", "bar"}
                 and ("09:30" <= clock < "11:30" or "13:00" <= clock < "15:00"),
-                "JQ_ORDER_OUTSIDE_SESSION",
+                "AQUANT_ORDER_OUTSIDE_SESSION",
             )
         else:
             require(
                 self.host.phase == "bar"
                 and at in self.host.data.clocks[day]
                 and at < self.host.data.sessions[day][-1][1],
-                "JQ_ORDER_OUTSIDE_SESSION",
+                "AQUANT_ORDER_OUTSIDE_SESSION",
             )
         if self.host.config["matching"] == "jq_current":
             row = self.host.data.bars.get((security, at))
@@ -697,24 +699,24 @@ class API:
             else:
                 require(
                     row is not None and row["_available"] <= at,
-                    "JQ_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
+                    "AQUANT_CURRENT_REQUIRES_VISIBLE_CLOSED_BAR:opening_or_missing_bar_not_supported",
                 )
 
     def _order(self, api_name, security, value, style, side, pindex, close_today):
         self.securities(security)
         require(
             side == "long" and pindex == 0 and close_today is False,
-            "JQ_ONLY_LONG_SINGLE_STOCK_ACCOUNT",
+            "AQUANT_ONLY_LONG_SINGLE_STOCK_ACCOUNT",
         )
         self.validate_order_clock(security)
         if getattr(self.host.data, "demand", False):
             self.host.data.component(security, str(self.host.at.date()))
         at = self.host.at
-        require(type(value) in (int, float) and math.isfinite(value), "JQ_ORDER_FINITE_AMOUNT")
+        require(type(value) in (int, float) and math.isfinite(value), "AQUANT_ORDER_FINITE_AMOUNT")
         if api_name in {"order_shares", "order_to"}:
-            require(float(value).is_integer(), "JQ_ORDER_INTEGER_SHARES")
+            require(float(value).is_integer(), "AQUANT_ORDER_INTEGER_SHARES")
         if api_name.startswith("order_target") or api_name == "order_to":
-            require(value >= 0, "JQ_TARGET_CANNOT_BE_NEGATIVE")
+            require(value >= 0, "AQUANT_TARGET_CANNOT_BE_NEGATIVE")
         from rqalpha import api as native
         from rqalpha.model.order import LimitOrder, MarketOrder
 
@@ -724,7 +726,7 @@ class API:
             self.host.data.check_order_price(security, style.price, at=at)
             native_style = LimitOrder(float(style.price))
         else:
-            raise UnsupportedAPI("JQ_ORDER_STYLE_UNSUPPORTED")
+            raise UnsupportedAPI("AQUANT_ORDER_STYLE_UNSUPPORTED")
         self.host.emit(
             "order_request",
             api=api_name,
@@ -734,7 +736,7 @@ class API:
         )
         result = getattr(native, api_name)(security, value, style=native_style)
         if isinstance(result, list):
-            require(len(result) <= 1, "JQ_NATIVE_ORDER_RESULT_SCOPE")
+            require(len(result) <= 1, "AQUANT_NATIVE_ORDER_RESULT_SCOPE")
             result = result[0] if result else None
         if result is not None:
             self.host.orders[str(result.order_id)] = result
@@ -780,7 +782,7 @@ class API:
 
     def cancel_order(self, order):
         order_id = str(getattr(order, "order_id", order))
-        require(order_id in self.host.orders, "JQ_UNKNOWN_ORDER_ID")
+        require(order_id in self.host.orders, "AQUANT_UNKNOWN_ORDER_ID")
         native = self.host.orders[order_id]
         if native.is_final():
             return False
@@ -806,7 +808,7 @@ class API:
     def record(self, **values):
         require(
             all(type(v) in (int, float) and math.isfinite(v) for v in values.values()),
-            "JQ_RECORD_FINITE_NUMBERS_ONLY",
+            "AQUANT_RECORD_FINITE_NUMBERS_ONLY",
         )
         self.host.emit("record", values=values)
 
@@ -839,7 +841,7 @@ class API:
             },
             set_level=unsupported("log.set_level"),
         )
-        module = ModuleType("jqdata")
+        module = ModuleType("aquant")
         module.__dict__.update(result)
         module.__all__ = list(result)
 
@@ -849,7 +851,8 @@ class API:
             return unsupported(name)()
 
         module.__getattr__ = missing
-        sys.modules["jqdata"] = module
+        sys.modules["aquant"] = module
+        result["__builtins__"] = {**vars(builtins), "__import__": strategy_import}
         return result
 
     def logger(self, level):

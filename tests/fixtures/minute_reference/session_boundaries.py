@@ -2,7 +2,7 @@
 
 # ruff: noqa: F405
 
-from jqdata import *  # noqa: F403
+from aquant import *  # noqa: F403
 
 
 def initialize(context):

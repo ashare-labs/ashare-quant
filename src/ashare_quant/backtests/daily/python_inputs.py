@@ -200,9 +200,9 @@ class DailyPythonInputs:
         return self.states[sid, day]
 
     def visible(self, sid, at, *, count=None, end=None, include_now=True, preserve_missing=False):
-        require(sid in self.ids, "JQ_SECURITY_OUT_OF_SCOPE")
+        require(sid in self.ids, "AQUANT_SECURITY_OUT_OF_SCOPE")
         cutoff = at if end is None else end
-        require(cutoff <= at, "JQ_FUTURE_DATA_REQUEST")
+        require(cutoff <= at, "AQUANT_FUTURE_DATA_REQUEST")
         result = []
         for day in self.calendar[:-1]:
             available = stamp(day + "T15:00:00+08:00")

@@ -17,7 +17,7 @@ from tests.minute_tasks.test_daily import fixed_release as fixed_release
 ]}], indirect=True)
 def test_reference_calendar_zero_position_and_visible_open_need_no_execution_data(daily_jobs, frequency):
     app, jobs, body = daily_jobs
-    body.update(frequency=frequency, end_date=body["start_date"], securities=[], source='''from jqdata import *
+    body.update(frequency=frequency, end_date=body["start_date"], securities=[], source='''from aquant import *
 def initialize(c):
     g.calls = []
     run_daily(before, 'before_open', reference_security='000300.XSHG')
@@ -34,17 +34,17 @@ def empty(c):
     zero.total_amount = 999
     assert p.positions['000001.XSHE'].total_amount == 0
     try: p.positions[('000001.XSHE',)]
-    except ValueError as e: assert 'JQ_POSITION_SECURITY_REQUIRED' in str(e)
+    except ValueError as e: assert 'AQUANT_POSITION_SECURITY_REQUIRED' in str(e)
     else: raise AssertionError('multiple-security position key accepted')
     try: p.positions['000300.XSHG']
-    except Exception as e: assert getattr(e, 'code', None) == 'JQ_UNKNOWN_RELEASE_SECURITY'
+    except Exception as e: assert getattr(e, 'code', None) == 'AQUANT_UNKNOWN_RELEASE_SECURITY'
     else: raise AssertionError('reference calendar silently authorized missing security')
     assert p.available_cash == p.total_value == 100000 and p.positions_value == 0
 def before(c):
     assert c.current_dt.strftime('%H:%M') == '09:00'
     empty(c)
     try: get_current_data()['000001.XSHE'].day_open
-    except ValueError as e: assert 'JQ_DAY_OPEN_NOT_VISIBLE' in str(e)
+    except ValueError as e: assert 'AQUANT_DAY_OPEN_NOT_VISIBLE' in str(e)
     else: raise AssertionError('future opening price visible')
     g.calls.append('before')
 def opened(c):
@@ -77,11 +77,11 @@ def after(c):
 @pytest.mark.parametrize("frequency", ["1d", "1m"])
 def test_unknown_reference_calendar_is_not_assumed_to_be_cash_equity(daily_jobs, frequency):
     app, jobs, body = daily_jobs
-    body.update(frequency=frequency, end_date=body["start_date"], securities=[], source='''from jqdata import *
+    body.update(frequency=frequency, end_date=body["start_date"], securities=[], source='''from aquant import *
 def initialize(c):
     run_daily(lambda c: None, reference_security='IF1512.CCFX')
 ''')
     with TestClient(app) as client:
         job = execute(client, jobs, body)
         assert job["status"] == "failed"
-        assert "JQ_REFERENCE_CALENDAR_UNSUPPORTED" in job["error"]["message"]
+        assert "AQUANT_REFERENCE_CALENDAR_UNSUPPORTED" in job["error"]["message"]

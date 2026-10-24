@@ -100,7 +100,10 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                     caps = await call(client, "research_capabilities")
                     env = caps["python_minute"]["value"]["environment_id"]
                     cid = caps["product"]["value"]["configuration_id"]
-                    assert caps["python_minute"]["value"]["max_stock_minutes"] == 20000
+                    python_api = caps["python_minute"]["value"]
+                    assert "max_stock_minutes" not in python_api
+                    assert python_api["strategy_api"]["module"] == "aquant"
+                    assert python_api["strategy_api"]["legacy_module_supported"] is False
                     assert caps["extensions"]["factors"]["available"]
                     assert caps["extensions"]["python_daily"]["available"]
                     found = await call(client, "discover_data", configuration_id=cid)

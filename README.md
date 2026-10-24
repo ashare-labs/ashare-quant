@@ -37,6 +37,7 @@ python -m ashare_quant.deployment task-worker
 ## 使用指南
 
 - [因子看板与评价](docs/factors.md)：已有两来源库、冻结输入、真实数值与同页统计诊断。
+- [aquant 策略入口迁移](docs/aquant-migration.md)：新导入、安装边界与可恢复的保存策略迁移。
 - [Python 策略工作台](docs/python-workbench.md)：自动准备正式数据、运行自定义日频/分钟 Python、查看与取消任务。
 - [研究任务](docs/tasks.md)：共享队列、取消、结果和重连找回。
 - [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份与空目录恢复。

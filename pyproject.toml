@@ -92,6 +92,7 @@ include = [
 [project.scripts]
 ashare-quant-mcp = "ashare_quant.mcp.server:main"
 ashare-quant = "ashare_quant.cli:main"
+ashare-quant-migrate-imports = "ashare_quant.strategies.migrate_imports:main"
 
 [dependency-groups]
 dev = ["pytest==9.1.1", "httpx==0.28.1", "ruff==0.16.6", "packaging==26.3"]

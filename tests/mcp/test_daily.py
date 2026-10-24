@@ -12,7 +12,7 @@ from ashare_quant.tasks.worker import work_one
 from tests.mcp.fixture import make_deployment, submission
 from tests.mcp.test_e2e import call, collect, serving
 
-SOURCE = """from jqdata import *
+SOURCE = """from aquant import *
 def initialize(context):
     set_universe(context.securities)
     run_daily(trade, time="open")

@@ -6,7 +6,7 @@ from ashare_quant.backtests.minute.lifecycle import handle_clocks
 
 
 def test_complete_callback_order_lunch_and_terminal_without_fabricated_bars(run_minute):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     assert c.current_dt.strftime('%H:%M') == '00:00'
     assert c.run_params.type == 'full_backtest'
@@ -52,7 +52,7 @@ def on_strategy_end(c):
 
 
 def test_full_lifecycle_does_not_make_first_unfinished_minute_visible(run_minute):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c): run_daily(opening,'09:30')
 def opening(c):
     if str(c.current_dt.date()) != '2024-03-04': return
@@ -70,7 +70,7 @@ def test_policy_options_are_strict_before_running(run_minute, key, value):
 
 
 def test_terminal_day_queries_end_without_erasing_native_ledger(run_minute):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c): run_daily(buy,'09:31')
 def buy(c):
     if str(c.current_dt.date())=='2024-03-06': g.order=order('600000.XSHG',100)

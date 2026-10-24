@@ -16,7 +16,7 @@ JQ = dict(
 def test_daily_initial_caps_odd_lot_partials_budget_and_next_session_expiry(
     run_minute, minute_session_doc
 ):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     set_option('order_volume_ratio',0.0001)
@@ -76,7 +76,7 @@ def on_strategy_end(c): assert g.day==3
 
 
 def test_daily_volume_is_not_available_to_strategy_at_initial_fill(run_minute, minute_session_doc):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c): run_daily(check,'09:31')
 def check(c):
     order('600000.XSHG',1000)
@@ -99,7 +99,7 @@ def test_daily_policy_requires_source_and_explicit_matching_modes(run_minute):
 def test_tight_buy_budget_keeps_price_improvement_and_paid_minimum_fee(
     run_minute, minute_session_doc
 ):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     run_daily(submit,'09:31')
     run_daily(cancel,'09:33')

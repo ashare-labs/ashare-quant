@@ -30,8 +30,8 @@ def test_opening_price_eligibility_precedes_all_native_order_sizing(
 ):
     for row in minute_session_doc["session_observations"]["opening_prices"]:
         row["available_at"] = row["date"] + "T10:00:00+08:00"
-    source = f"from jqdata import *\ndef initialize(c):run_daily(buy,'09:30')\ndef buy(c):{api}('{SID}',1000)"
-    with pytest.raises(MinuteRunError, match="JQ_OPENING_EXECUTION_PRICE_UNAVAILABLE"):
+    source = f"from aquant import *\ndef initialize(c):run_daily(buy,'09:30')\ndef buy(c):{api}('{SID}',1000)"
+    with pytest.raises(MinuteRunError, match="AQUANT_OPENING_EXECUTION_PRICE_UNAVAILABLE"):
         run_minute(source, doc=minute_session_doc, config=JQ)
     root = tmp_path / "run"
     events = [json.loads(s) for s in (root / "events.jsonl").read_text().splitlines()]
@@ -45,7 +45,7 @@ def test_visible_opening_executes_at_its_own_price_and_closed_bar_needs_no_day_o
     # The opening scalar is different from yesterday and from the first close.
     for state in minute_session_doc["states"]:
         state["previous_close"] = "9.5" if state["security"] == SID else state["previous_close"]
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     run_daily(buy,'09:30');run_daily(later,'09:31')
 def buy(c):
@@ -77,13 +77,13 @@ def test_resume_uses_only_current_day_visible_morning_bars(run_minute, minute_se
             and not visible
         ):
             row["available_at"] = "2024-03-04T13:01:00+08:00"
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):run_daily(buy,'13:00')
 def buy(c):
     if str(c.current_dt.date())=='2024-03-04':order('600000.XSHG',100)
 """
     if not visible:
-        with pytest.raises(MinuteRunError, match="JQ_RESUME_EXECUTION_PRICE_UNAVAILABLE"):
+        with pytest.raises(MinuteRunError, match="AQUANT_RESUME_EXECUTION_PRICE_UNAVAILABLE"):
             run_minute(source, doc=minute_session_doc, config=JQ)
     else:
         result, _, root = run_minute(source, doc=minute_session_doc, config=JQ)
@@ -100,7 +100,7 @@ def test_zero_minute_keeps_callbacks_and_pending_orders_but_has_no_fills(
     for row in minute_session_doc["session_observations"]["daily"]:
         if row["security"] == SID:
             row["volume"] = "2390000"
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     run_daily(rest,'14:58');run_daily(zero,'14:59')
 def rest(c):

@@ -34,7 +34,7 @@ def validate_sessions(data):
             (stamp(day + "T09:30:00+08:00"), stamp(day + "T11:30:00+08:00")),
             (stamp(day + "T13:00:00+08:00"), stamp(day + "T15:00:00+08:00")),
         ]
-        require(data.sessions[day] == expected, "JQ_LIFECYCLE_REQUIRES_FULL_AD_SESSIONS")
+        require(data.sessions[day] == expected, "AQUANT_LIFECYCLE_REQUIRES_FULL_AD_SESSIONS")
 
 
 class JQEventSource(AbstractEventSource):
@@ -70,7 +70,7 @@ class JQEventSource(AbstractEventSource):
         yield self.event(EVENT.USER, stamp(self.data.days[-1] + "T23:59:59.001000+08:00"), "end")
 
     def get_state(self):
-        raise RuntimeError("JQ_LIFECYCLE_INTERMEDIATE_RESTORE_UNSUPPORTED")
+        raise RuntimeError("AQUANT_LIFECYCLE_INTERMEDIATE_RESTORE_UNSUPPORTED")
 
     def set_state(self, state):
-        raise RuntimeError("JQ_LIFECYCLE_INTERMEDIATE_RESTORE_UNSUPPORTED")
+        raise RuntimeError("AQUANT_LIFECYCLE_INTERMEDIATE_RESTORE_UNSUPPORTED")

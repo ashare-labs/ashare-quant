@@ -349,7 +349,7 @@ def test_unsupported_execution_policy_is_not_silently_accepted(doc, tmp_path):
 
 def test_generic_contract_runs_native_account_and_completed_reentry(doc, tmp_path):
     strategy = tmp_path / "strategy.py"
-    strategy.write_text("""from jqdata import order, order_target, run_daily
+    strategy.write_text("""from aquant import order, order_target, run_daily
 def initialize(context): run_daily(trade, '09:31')
 def trade(context):
     if str(context.current_dt.date()) == '2025-07-02': order('601234.XSHG', 100)

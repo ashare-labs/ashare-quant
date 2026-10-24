@@ -54,12 +54,12 @@ def frozen_factors(root, binding):
 
 def history_prices(rows, raw_receipt, factors, adjustment, basis_date):
     """Select immutable raw rows, then use the data owner's public price projection."""
-    require(adjustment in {None, "pre", "post"}, "JQ_ADJUSTMENT_UNSUPPORTED")
+    require(adjustment in {None, "pre", "post"}, "AQUANT_ADJUSTMENT_UNSUPPORTED")
     if adjustment is None:
         return {"rows": rows, "price_basis": "raw", "receipt": raw_receipt}
     require(
         factors is not None,
-        "JQ_ADJUSTMENT_UNAVAILABLE",
+        "AQUANT_ADJUSTMENT_UNAVAILABLE",
         "Configure a fixed owner history factor snapshot, or use fq=None",
     )
     raw = {

@@ -2,6 +2,7 @@
 
 import inspect
 import json
+import sys
 from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal, localcontext
@@ -198,7 +199,7 @@ class Matcher(DefaultBarMatcher):
         if self.host.config.get("lifecycle") == "jq_minute":
             self.update(None)
         if self.host.config.get("capacity_policy") == "jq_daily_initial":
-            require(self._volume_limit and not open_auction, "JQ_EXPLICIT_CAPACITY_REQUIRED")
+            require(self._volume_limit and not open_auction, "AQUANT_EXPLICIT_CAPACITY_REQUIRED")
             initial = order.datetime.replace(tzinfo=SHANGHAI) == self.host.at
             bar = self.host.data.bars.get((order.order_book_id, self.host.at))
             zero_minute = bar is not None and Fraction(str(bar["volume"])) == 0
@@ -298,9 +299,9 @@ class BarData(Mapping):
         return len(self.ids)
 
     def __getitem__(self, sid):
-        require(sid in self.ids, "JQ_SECURITY_OUT_OF_SCOPE")
+        require(sid in self.ids, "AQUANT_SECURITY_OUT_OF_SCOPE")
         rows = self.host.data.visible(sid, self.host.at, count=1)
-        require(rows, f"JQ_NO_VISIBLE_BAR:{sid}")
+        require(rows, f"AQUANT_NO_VISIBLE_BAR:{sid}")
         row = rows[-1]
         return SimpleNamespace(
             **{k: float(row[k]) for k in ("open", "high", "low", "close", "volume")},
@@ -395,7 +396,7 @@ class Mod(AbstractMod):
                 self.data.component(sid, self.day)
         if self.phase == "before" and self.jq_lifecycle:
             for order in list(self.env.broker.get_open_orders()):
-                require(order.datetime.date() < self.at.date(), "JQ_ROLLOVER_ORDER_DATE")
+                require(order.datetime.date() < self.at.date(), "AQUANT_ROLLOVER_ORDER_DATE")
                 self.emit(
                     "order_expiry_boundary",
                     order_id=str(order.order_id),
@@ -414,7 +415,7 @@ class Mod(AbstractMod):
         from rqalpha.core.execution_context import ExecutionContext
 
         phase = getattr(event, "minute_phase", None)
-        require(phase in {"scheduled", "after", "end"}, "JQ_UNKNOWN_CLOCK_EVENT")
+        require(phase in {"scheduled", "after", "end"}, "AQUANT_UNKNOWN_CLOCK_EVENT")
         self.env.update_time(event.calendar_dt, event.trading_dt)
         self.at = event.trading_dt.replace(tzinfo=SHANGHAI)
         self.phase = phase
@@ -475,7 +476,7 @@ class Mod(AbstractMod):
         exec(
             compile(runtime["source"], str(runtime["root"] / "strategy.py"), "exec"), self.namespace
         )
-        require(callable(self.namespace.get("initialize")), "JQ_INITIALIZE_REQUIRED")
+        require(callable(self.namespace.get("initialize")), "AQUANT_INITIALIZE_REQUIRED")
         for name in (
             "initialize",
             "before_trading_start",
@@ -500,7 +501,7 @@ class Mod(AbstractMod):
         if inspect.isawaitable(result) or inspect.isgenerator(result) or inspect.isasyncgen(result):
             if inspect.iscoroutine(result):
                 result.close()  # Do not evaluate it; avoid an unawaited-coroutine warning.
-            raise ValueError(f"JQ_CALLBACK_RESULT_UNSUPPORTED:{name}:unevaluated_execution_object")
+            raise ValueError(f"AQUANT_CALLBACK_RESULT_UNSUPPORTED:{name}:unevaluated_execution_object")
         self.emit("callback_end", name=name, phase=self.phase)
 
     def dispatch(self, phase):
@@ -859,12 +860,17 @@ def after_trading(context): runtime["mod"].dispatch("after")
 
     native.BaseDataSource, native.DataProxy = forbidden, Proxy
     atomic_json(root / "native-config.json", requested)
+    previous_aquant = sys.modules.get("aquant")
     try:
         with logbook.FileHandler(str(root / "native.log")).applicationbound():
             result = native.run(parsed, source_code=wrapper)
         require(result and result.get("pythonminute"), "MINUTE_NATIVE_COMPLETION_MISSING")
         return result["pythonminute"]
     finally:
+        if previous_aquant is None:
+            sys.modules.pop("aquant", None)
+        else:
+            sys.modules["aquant"] = previous_aquant
         if Environment._env is not None:
             native.cleanup_resources(Environment._env)
         atomic_json(root / "teardown.json", {"native_singleton_cleared": Environment._env is None})

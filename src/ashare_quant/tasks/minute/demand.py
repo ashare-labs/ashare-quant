@@ -167,7 +167,7 @@ class DemandInputs:
     def securities(self, ids):
         require(
             len(ids) == len(set(ids)) and all(s in self.owner.release.identifiers for s in ids),
-            "JQ_UNKNOWN_RELEASE_SECURITY",
+            "AQUANT_UNKNOWN_RELEASE_SECURITY",
             "Security is not in the frozen release",
             {"securities": ids},
         )
@@ -177,7 +177,7 @@ class DemandInputs:
         self.securities(list(ids))
         for sid in ids:
             require(self.owner.release.instruments.get(sid, {}).get("asset_class", "equity") == "equity",
-                    "JQ_NOT_TRADABLE_SECURITY", "The current execution model trades equities only",
+                    "AQUANT_NOT_TRADABLE_SECURITY", "The current execution model trades equities only",
                     {"security": sid})
             if sid not in self.ids:
                 self.ids.append(sid)
@@ -250,7 +250,7 @@ class DemandInputs:
         fields=(),
     ):
         cutoff = end or at
-        require(cutoff <= at, "JQ_FUTURE_DATA_REQUEST", "Future observations are not visible")
+        require(cutoff <= at, "AQUANT_FUTURE_DATA_REQUEST", "Future observations are not visible")
         eligible = [
             d
             for d in self.calendar
@@ -285,7 +285,7 @@ class DemandInputs:
             ]
         require(
             selected and (count is None or len(selected) == count),
-            "JQ_INSUFFICIENT_VISIBLE_HISTORY",
+            "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
             "Frozen publication cannot supply the requested history",
             {"security": sid, "requested": count, "returned": len(selected), "start": start},
         )
@@ -367,7 +367,7 @@ class DemandInputs:
         self, sid, at, *, count=None, start=None, end=None, include_now=True, fields=()
     ):
         cutoff = end or at
-        require(cutoff <= at, "JQ_FUTURE_DATA_REQUEST", "Future observations are not visible")
+        require(cutoff <= at, "AQUANT_FUTURE_DATA_REQUEST", "Future observations are not visible")
         require(
             start is None or str(start.date()) >= self.calendar[0],
             "PYTHON_CALENDAR_GAP",
@@ -390,7 +390,7 @@ class DemandInputs:
         slots.reverse()
         require(
             slots and (count is None or len(slots) == count),
-            "JQ_INSUFFICIENT_VISIBLE_HISTORY",
+            "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
             "Frozen publication cannot supply the requested minutes",
         )
         selected = []

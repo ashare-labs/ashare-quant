@@ -37,7 +37,7 @@ def test_after_close_native_mark_uses_only_visible_prices_without_late_matching(
         if r["security"] == SID and "T15:00:" in r["bar_end"]:
             r.update(close="11", high="11", available_at=f"2024-03-04T{available}+08:00")
     result, events, _ = run_minute(
-        """from jqdata import *
+        """from aquant import *
 def initialize(c):
     run_daily(buy, 'open')
     run_daily(pending, '14:59')
@@ -73,7 +73,7 @@ def test_next_day_preopen_marks_dated_reference_without_revealing_late_bar(
         if s["security"] == SID and s["date"] == "2024-03-05":
             s["previous_close"] = "11"  # Distinct, declared pre-open reference evidence.
     result, events, _ = run_minute(
-        f"""from jqdata import *
+        f"""from aquant import *
 def initialize(c): run_daily(buy, 'open')
 def buy(c):
     if str(c.current_dt.date()) == '2024-03-04': order('600000.XSHG', 100)
@@ -102,7 +102,7 @@ def test_history_endpoint_and_knowledge_clock_stay_independent(run_minute, minut
         if r["security"] == SID and "T09:31:" in r["bar_end"]:
             r["available_at"] = "2024-03-04T09:34:00+08:00"
     _, events, _ = run_minute(
-        """from jqdata import *
+        """from aquant import *
 def initialize(c):
     run_daily(early, '09:33')
     run_daily(later, '09:34')
@@ -150,14 +150,14 @@ def test_deferred_callback_definitions_fail_all_lifecycle_entries(run_minute, tm
     if name == "scheduled":
         init = "def initialize(c): run_daily(scheduled, 'open')\n"
     args = "c, data" if name == "handle_data" else "c"
-    source = f"from jqdata import *\n{init}{prefix}def {name}({args}):\n    {body}\n"
-    with pytest.raises(MinuteRunError, match="JQ_CALLBACK_UNSUPPORTED"):
+    source = f"from aquant import *\n{init}{prefix}def {name}({args}):\n    {body}\n"
+    with pytest.raises(MinuteRunError, match="AQUANT_CALLBACK_UNSUPPORTED"):
         run_minute(source)
     assert not (tmp_path / "run/complete.json").exists()
     assert not (tmp_path / "run/result.json").exists()
     assert "never awaited" not in (tmp_path / "run/stderr.log").read_text()
     assert (
-        "JQ_CALLBACK_UNSUPPORTED"
+        "AQUANT_CALLBACK_UNSUPPORTED"
         in json.loads((tmp_path / "run/failure.json").read_text())["message"]
     )
 
@@ -174,9 +174,9 @@ def test_sync_wrappers_returning_deferred_execution_objects_fail(
         "awaitable": "class deferred:\n    def __await__(self):\n        raise RuntimeError('not-awaited')\n        yield\n",
     }
     init = "" if target == "initialize" else "def initialize(c): run_daily(scheduled, 'open')\n"
-    with pytest.raises(MinuteRunError, match="JQ_CALLBACK_RESULT_UNSUPPORTED"):
+    with pytest.raises(MinuteRunError, match="AQUANT_CALLBACK_RESULT_UNSUPPORTED"):
         run_minute(
-            f"from jqdata import *\n{definitions[kind]}{init}def {target}(c): return deferred()\n"
+            f"from aquant import *\n{definitions[kind]}{init}def {target}(c): return deferred()\n"
         )
     assert not (tmp_path / "run/complete.json").exists()
     events = [json.loads(x) for x in (tmp_path / "run/events.jsonl").read_text().splitlines()]
@@ -300,7 +300,7 @@ def test_state_replay_clock_cannot_expose_future_date_or_preopen_state(minute_do
 
 def test_state_replay_native_run_identity_and_future_prefix(run_minute, minute_doc, tmp_path):
     doc = posthoc(flat_window(minute_doc, days=2))
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c): run_daily(buy, 'open')
 def buy(c): order_target('600000.XSHG', 100)
 def before_trading_start(c):

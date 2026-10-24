@@ -19,6 +19,7 @@ from ashare_quant.identity import package_root, source_inventory
 from ashare_quant.portfolio.inputs import digest, require
 from ashare_quant.runtime import runtime_fingerprint
 from ashare_quant.storage.atomic_json import atomic as atomic_json
+from ashare_quant.strategies.imports import validate_imports
 
 DEFAULTS = {
     "initial_cash": 100000.0,
@@ -74,6 +75,7 @@ def run_backtest(
     source = Path(strategy).read_bytes()
     require(len(source) <= 256 * 1024, "MINUTE_STRATEGY_TOO_LARGE")
     compile(source, str(strategy), "exec")
+    validate_imports(source)
     require(type(timeout) in (int, float) and 0 < timeout <= 3600, "MINUTE_TIMEOUT_RANGE")
     settings = {**DEFAULTS, **(config or {})}
     require(set(settings) == set(DEFAULTS), "MINUTE_UNKNOWN_CONFIG")
@@ -103,7 +105,7 @@ def run_backtest(
     if settings["capacity_policy"] == "jq_daily_initial":
         require(
             settings["matching"] == "jq_current" and settings["lifecycle"] == "jq_minute",
-            "JQ_DAILY_CAP_REQUIRES_JQ_MATCHING_AND_LIFECYCLE",
+            "AQUANT_DAILY_CAP_REQUIRES_JQ_MATCHING_AND_LIFECYCLE",
         )
         data.require_jq_capacity()
     from ashare_quant.execution.rqalpha.runtime import runtime_identity

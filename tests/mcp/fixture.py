@@ -10,7 +10,7 @@ from pathlib import Path
 
 SID = "000001.XSHE"
 DAYS = ["2024-03-01", "2024-03-04", "2024-03-05", "2024-03-06"]
-SOURCE = """from jqdata import *
+SOURCE = """from aquant import *
 def initialize(context):
     set_universe(context.securities)
     run_daily(trade, time="09:50")

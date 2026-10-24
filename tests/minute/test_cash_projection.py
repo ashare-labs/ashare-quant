@@ -62,7 +62,7 @@ def test_real_cash_projection_cannot_shift_into_a_nonexistent_reserve(
         )
 
 
-SOURCE = """from jqdata import *
+SOURCE = """from aquant import *
 import json
 def snapshot(c, label):
     g.seq += 1

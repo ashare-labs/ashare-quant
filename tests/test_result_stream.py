@@ -73,7 +73,7 @@ def test_verified_read_reports_actual_disk_reserve(tmp_path, monkeypatch):
 @pytest.mark.parametrize("daily_jobs", [{"file_bytes": 128 * 1024 * 1024}], indirect=True)
 def test_legal_large_result_all_read_paths_and_small_analysis_allocation(daily_jobs):
     app, jobs, body = daily_jobs
-    body.update(securities=[], end_date=body["start_date"], source="""from jqdata import *
+    body.update(securities=[], end_date=body["start_date"], source="""from aquant import *
 def initialize(context):
     log.info('x' * (65 * 1024 * 1024))
 """)

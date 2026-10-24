@@ -1,6 +1,6 @@
 """A different real Python strategy: choose using only visible five-minute returns."""
 
-from jqdata import (
+from aquant import (
     LimitOrderStyle,
     g,
     get_current_data,

@@ -43,7 +43,7 @@ def test_complete_real_probe_source_with_one_explicit_raw_price_argument(gap_run
     assert hashlib.sha256(original.encode()).hexdigest() == (
         "15fd3ba5759bd5d05915aba7edd53569986c2643a64a2e1067afd33e926ea6e0"
     )
-    assert ported == original.replace(
+    assert ported == original.replace("from jqdata import *", "from aquant import *").replace(
         "skip_paused=False, df=True)", "skip_paused=False, df=True, fq=None)"
     )
     result, events, root = gap_run
@@ -115,7 +115,7 @@ def test_policy_identity_reentry_and_terminal_failure(
 
 
 def test_odd_share_t1_exit_and_fee_carry_remain_native(run_minute, minute_session_doc):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     g.day=0
     run_daily(buy,'09:31'); run_daily(cancel,'09:33'); run_daily(sell,'09:34')
@@ -151,7 +151,7 @@ def after_trading_end(c):
 def test_last_day_pending_state_is_declared_without_invented_cancel_clock(
     run_minute, minute_session_doc
 ):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c): run_daily(buy,'14:59')
 def buy(c):
     if str(c.current_dt.date())=='2024-03-06': order('600000.XSHG',1000,LimitOrderStyle(2))
@@ -170,6 +170,6 @@ def on_strategy_end(c): assert len(get_open_orders())==1
 
 @pytest.mark.parametrize("clock", ["11:30", "12:00", "15:00", "15:30"])
 def test_scheduled_outside_order_window_is_explicit(run_minute, minute_session_doc, clock):
-    source = f"from jqdata import *\ndef initialize(c): run_daily(buy,{clock!r})\ndef buy(c): order('600000.XSHG',100)"
-    with pytest.raises(MinuteRunError, match="JQ_ORDER_OUTSIDE_SESSION"):
+    source = f"from aquant import *\ndef initialize(c): run_daily(buy,{clock!r})\ndef buy(c): order('600000.XSHG',100)"
+    with pytest.raises(MinuteRunError, match="AQUANT_ORDER_OUTSIDE_SESSION"):
         run_minute(source, doc=minute_session_doc, config=JQ)

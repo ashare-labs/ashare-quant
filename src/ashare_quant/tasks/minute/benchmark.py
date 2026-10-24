@@ -39,7 +39,7 @@ def observations(data, security, days, at):
     require(days == data.days, "PYTHON_BENCHMARK_DATES", "Benchmark must match completed account sessions")
     from ashare_quant.backtests.minute.inputs import stamp
     require(stamp(days[-1] + "T15:00:00+08:00") <= at,
-            "JQ_FUTURE_DATA_REQUEST", "Benchmark cannot include a future session close")
+            "AQUANT_FUTURE_DATA_REQUEST", "Benchmark cannot include a future session close")
     base_date = data.previous[days[0]]
     wanted = [base_date, *days]
     data.check_budget(len(wanted))

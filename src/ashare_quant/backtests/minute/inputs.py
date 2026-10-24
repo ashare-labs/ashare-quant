@@ -384,7 +384,7 @@ class MinuteInputs:
     def visible(self, sid, at, *, include_now=True, count=None, end=None, preserve_missing=False):
         require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
         cutoff = at if end is None else end
-        require(cutoff <= at, "JQ_FUTURE_DATA_REQUEST")
+        require(cutoff <= at, "AQUANT_FUTURE_DATA_REQUEST")
         # end bounds bar labels; at is the knowledge clock. include_now excludes
         # only the bar ending at the current clock, not an inclusive past end.
         labels = self.history_labels[sid] if preserve_missing else self.labels[sid]
@@ -482,28 +482,28 @@ class MinuteInputs:
         require(sid in self.ids, "MINUTE_SECURITY_OUT_OF_SCOPE")
         clock = at.strftime("%H:%M")
         if clock == "09:30":
-            require(self.session_data is not None, "JQ_OPENING_EXECUTION_PRICE_UNAVAILABLE")
+            require(self.session_data is not None, "AQUANT_OPENING_EXECUTION_PRICE_UNAVAILABLE")
             row = self.session_data.opening.get((sid, str(at.date())))
             require(
                 row is not None and row["_available"] <= at,
-                "JQ_OPENING_EXECUTION_PRICE_UNAVAILABLE",
+                "AQUANT_OPENING_EXECUTION_PRICE_UNAVAILABLE",
             )
             return float(row["price"])
-        require(clock == "13:00", "JQ_NO_BAR_EXECUTION_CLOCK_UNSUPPORTED")
+        require(clock == "13:00", "AQUANT_NO_BAR_EXECUTION_CLOCK_UNSUPPORTED")
         rows = self.visible(sid, at, count=1)
         require(
             rows and rows[-1]["_end"].date() == at.date(),
-            "JQ_RESUME_EXECUTION_PRICE_UNAVAILABLE",
+            "AQUANT_RESUME_EXECUTION_PRICE_UNAVAILABLE",
         )
         return float(rows[-1]["close"])
 
     def require_jq_capacity(self):
-        require(self.session_data is not None, "JQ_DAILY_CAP_REQUIRES_AD_SESSION_OBSERVATIONS")
+        require(self.session_data is not None, "AQUANT_DAILY_CAP_REQUIRES_AD_SESSION_OBSERVATIONS")
 
     def execution_daily_volume(self, sid, day):
         """Post-hoc execution denominator; never use this in a strategy data API."""
         self.require_jq_capacity()
-        require(day in self.days and sid in self.ids, "JQ_DAILY_CAP_OUT_OF_SCOPE")
+        require(day in self.days and sid in self.ids, "AQUANT_DAILY_CAP_OUT_OF_SCOPE")
         return self.session_data.daily[sid, day]
 
     def preflight(self):

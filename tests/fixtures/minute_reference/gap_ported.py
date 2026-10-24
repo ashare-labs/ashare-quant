@@ -4,7 +4,7 @@ This is an observation experiment, not an investable strategy. No factor API,
 paid data, credentials, or live/simulated trading setup is used. Orders deliberately
 bind the participation cap. Read the complete log before drawing conclusions.
 """
-from jqdata import *
+from aquant import *
 import json
 import math
 

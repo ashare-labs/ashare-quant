@@ -1,5 +1,7 @@
 # 依赖的声明、锁定与安装
 
+策略运行时模块为 `aquant`；发行包仍为 `ashare-quant`，不要安装 PyPI 上同名的第三方 `aquant` 包。详见 [入口迁移与 wheel 边界](aquant-migration.md)。
+
 `pyproject.toml` 声明项目依赖和 core/native/dev 安装范围，`uv.lock` 是已解析版本、来源和制品哈希的唯一锁定来源。日常安装使用 `--locked`，让声明与锁不一致时直接失败；只有有意更新依赖时才运行 `uv lock`。不要手工维护另一份安装版本清单。
 
 | 文件 | 职责及消费者 | 更新方式 |

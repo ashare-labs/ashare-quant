@@ -1,6 +1,6 @@
 """Partial day-limit orders survive lunch; inventory is sold after native T+1."""
-# ruff: noqa: F405 -- APIs are supplied by the explicit jqdata star import.
-from jqdata import *  # noqa: F403
+# ruff: noqa: F405 -- APIs are supplied by the explicit aquant star import.
+from aquant import *  # noqa: F403
 
 
 def initialize(context):

@@ -34,7 +34,7 @@ def test_invalid_role_or_clock_is_rejected_before_output(tmp_path, minute_sessio
 
 
 def test_opening_scalar_never_reveals_the_unfinished_ohlc(run_minute, minute_session_doc):
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c): run_daily(check,'09:30')
 def check(c):
     if str(c.current_dt.date()) != '2024-03-04': return
@@ -53,7 +53,7 @@ def test_independent_close_updates_native_valuation_without_matching_an_extra_ba
     for row in minute_session_doc["session_observations"]["closing_marks"]:
         if row["security"] == "600000.XSHG":
             row["price"] = "11"
-    source = """from jqdata import *
+    source = """from aquant import *
 def initialize(c):
     run_daily(buy,'09:31')
     run_daily(pending,'14:59')

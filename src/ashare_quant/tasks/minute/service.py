@@ -91,7 +91,11 @@ class PythonJobs(TaskService):
                 "Source must fit 256 KiB and parameters 16 KiB",
             )
             try:
-                ast.parse(request.source, filename="strategy.py")
+                tree = ast.parse(request.source, filename="strategy.py")
+                from ashare_quant.strategies.imports import MIGRATION_MESSAGE, legacy_nodes
+
+                if list(legacy_nodes(tree)):
+                    raise DomainError("AQUANT_LEGACY_IMPORT", MIGRATION_MESSAGE, 422)
             except SyntaxError as exc:
                 raise DomainError(
                     "PYTHON_SYNTAX_ERROR",
