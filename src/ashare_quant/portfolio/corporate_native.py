@@ -13,11 +13,15 @@ from rqalpha.const import INSTRUMENT_TYPE, POSITION_DIRECTION
 from rqalpha.mod.rqalpha_mod_sys_accounts.position_model import StockPosition
 from rqalpha.portfolio.position import POSITION_TYPE_MAP, Position
 
-from ashare_quant.execution.rqalpha.checkpoint import kill_at
 from ashare_quant.portfolio.inputs import digest, require
 
 
-def install(host):
+def install(host, *, on_stage=None):
+    """Install account rules; a checkpoint owner may supply its own fault probe.
+
+    Corporate settlement also runs under non-resumable Python clock sources.
+    It must not require their event source to implement a checkpoint cursor.
+    """
     class CorporateStockPosition(StockPosition):
         __instrument_types__ = []  # Install only in this frozen native subprocess.
 
@@ -37,7 +41,8 @@ def install(host):
             )
             require(key not in entry["stages"], "CORPORATE_STAGE_ALREADY_APPLIED")
             entry["stages"][key] = host.day
-            kill_at("corporate_" + stage, host.env.event_source.cursor + 1)
+            if on_stage is not None:
+                on_stage("corporate_" + stage)
 
         def done(self, entry, stage):
             key = entry["event"]["settlement_keys"].get(

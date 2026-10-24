@@ -271,7 +271,7 @@ class Mod(AbstractMod):
         if self.data.corporate_actions is not None:
             from ashare_quant.portfolio.corporate_native import install
 
-            install(self)
+            install(self, on_stage=lambda stage: kill_at(stage, self.env.event_source.cursor + 1))
         self.day, self.phase = self.data.days[0], "DECIDE"
         self.decisions, self.orders, self.trades, self.accounts, self.submissions = (
             [],
