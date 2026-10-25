@@ -21,7 +21,7 @@ def trade(context):
 """
 
 
-def make_deployment(root):
+def make_deployment(root, *, minute_readers=None):
     from ashare_data.financials.tables import TABLES
     from ashare_data.storage.local_daily import LocalDailyStore
     from ashare_data.storage.market_release import MarketRelease, ReleaseWriter, connection
@@ -60,6 +60,11 @@ def make_deployment(root):
                 "INSERT INTO release_contracts VALUES('minute_selection',?)",
                 [json.dumps(dict(sources=dict(tdx=3), canonical_series=[3]))],
             )
+            if minute_readers is not None:
+                db.execute(
+                    "INSERT INTO release_contracts VALUES('source_observation_readers',?)",
+                    [json.dumps(minute_readers)],
+                )
         c = connection(memory="128MB", threads=1)
         c.execute("SET TimeZone = 'UTC'")
         c.execute("CREATE TABLE dates(d DATE, n INTEGER)")

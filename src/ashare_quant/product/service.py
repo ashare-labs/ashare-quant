@@ -101,10 +101,10 @@ class Product:
         verify_data_runtime()
         try:
             if minute:
-                from ashare_data.product import LocalMinuteProduct
+                from ashare_quant.product.minute_owner import MinuteOwner
 
-                owner = LocalMinuteProduct(config.deployment, profile=config.profile)
-                if owner.document != config.document or owner.root != config.data_root:
+                owner = MinuteOwner(config.deployment, profile=config.profile)
+                if owner.deployment_document != config.document or owner.root != config.data_root:
                     self.configuration_changed = True
                     self.require_configuration_snapshot(config)
                 return owner

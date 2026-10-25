@@ -6,8 +6,8 @@ its explicit initialized control state and paired AD runtime. No owner override,
 filesystem path, repair option, or execution acceptance flag is accepted in a
 request. These endpoints do not create backtests or publications.
 
-`GET /api/v1/product/minute/sources` returns the configured source IDs, default
-`tdx`, exact asset/evidence bindings, registered coverage and limitations. Source
+`GET /api/v1/product/minute/sources` returns the configured source IDs, the profile's
+default source (`tdx` when unspecified), exact asset/evidence bindings, registered coverage and limitations. Source
 discovery does not scan the library. Malformed registrations are reported per
 source. Select the returned ID explicitly for an HF read:
 
@@ -20,8 +20,9 @@ source. Select the returned ID explicitly for an HF read:
 }
 ```
 
-Send that body to `POST /api/v1/product/minute/prices`. Omitting `source` selects
-TDX; `auto` is not an implicit fallback. Timestamps require offsets and whole
+Send that body to `POST /api/v1/product/minute/prices`. Omitting `source` or using
+`auto` selects that profile default, including `canonical` for a market release;
+it is not an implicit fallback. Timestamps require offsets and whole
 minutes. Bounds are inclusive, one security and the complete requested range, without fixed day or row ceilings.
 BJ retains the exact native identifier `BJ.920000` rather than a guessed mapping.
 The existing daily `/prices` endpoint and its `auto` source policy are unchanged.
@@ -38,8 +39,10 @@ Configuration identity includes the minute registry and resolved asset paths.
 The API retains its startup configuration. A semantic deployment edit, a changed
 resolved asset path, or an unreadable deployment latches
 `PRODUCT_CONFIGURATION_CHANGED` (409) and requires restarting the API. Minute
-reads check the configuration before opening the owner, against the owner's
-loaded document, and after the read; a changed binding cannot be returned under
+reads check the configuration before opening the owner, against a copy of the
+original document loaded by that owner, and after the read. AD can add or replace
+runtime reader assets from the pinned market release without changing this
+deployment snapshot. A changed binding cannot be returned under
 the old identity. `/config` then reports `configured=false` with the restart
 error and the startup identity, rather than claiming the changed environment is
 ready. Restoring the file alone does not clear the latched state. On restart,

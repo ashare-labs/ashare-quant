@@ -273,3 +273,118 @@ def test_concurrent_old_snapshot_cannot_clear_latched_change(case, monkeypatch):
             release.set()
         with pytest.raises(DomainError, match="restart the API"):
             future.result(timeout=5)
+
+
+@pytest.fixture(params=["added", "overridden"])
+def released_case(tmp_path, request):
+    from tests.mcp.fixture import make_deployment
+
+    native = tmp_path / "minute.json"
+    write(native, {"schema": "ad-tdx-minute-session.v1", "minute": []})
+    readers = {
+        "assets": {"minute-tdx": {
+            "kind": "reference", "path": str(native), "role": "bounded_research",
+        }},
+        "minute_sources": {"tdx": {
+            "reader": "tdx-session", "asset": "minute-tdx",
+            "content": {"sha256": sha(native)}, "coverage": "synthetic", "limits": [],
+        }},
+    }
+    config = make_deployment(tmp_path, minute_readers=readers)
+    document = json.loads(config.deployment.read_bytes())
+    if request.param == "overridden":
+        document["assets"]["minute-tdx"] = {
+            **readers["assets"]["minute-tdx"], "path": "unselected-original.json",
+        }
+        write(config.deployment, document)
+    return resolve(config.deployment), document
+
+
+def released_views(client):
+    paths = [P + "/config", P + "/catalogue?limit=1", "/api/v1/python/catalogue",
+             "/api/v1/factors/catalogue", "/api/v1/factors/sources"]
+    values = {}
+    for path in paths:
+        response = client.get(path)
+        assert response.status_code == 200, response.text
+        values[path] = response.json()
+    assert values[P + "/config"]["configured"]
+    assert values[P + "/catalogue?limit=1"]["total"] == 1
+    assert {item["id"] for item in values["/api/v1/factors/sources"]["items"]} == {"market-release"}
+    return values
+
+
+def test_frozen_minute_readers_preserve_deployment_and_catalogues(released_case):
+    config, original = released_case
+    before_bytes = config.deployment.read_bytes()
+    with TestClient(create_app(product_configuration=config)) as client:
+        before = released_views(client)
+        registry = None
+        for _ in range(3):
+            response = client.get(P + "/minute/sources")
+            assert response.status_code == 200, response.text
+            listing = response.json()
+            assert listing["default_source"] == "canonical"
+            assert {item["source"] for item in listing["sources"]} == {"canonical", "tdx"}
+            assert registry is None or listing == registry
+            registry = listing
+            prices = client.post(P + "/minute/prices", json={
+                "security": "000001.XSHE", "start": "2024-03-04T09:31:00+08:00",
+                "end": "2024-03-04T09:32:00+08:00",
+            })
+            assert prices.status_code == 200, prices.text
+            assert len(prices.json()["rows"]) == 2
+            assert released_views(client) == before
+    assert config.document == original
+    assert config.deployment.read_bytes() == before_bytes
+
+
+def test_concurrent_frozen_minute_readers_keep_the_same_environment(released_case):
+    config, _ = released_case
+    with TestClient(create_app(product_configuration=config)) as client:
+        before = released_views(client)
+
+        def read(_):
+            response = client.get(P + "/minute/sources")
+            assert response.status_code == 200, response.text
+            return response.json(), released_views(client)
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(read, range(8)))
+        assert all(registry == results[0][0] and views == before for registry, views in results)
+        assert released_views(client) == before
+
+
+def test_real_edit_after_frozen_reader_expansion_still_latches(released_case):
+    config, original = released_case
+    with TestClient(create_app(product_configuration=config)) as client:
+        response = client.get(P + "/minute/sources")
+        assert response.status_code == 200, response.text
+        changed = copy.deepcopy(original)
+        changed["assets"]["minute-tdx"] = {
+            "kind": "reference", "path": "changed.json", "role": "bounded_research",
+        }
+        write(config.deployment, changed)
+        refused(client)
+        write(config.deployment, original)
+        refused(client)
+
+
+def test_frozen_reader_cannot_hide_a_changed_then_restored_raw_document(released_case, monkeypatch):
+    from ashare_data.product import LocalMinuteProduct
+
+    config, original = released_case
+    changed = copy.deepcopy(original)
+    changed["assets"]["minute-tdx"] = {
+        "kind": "reference", "path": "changed.json", "role": "bounded_research",
+    }
+    original_init = LocalMinuteProduct.__init__
+
+    def change_while_opening(self, *args, **kwargs):
+        write(config.deployment, changed)
+        original_init(self, *args, **kwargs)
+        write(config.deployment, original)
+
+    monkeypatch.setattr(LocalMinuteProduct, "__init__", change_while_opening)
+    with TestClient(create_app(product_configuration=config)) as client:
+        refused(client)
