@@ -65,6 +65,14 @@ def main():
     headings = re.findall(r"^## (.+)$", (root / "README.md").read_text(), re.M)
     if headings != ["项目简介", "安装指南", "快速开始", "使用指南", "限制与说明"]:
         errors.append("README must retain its five human-facing chapters")
+    project = tomllib.loads((root / "pyproject.toml").read_text())
+    module = ast.parse((root / "src/ashare_quant/__init__.py").read_text())
+    public_version = next(ast.literal_eval(node.value) for node in module.body
+                          if isinstance(node, ast.Assign) and any(
+                              isinstance(target, ast.Name) and target.id == "__version__"
+                              for target in node.targets))
+    if public_version != project["project"]["version"]:
+        errors.append("Runtime public version differs from package version")
     lock_raw = (root / "uv.lock").read_bytes()
     lock = tomllib.loads(lock_raw.decode())
     owner = next(p for p in lock["package"] if p["name"] == "ashare-data")

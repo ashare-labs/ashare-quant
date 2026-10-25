@@ -1,5 +1,5 @@
 {
-  "commit": "1da924989d93da9793579950c845490114ba586b",
+  "commit": "38628fe9e17fb96a84fd720f7bc67157d936990d",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,7 +8,7 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "cf35206310789d2d449d69cffe49b9064062c451e0d5b33b8486cecf71fcdc0d",
+    "__init__.py": "ddb3b815644744e9048729b60c49d9425c997656c5786e637a29aa00119e7314",
     "cli/__init__.py": "8d193e425e38420b7f34075c9b681b22b7eebcade388cdc0a0fdc01c8813ef57",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/cmes.py": "57e825138a429ed75d37f7bcc6257bd3f10aabe335d548c1aff1e679620de507",
@@ -188,10 +188,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "71b38ea663931d5e3443ba387fa3b9eb17ab1cb3746328cca89f4afba7356e8e",
+  "runtime_code_sha256": "bccad72f995418f2289fd02ad6c56b11b8378993a14c83c3b2c4b0bb877b6d65",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "b7342863aa82e2e7f1ebe11eb6f6e1c1ea128e7b",
-  "version": "0.10.0.dev24",
-  "wheel_sha256": "39dd29d8bb624fa275cae37a5af1736750d8151c318da7f9f565ec994ad71ced"
+  "tree": "c5f6abbe4b2c30d5b601908042e3c7e3651bd004",
+  "version": "0.10.0.dev25",
+  "wheel_sha256": "6f964b8d5192c71d30bbed669116310e5d9cb1b20e1fca99ed071c1e9d4f94c7"
 }

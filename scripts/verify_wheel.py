@@ -13,6 +13,10 @@ from pathlib import Path
 IDENTITY = """
 import json
 import ashare_quant
+import ashare_data
+from importlib.metadata import version
+assert ashare_quant.__version__ == version("ashare-quant")
+assert ashare_data.__version__ == version("ashare-data")
 from ashare_quant.identity import source_sha256
 from ashare_quant.providers.runtime import verify
 from ashare_quant.runtime import runtime_fingerprint
