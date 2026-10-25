@@ -1,11 +1,14 @@
 """JSON boundary for read-only analysis; no change to frozen result contracts."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 
 from ashare_quant.contracts import Contract
 from ashare_quant.tasks.contracts import JobID, JSONObject, Sha
+
+AnalysisVersion = Literal["returns-v1", "returns-v2"]
+BenchmarkSelection = Annotated[str, Field(pattern=r"^(frozen|none|[0-9]{6}\.(XSHG|XSHE))$")]
 
 
 class AnalysisMetric(Contract):
@@ -18,7 +21,7 @@ class AnalysisMetric(Contract):
 
 class ResultAnalysis(Contract):
     schema_version: Literal["aq.analysis.v1"]
-    calculation_version: Literal["returns-v1"]
+    calculation_version: AnalysisVersion
     analysis_id: Sha
     job_id: JobID
     source_sha256: Sha
@@ -35,3 +38,6 @@ class ResultAnalysis(Contract):
     costs: JSONObject
     trading: JSONObject
     quality: JSONObject
+    comparison: JSONObject | None = None
+    return_difference: AnalysisMetric | None = None
+    excess_drawdowns: list[JSONObject] | None = None

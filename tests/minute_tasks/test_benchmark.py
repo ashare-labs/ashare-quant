@@ -123,3 +123,41 @@ def initialize(c):
         job = execute(client, jobs, body)
         assert job['status'] == 'failed'
         assert 'AQUANT_BENCHMARK_ONLY_IN_INITIALIZE' in job['error']['message']
+
+
+@pytest.mark.parametrize("frequency", ["1d", "1m"])
+@pytest.mark.parametrize("selection", ["default", "none"])
+@pytest.mark.parametrize("fixed_release", [{"minutes": True}], indirect=True)
+def test_new_default_and_explicit_none_preserve_trading(daily_jobs, fixed_release, tmp_path, frequency, selection):
+    app, jobs, body = daily_jobs
+    _, days = fixed_release
+    pin = reference(tmp_path, days[19:23], [])
+    profile = {"benchmark_release": {"asset": "indices", "release_id": pin["release_id"],
+                                      "manifest_sha256": pin["manifest_sha256"]}}
+    jobs.product.configured = lambda: SimpleNamespace(
+        document={"profiles": {"product": profile}}, profile="product",
+        asset=lambda name: SimpleNamespace(path=pin["root"]))
+    selection_code = "set_benchmark(None)" if selection == "none" else "pass"
+    body.update(frequency=frequency, securities=[], start_date=days[20], end_date=days[22], source=f'''from aquant import *
+def initialize(c):
+    {selection_code}
+    run_daily(trade, 'open')
+def trade(c):
+    order_target('600000.XSHG', 100)
+''')
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "succeeded", job.get("error")
+        result = client.get(job["result"]["href"]).json()
+        assert result["summary"]["trade_count"] == 1
+        assert set(result["native"]["final_account"]["positions"]) == {"600000.XSHG"}
+        benchmark = result["native"]["benchmark"]
+        if selection == "none":
+            assert benchmark["status"] == "not_selected"
+            assert benchmark["security"] is None and benchmark["selection_source"] == "strategy"
+            assert benchmark["prices"] == []
+        else:
+            assert benchmark["status"] == "available"
+            assert benchmark["security"] == "000300.XSHG" and benchmark["selection_source"] == "default"
+            assert benchmark["base"] == {"date": days[19], "close": 100}
+            assert len(benchmark["prices"]) == 3

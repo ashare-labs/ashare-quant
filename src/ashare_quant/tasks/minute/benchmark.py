@@ -23,41 +23,41 @@ def configured_release(config):
     }
 
 
-def observations(data, security, days, at):
-    value = {
+def empty_observations(security, selection_source):
+    return {
         "schema": "aq-benchmark-prices.v1", "security": security,
+        "selection_source": selection_source,
         "status": "not_selected" if security is None else "unavailable",
         "price_basis": "published_close_price_return", "base": None, "prices": [],
         "missing_dates": [], "reason": None, "release": None, "receipt": None,
         "historical_pit_verified": False,
         "limitations": ["Price return, not a dividend-reinvested total return index"],
     }
+
+
+def published_observations(owner, security, days, base_date, *, supplemental_pin=None,
+                           selection_source="comparison"):
+    """Read a pinned publication only; shared by execution and later comparisons."""
+    value = empty_observations(security, selection_source)
     if security is None:
-        return value
-    if not getattr(data, "demand", False):
-        return {**value, "reason": "BENCHMARK_RELEASE_UNAVAILABLE"}
-    require(days == data.days, "PYTHON_BENCHMARK_DATES", "Benchmark must match completed account sessions")
-    from ashare_quant.backtests.minute.inputs import stamp
-    require(stamp(days[-1] + "T15:00:00+08:00") <= at,
-            "AQUANT_FUTURE_DATA_REQUEST", "Benchmark cannot include a future session close")
-    base_date = data.previous[days[0]]
+        return value, None
     wanted = [base_date, *days]
-    owner = data.owner
-    if security not in owner.release.identifiers and data.benchmark_pin is not None:
-        value["release"] = data.benchmark_pin
+    if security not in owner.release.identifiers and supplemental_pin is not None:
+        value["release"] = supplemental_pin
         try:
-            owner = ReleasedDailyProduct({"market_release": data.benchmark_pin})
+            owner = ReleasedDailyProduct({"market_release": supplemental_pin})
         except FileNotFoundError:
-            return {**value, "reason": "BENCHMARK_SOURCE_UNAVAILABLE", "missing_dates": wanted}
+            return {**value, "reason": "BENCHMARK_SOURCE_UNAVAILABLE", "missing_dates": wanted}, None
     value["release"] = owner.release.receipt()
     if security not in owner.release.identifiers:
-        return {**value, "reason": "BENCHMARK_SECURITY_UNAVAILABLE", "missing_dates": wanted}
+        return {**value, "reason": "BENCHMARK_SECURITY_UNAVAILABLE", "missing_dates": wanted}, None
     instrument = owner.release.instruments.get(security, {})
     value["asset_class"] = instrument.get("asset_class")
+    value["name"] = instrument.get("name") or security
     try:
         response = owner.prices([security], base_date, days[-1])
     except FileNotFoundError:
-        return {**value, "reason": "BENCHMARK_SOURCE_UNAVAILABLE", "missing_dates": wanted}
+        return {**value, "reason": "BENCHMARK_SOURCE_UNAVAILABLE", "missing_dates": wanted}, None
     rows = {r["date"]: r for r in response["rows"]}
     require(len(rows) == len(response["rows"]), "PYTHON_BENCHMARK_DUPLICATE", "Duplicate benchmark dates")
     missing, prices = [], []
@@ -72,12 +72,6 @@ def observations(data, security, days, at):
             prices.append({"date": day, "close": close})
         else:
             missing.append(day)
-    data.benchmark_rows = len(response["rows"])
-    data._retain({
-        "api": "benchmark_prices", "security": security, "start": base_date, "end": days[-1],
-        "knowledge_at": at.isoformat(), "receipt": response["receipt"],
-        "rows_sha256": digest(response["rows"]), "gaps": response["gaps"],
-    }, len(response["rows"]))
     value.update(receipt=response["receipt"], missing_dates=missing,
                  price_unit=response["coverage"][0]["source_metadata"]["price_unit"])
     if missing:
@@ -87,6 +81,32 @@ def observations(data, security, days, at):
                      observed_prices=prices)
     else:
         value.update(status="available", base=prices[0], prices=prices[1:])
+    return value, response
+
+
+def observations(data, security, days, at, *, selection_source="strategy"):
+    value = empty_observations(security, selection_source)
+    if security is None:
+        return value
+    if not getattr(data, "demand", False):
+        return {**value, "reason": "BENCHMARK_RELEASE_UNAVAILABLE"}
+    require(days == data.days, "PYTHON_BENCHMARK_DATES", "Benchmark must match completed account sessions")
+    from ashare_quant.backtests.minute.inputs import stamp
+    require(stamp(days[-1] + "T15:00:00+08:00") <= at,
+            "AQUANT_FUTURE_DATA_REQUEST", "Benchmark cannot include a future session close")
+    base_date = data.previous[days[0]]
+    value, response = published_observations(
+        data.owner, security, days, base_date, supplemental_pin=data.benchmark_pin,
+        selection_source=selection_source)
+    if response is None:
+        return value
+    data.benchmark_rows = len(response["rows"])
+    data._retain({
+        "api": "benchmark_prices", "security": security, "start": base_date, "end": days[-1],
+        "knowledge_at": at.isoformat(), "receipt": response["receipt"],
+        "rows_sha256": digest(response["rows"]), "gaps": response["gaps"],
+    }, len(response["rows"]))
     data.queries.append({"api": "benchmark_result", "security": security,
-                         "rows": len(prices), "result_sha256": digest(value)})
+                         "rows": len(value.get("observed_prices", value["prices"]))
+                         + int(value["base"] is not None), "result_sha256": digest(value)})
     return value

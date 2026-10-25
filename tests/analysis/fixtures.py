@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from ashare_quant.analysis import AnalysisPolicy, analyze_result
 
 
-def browser_fixture(*, with_benchmark=True, sessions=70, job_number=1):
+def browser_fixture(*, with_benchmark=True, sessions=70, job_number=1, calculation_version="returns-v1"):
     days = []
     day = date(2025, 1, 2)
     while len(days) < sessions:
@@ -69,7 +69,13 @@ def browser_fixture(*, with_benchmark=True, sessions=70, job_number=1):
     analysis = analyze_result(result, source_sha256=digest,
                               policy=AnalysisPolicy(annualization=252, risk_free_annual=0.0,
                                                     risk_free_source="assumed_zero", min_risk_observations=20),
-                              benchmark=benchmark if with_benchmark else None)
+                              benchmark=benchmark if with_benchmark else None,
+                              calculation_version=calculation_version)
+    if calculation_version == "returns-v2":
+        analysis["comparison"] = {"selection": "frozen", "source": "frozen",
+                                  "reference_status": "unavailable", "reference_reason": "BENCHMARK_RELEASE_UNAVAILABLE",
+                                  "options": [{"value": "frozen", "label": "原始基准"},
+                                              {"value": "none", "label": "无基准"}]}
     job = {"job_id": job_id, "request": {"name": result["name"], "frequency": "1m",
             "start_date": days[0], "end_date": days[-1], "initial_cash": 100000},
            "status": "succeeded", "created_at": "2025-05-01T00:00:00Z", "updated_at": "2025-05-01T00:00:00Z",

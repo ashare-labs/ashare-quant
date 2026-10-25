@@ -1418,9 +1418,26 @@
             "title": "Benchmark"
           },
           "calculation_version": {
-            "const": "returns-v1",
+            "enum": [
+              "returns-v1",
+              "returns-v2"
+            ],
             "title": "Calculation Version",
             "type": "string"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison"
           },
           "costs": {
             "additionalProperties": {
@@ -1445,6 +1462,23 @@
             },
             "title": "Engine",
             "type": "object"
+          },
+          "excess_drawdowns": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excess Drawdowns"
           },
           "initial_equity": {
             "exclusiveMinimum": 0.0,
@@ -1486,6 +1520,16 @@
             },
             "title": "Quality",
             "type": "object"
+          },
+          "return_difference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rolling": {
             "items": {
@@ -1935,6 +1979,15 @@
       "StrategyBacktests": {
         "additionalProperties": false,
         "properties": {
+          "analysis_version": {
+            "default": "returns-v1",
+            "enum": [
+              "returns-v1",
+              "returns-v2"
+            ],
+            "title": "Analysis Version",
+            "type": "string"
+          },
           "identity_model": {
             "default": "saved_relative_path",
             "title": "Identity Model",
@@ -2325,7 +2378,7 @@
   },
   "info": {
     "title": "A宽 research tasks",
-    "version": "0.12.0.dev30"
+    "version": "0.12.0.dev32"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3622,6 +3675,31 @@
               "title": "Job Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "analysis_version",
+            "required": false,
+            "schema": {
+              "default": "returns-v1",
+              "enum": [
+                "returns-v1",
+                "returns-v2"
+              ],
+              "title": "Analysis Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "benchmark",
+            "required": false,
+            "schema": {
+              "default": "frozen",
+              "pattern": "^(frozen|none|[0-9]{6}\\.(XSHG|XSHE))$",
+              "title": "Benchmark",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3838,6 +3916,20 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "analysis_version",
+            "required": false,
+            "schema": {
+              "default": "returns-v1",
+              "enum": [
+                "returns-v1",
+                "returns-v2"
+              ],
+              "title": "Analysis Version",
+              "type": "string"
             }
           }
         ],
@@ -5089,6 +5181,31 @@
             "schema": {
               "pattern": "^m2job-[0-9a-f]{32}$",
               "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "analysis_version",
+            "required": false,
+            "schema": {
+              "default": "returns-v1",
+              "enum": [
+                "returns-v1",
+                "returns-v2"
+              ],
+              "title": "Analysis Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "benchmark",
+            "required": false,
+            "schema": {
+              "default": "frozen",
+              "pattern": "^(frozen|none|[0-9]{6}\\.(XSHG|XSHE))$",
+              "title": "Benchmark",
               "type": "string"
             }
           }

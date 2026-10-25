@@ -1,6 +1,16 @@
 # 冻结结果的派生分析
 
-`ashare_quant.analysis` 是计算模块，不执行策略，不访问行情，不修改输入、任务或历史结果。输入必须由调用方先完成冻结文件完整性校验。输出是 JSON 可序列化的 `aq.analysis.v1`，计算定义版本为 `returns-v1`。
+`ashare_quant.analysis` 是计算模块，不执行策略，不访问行情，不修改输入、任务或历史结果。输入必须由调用方先完成冻结文件完整性校验。输出是 JSON 可序列化的 `aq.analysis.v1`。纯函数默认保留 `returns-v1`；显式传入 `calculation_version="returns-v2"` 使用相对净值超额收益，输出及分析身份均记录版本。
+
+## 相对净值口径（returns-v2）
+
+主超额收益为 `(1 + 策略累计收益) / (1 + 基准累计收益) - 1`。策略从 100 到 120、基准从 100 到 110 时，超额为 9.0909%，不是收益差 10 个百分点。指标、每日曲线及月度超额使用这一口径；超额回撤继续基于同一相对净值及期初值 1。
+
+v2 保持首页的 20 项指标结构。辅助 `return_difference` 为 `{value, unit: "percentage_points", ...}`，数值 10 表示 10 个百分点；每日及月度同名字段也以百分点存储。`series.relative_nav` 提供相对净值，`excess_drawdowns` 提供相应回撤与恢复区间。辅助收益差不要求进入首页。
+
+Alpha、Beta、信息比率、日均超额收益仍遵循下文各自的回归、协方差、主动日收益及跟踪误差定义，不因主超额口径改变而改成除法。日胜率仍为正收益日占比；盈亏比仍为闭合周期平均盈利/平均亏损；超额夏普目前明确与信息比率同义。这些定义不是对任何第三方平台全部公式等价的声明。
+
+v1 保留原累计收益差语义及输出结构。版本改变生成不同 `analysis_id`，`source_sha256` 仍指向同一原结果；不重写冻结文件，不回填成交或假造平仓。
 
 ## 接入与依赖
 
@@ -22,13 +32,30 @@ analysis = analyze_result(
 
 必须显式提供年化因子、无风险假设及最短风险样本数。上述策略是产品可以选择的明确约定，不是库内隐式默认。252 代表交易观察值的年化约定，不用于生成美国或 A 股日历。分钟执行也从账户点聚合日终评价；不套分钟年化系数。
 
-函数使用 **empyrical-reloaded 0.7.0**，调用时校验版本。接线方须将这一版本及其传递依赖纳入产品依赖锁；此模块提交不修改执行线程拥有的 `pyproject.toml`、`uv.lock` 或任务路由。库许可为 Apache-2.0，官方来源为 [empyrical-reloaded](https://github.com/stefan-jansen/empyrical-reloaded)。不安装数据下载 extras，不调用数据下载工具；原版 empyrical 与 reloaded 共用 import 名，不能并装。
+函数使用现有锁定的 **empyrical-reloaded 0.7.0**，调用时校验版本。库许可为 Apache-2.0，官方来源为 [empyrical-reloaded](https://github.com/stefan-jansen/empyrical-reloaded)。不安装数据下载 extras，不调用数据下载工具；原版 empyrical 与 reloaded 共用 import 名，不能并装。
 
 HTTP入口为 `/api/v1/python/jobs/{id}/result/analysis` 与 `/api/v1/history/jobs/{id}/result/analysis`，共用这一个计算函数和原历史结果的完整性校验；短路径 `/jobs/{id}/analysis` 是同一读取操作的兼容别名。输出 `source_sha256` 是核验过的原发布文件摘要。重复GET确定且只读，不覆盖 `published.json`、不触发回测、不重读今天的行情或默认基准。仅支持含账户序列的Python回测；其他历史结果仍按原接口可读。
 
 `GET /api/v1/python/backtests` 的每条成功记录在读取已验证冻结结果后，将同一分析的 `metrics[key].value` 投影至 `items[].summary[key]`；保留期初资金、期末权益和成交数等原汇总字段。缺基准等不可用指标保留 null，真实零收益保留 0。整体分析失败由独立的 `analysis_error` 返回，不把仍完整可读的结果误标为不可用；结果完整性失败仍使用 `result_error`。此列表投影不更改 `/result` 返回的原始冻结数据。对比页应读取 `/analysis` 并校验 `job_id` 和原 `result.snapshot_sha256`，不能期望旧 `/result.summary` 含后来新增的指标。
 
 接线采用上面的明确产品约定。依赖及传递闭包已纳入 `pyproject.toml`、`uv.lock` 和运行时快照。`native.benchmark` 的冻结基期/逐日收盘点位投影为输入，身份取完整冻结基准对象摘要；未提供可核实名称时显示证券代码。缺参考数据保留执行时的具体 `BENCHMARK_*` 原因和 `missing_dates`，独立策略指标继续可用。账本不一致时返回结构化409与 `RESULT_ANALYSIS_UNAVAILABLE`，不返回看似正常的虚构统计。
+
+## 版本化比较请求
+
+显式查询 `?analysis_version=returns-v2&benchmark=frozen` 选择新口径，`benchmark=none` 明确不比较，
+`benchmark=000300.XSHG` 等选择派生比较。省略参数仍是 v1 / frozen；重复、未知参数和 v1 派生选择拒绝 422。
+v2 响应的 `comparison` 给出选择、原基准摘要、实际指数 options 和引用可用性；其 `source` 为 frozen 或 derived。
+只从该任务已冻结 session 的 release / benchmark_release 读取；原市场发布的日历决定前置基期。
+不读取 latest，不给缺日补值；未固定数据源的旧记录明确不可比较，不擅自绑定当前配置。
+派生返回带来源的独立 analysis_id，不修改原冻结输入、成交、权益或原分析语义。
+
+列表 GET `/api/v1/python/backtests` 同样接受 `analysis_version=returns-v2` 并在响应根字段回显；
+省略继续 v1。列表投影原始基准，结果页临时选择不反写列表或其他任务。前端结果、列表、对比和 CSV 显式使用 v2。
+
+新任务默认沪深300；策略 initialize 内 `set_benchmark(code)` 覆盖，`set_benchmark(None)` 关闭。
+旧结果仍按其原始基准显示，使用页面比较选项才生成派生分析。
+`BENCHMARK_BASE_MISSING` / `BENCHMARK_DAILY_GAP` / `BENCHMARK_SOURCE_UNAVAILABLE` / `BENCHMARK_SOURCE_INVALID`
+分别保留缺基期、缺日、来源不可读及校验失败；显式关闭是 `benchmark_disabled`，旧未选择为 `missing_benchmark`。
 
 ## 输入
 

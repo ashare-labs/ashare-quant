@@ -25,7 +25,8 @@ RATIOS = {"alpha", "beta", "sharpe", "sortino", "profit_loss_ratio", "informatio
           "excess_sharpe"}
 
 
-def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchmark=None):
+def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchmark=None,
+                   calculation_version="returns-v1"):
     """Analyze a verified result mapping. Inputs are never mutated; no I/O is performed.
 
     The caller owns verification of source_sha256 and frozen benchmark provenance.
@@ -34,6 +35,9 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
     """
     if not isinstance(source_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
         raise AnalysisInputError("invalid_source_sha256")
+    if calculation_version not in {"returns-v1", "returns-v2"}:
+        raise AnalysisInputError("unsupported_calculation_version")
+    relative = calculation_version == "returns-v2"
     import empyrical as ep
 
     engine_version = version("empyrical-reloaded")
@@ -104,7 +108,7 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
         None if valid_returns else "zero_equity_base")
 
     benchmark_returns, benchmark_info, benchmark_reason = _benchmark(benchmark, daily)
-    benchmark_nav = None
+    benchmark_nav = relative_nav = None
     benchmark_metrics = ("benchmark_return", "excess_return", "alpha", "beta",
                          "daily_excess_return", "excess_max_drawdown", "excess_sharpe",
                          "information_ratio", "benchmark_volatility")
@@ -113,8 +117,9 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
     if benchmark_returns is not None:
         benchmark_nav = np.cumprod(1 + benchmark_returns)
         put("benchmark_return", calculate(ep.cum_returns_final, benchmark_returns))
-        put("excess_return", total - metrics["benchmark_return"]["value"])
         relative_nav = nav / np.r_[1.0, benchmark_nav]
+        put("excess_return", float(relative_nav[-1] - 1) if relative else
+            total - metrics["benchmark_return"]["value"])
         put("excess_max_drawdown", float(-min(relative_nav / np.maximum.accumulate(relative_nav) - 1)))
         if valid_returns:
             active = returns - benchmark_returns
@@ -144,6 +149,10 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
     series = []
     for index, row in enumerate(daily):
         benchmark_cumulative = float(benchmark_nav[index] - 1) if benchmark_nav is not None else None
+        difference = (float(nav[index + 1] - 1) - benchmark_cumulative
+                      if benchmark_cumulative is not None else None)
+        excess = (float(relative_nav[index + 1] - 1)
+                  if relative_nav is not None and relative else difference)
         series.append({"date": row["date"], "equity": row["equity"], "cash": row["cash"],
                        "positions_value": row["positions_value"], "return": number(returns[index]),
                        "pnl": float(values[index + 1] - values[index]), "nav": float(nav[index + 1]),
@@ -151,10 +160,12 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
                        "benchmark_return": float(benchmark_returns[index])
                        if benchmark_returns is not None else None,
                        "benchmark_cumulative_return": benchmark_cumulative,
-                       "excess_return": float(nav[index + 1] - 1) - benchmark_cumulative
-                       if benchmark_cumulative is not None else None,
-                       "drawdown": float(curve[index + 1]), **flows[row["date"]]})
-    monthly = _monthly(series, ep)
+                       "excess_return": excess,
+                       "drawdown": float(curve[index + 1]), **flows[row["date"]],
+                       **({"return_difference": difference * 100 if difference is not None else None,
+                           "relative_nav": float(relative_nav[index + 1]) if relative_nav is not None else None}
+                          if relative else {})})
+    monthly = _monthly(series, ep, relative=relative)
     rolling = []
     if valid_returns:
         for window in (20, 60, 120):
@@ -171,12 +182,12 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
                                 else None})
     reasons = sorted({m["reason"] for m in metrics.values() if m["reason"]})
     identity = {"source_sha256": source_sha256, "policy": asdict(policy),
-                "benchmark": benchmark, "calculation_version": "returns-v1", "engine": engine_version}
+                "benchmark": benchmark, "calculation_version": calculation_version, "engine": engine_version}
     # Invalid benchmark payloads must not prevent independent portfolio metrics.
     identity_bytes = json.dumps(identity, sort_keys=True, separators=(",", ":"),
                                 allow_nan=True, default=str).encode()
     return {
-        "schema_version": "aq.analysis.v1", "calculation_version": "returns-v1",
+        "schema_version": "aq.analysis.v1", "calculation_version": calculation_version,
         "analysis_id": hashlib.sha256(identity_bytes).hexdigest(),
         "job_id": result.get("job_id"), "source_sha256": source_sha256,
         "engine": {"name": "empyrical-reloaded", "version": engine_version},
@@ -185,14 +196,22 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
                    "sampling": "last_account_per_session", "drawdown_sign": "negative_series_positive_metric",
                    "daily_win_rate": "positive_sessions_over_all_valid_sessions",
                    "alpha": "daily_jensen_intercept_compounded_annually",
-                   "excess_return": "cumulative_return_difference",
+                   "excess_return": "relative_nav_return" if relative else "cumulative_return_difference",
                    "excess_max_drawdown": "relative_nav_drawdown",
                    "information_ratio": "mean_active_over_sample_tracking_error_times_sqrt_annualization",
-                   "excess_sharpe": "alias_of_information_ratio"},
+                   "excess_sharpe": "alias_of_information_ratio",
+                   **({"return_difference": "cumulative_return_difference_in_percentage_points"}
+                      if relative else {})},
         "initial_equity": initial, "sample_count": n,
         "metrics": {key: metrics[key] for key in METRICS}, "series": series,
         "benchmark": benchmark_info, "drawdowns": _drawdowns(daily, values),
         "monthly": monthly, "rolling": rolling, "costs": costs, "trading": trading,
+        **({"return_difference": metric(
+                (total - metrics["benchmark_return"]["value"]) * 100
+                if benchmark_nav is not None else None, unit="percentage_points",
+                reason=benchmark_reason, count=n),
+            "excess_drawdowns": _drawdowns(daily, relative_nav) if relative_nav is not None else []}
+           if relative else {}),
         "quality": {"status": "partial" if reasons else "ok", "reasons": reasons,
                     "calendar_source": "frozen_sessions" if has_calendar else "observed_accounts_only",
                     "historical_pit_verified": native.get("historical_pit_verified"),
@@ -253,14 +272,19 @@ def _benchmark(benchmark, daily):
         if any(value is None or value <= 0 for value in values):
             raise AnalysisInputError("invalid_benchmark_value")
         levels = np.array([initial, *values])
-        returns = levels[1:] / levels[:-1] - 1
+        with np.errstate(all="ignore"):
+            returns = levels[1:] / levels[:-1] - 1
+            normalized = levels / initial
+        if (not np.isfinite(returns).all() or not np.isfinite(normalized).all()
+                or np.any(returns <= -1) or np.any(normalized <= 0)):
+            raise AnalysisInputError("invalid_benchmark_value")
         return returns, {**info, "status": "ok", "reason": None}, None
     except (AnalysisInputError, AttributeError) as exc:
         reason = exc.code if isinstance(exc, AnalysisInputError) else "invalid_benchmark"
     return None, {**info, "status": "unavailable", "reason": reason}, reason
 
 
-def _monthly(series, ep):
+def _monthly(series, ep, *, relative=False):
     groups = defaultdict(list)
     for row in series:
         groups[row["date"][:7]].append(row)
@@ -270,8 +294,15 @@ def _monthly(series, ep):
         bench = [row["benchmark_return"] for row in rows]
         value = number(ep.cum_returns_final(np.asarray(returns))) if None not in returns else None
         b_value = number(ep.cum_returns_final(np.asarray(bench))) if None not in bench else None
+        difference = value - b_value if value is not None and b_value is not None else None
+        excess = difference
+        if relative:
+            excess = (number((1 + value) / (1 + b_value) - 1)
+                      if difference is not None and b_value > -1 else None)
         output.append({"month": month, "return": value, "benchmark_return": b_value,
-                       "excess_return": value - b_value if value is not None and b_value is not None else None,
+                       "excess_return": excess,
+                       **({"return_difference": difference * 100 if difference is not None else None}
+                          if relative else {}),
                        "boundary_month": month in {series[0]["date"][:7], series[-1]["date"][:7]}})
     return output
 

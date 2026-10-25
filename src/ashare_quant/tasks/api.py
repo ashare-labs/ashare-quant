@@ -7,7 +7,12 @@ from fastapi.responses import JSONResponse
 
 from ashare_quant.access import trusted_browser_request
 from ashare_quant.contracts import Contract, DomainError
-from ashare_quant.tasks.analysis_contracts import ResultAnalysis
+from ashare_quant.tasks.analysis_contracts import (
+    AnalysisVersion,
+    BenchmarkSelection,
+    ResultAnalysis,
+)
+from ashare_quant.tasks.benchmark_comparison import check_query
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.history import History
 from ashare_quant.tasks.policy import ServiceStatus
@@ -74,7 +79,9 @@ def mount(app, store, *, jobs=None):
     def result(job_id: JobID) -> dict:
         return history.result_response(job_id)
 
-    @app.get("/api/v1/history/jobs/{job_id}/analysis", include_in_schema=False)
-    @app.get("/api/v1/history/jobs/{job_id}/result/analysis")
-    def analysis(job_id: JobID) -> ResultAnalysis:
-        return history.analysis(job_id)
+    @app.get("/api/v1/history/jobs/{job_id}/analysis", include_in_schema=False, response_model_exclude_unset=True)
+    @app.get("/api/v1/history/jobs/{job_id}/result/analysis", response_model_exclude_unset=True)
+    def analysis(job_id: JobID, request: Request, analysis_version: AnalysisVersion = "returns-v1",
+                 benchmark: BenchmarkSelection = "frozen") -> ResultAnalysis:
+        check_query(request, analysis_version, benchmark)
+        return history.analysis(job_id, analysis_version=analysis_version, benchmark=benchmark)
