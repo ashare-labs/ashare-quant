@@ -9,7 +9,7 @@ deliberately unsupported until their data and assumptions have been reviewed.
 from datetime import date, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
-from ashare_quant.backtests.minute.inputs import number, require, stamp
+from ashare_quant.core.validation import number, require, stamp
 
 SCHEMA = "aq-tdx-minute-research.v1"
 SCHEMA_FULL = "aq-tdx-minute-research.v2"

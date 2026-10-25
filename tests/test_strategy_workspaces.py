@@ -7,8 +7,8 @@ import pytest
 from ashare_quant.contracts import DomainError
 from ashare_quant.strategies.files import StrategyFiles
 from ashare_quant.strategies.projects import ProjectFiles
-from tests.test_strategy_files import client as client
-from tests.test_strategy_files import configuration as configuration
+from tests.support.strategy_files import client as client
+from tests.support.strategy_files import configuration as configuration
 
 A, B = "a" * 32, "b" * 32
 PREFIX = "/api/v1/python"

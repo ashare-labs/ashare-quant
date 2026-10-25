@@ -14,7 +14,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.strategies import projects as project_module
 from ashare_quant.strategies.files import StrategyFiles
 from ashare_quant.strategies.projects import ProjectFiles, validate_project_sources
-from tests.test_strategy_files import PREFIX, client, configuration, error  # noqa: F401
+from tests.support.strategy_files import PREFIX, client, configuration, error  # noqa: F401
 
 
 @pytest.fixture

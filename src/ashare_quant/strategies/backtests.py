@@ -7,9 +7,10 @@ from fastapi import Query, Request
 from pydantic import AwareDatetime
 
 from ashare_quant.contracts import Contract, DomainError
+from ashare_quant.core.types import JSONObject
 from ashare_quant.strategies.identity import StrategyID
 from ashare_quant.tasks.analysis_contracts import AnalysisVersion
-from ashare_quant.tasks.contracts import JobID, JSONObject, ResultReference
+from ashare_quant.tasks.contracts import JobID, ResultReference
 from ashare_quant.tasks.history import FAMILIES
 from ashare_quant.tasks.minute.contracts import TaskProgress
 

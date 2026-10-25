@@ -19,10 +19,10 @@ from rqalpha.mod.rqalpha_mod_sys_simulation.matcher import DefaultBarMatcher
 from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderCancelled, OrderNotMatchable
 from rqalpha.model.instrument import Instrument
 
+from ashare_quant.core.validation import digest, require
 from ashare_quant.execution.rqalpha.checkpoint import AtomicFile, StrictHelper, kill_at
 from ashare_quant.execution.rqalpha.events import RecordedEventSource
 from ashare_quant.execution.rqalpha.guards import block_rqdata_apis
-from ashare_quant.portfolio.inputs import digest, require
 from ashare_quant.portfolio.participation import strict_lot_capacity
 from ashare_quant.portfolio.signals import order_plan, scheduled
 

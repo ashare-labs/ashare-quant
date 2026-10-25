@@ -7,7 +7,7 @@ owner response is retained in the frozen input, including lineage and coverage.
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
-from ashare_quant.portfolio.inputs import digest, require
+from ashare_quant.core.validation import digest, require
 
 MODEL = {
     "schema": "aq.corporate-date-model.v1",

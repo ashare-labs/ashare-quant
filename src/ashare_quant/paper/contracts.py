@@ -7,10 +7,10 @@ from typing import Annotated, Literal
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import Contract, Identifier, Money
+from ashare_quant.core.types import EvidenceSha as Sha
+from ashare_quant.core.types import ResearchSecurity as Security
 
-Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 StrategyId = Literal["equal-weight", "momentum", "trend"]
-Security = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]
 Quantity = Annotated[int, Field(strict=True, ge=0, le=10**9)]
 
 

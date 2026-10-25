@@ -13,8 +13,8 @@ from ashare_data.product.released_corporate import ReleasedCorporateView
 from ashare_data.product.released_references import ReleasedReferences
 from ashare_data.storage.market_release import MarketRelease
 
-from ashare_quant.backtests.minute.inputs import number, stamp
 from ashare_quant.contracts import DomainError
+from ashare_quant.core.validation import number, stamp
 from ashare_quant.portfolio.corporate import MODEL, schedule_rows
 from ashare_quant.providers.daily.history import frozen_factors, history_prices
 from ashare_quant.storage.artifacts import atomic, digest

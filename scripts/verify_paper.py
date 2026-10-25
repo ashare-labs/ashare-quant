@@ -2,8 +2,9 @@
 
 import argparse
 import json
-import runpy
 from pathlib import Path
+
+from verify_portfolio import generate
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.paper.replay import advance, bind
@@ -34,7 +35,6 @@ def main():
     }
     synthetic_manifest = json.loads(manifest_path.read_text())
     synthetic_manifest["execution"]["initial_cash"] = "10000"
-    generate = runpy.run_path(str(REPO / "scripts/verify_portfolio.py"))["generate"]
     doc = generate(synthetic_manifest, constant=True)
     for row in doc["daily"]:
         row["suspended"] = False

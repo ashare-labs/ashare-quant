@@ -6,15 +6,10 @@ Synthetic engineering observations only. No mocks in the execution/result chain.
 import asyncio
 import json
 import os
-import socket
 import sys
-import threading
-import time
-from contextlib import contextmanager
 
 import httpx
 import pytest
-import uvicorn
 from mcp import Client, StdioServerParameters
 
 from ashare_quant.api import create_app
@@ -23,45 +18,9 @@ from ashare_quant.mcp.projection import digest
 from ashare_quant.mcp.server import create_server
 from ashare_quant.tasks.worker import work_one
 from tests.mcp.fixture import DAYS, SID, make_deployment, submission
-
-
-@contextmanager
-def serving(app):
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error"))
-    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-    thread.start()
-    try:
-        deadline = time.monotonic() + 10
-        while not server.started:
-            assert thread.is_alive() and time.monotonic() < deadline
-            time.sleep(0.01)
-        yield "http://127.0.0.1:" + str(sock.getsockname()[1])
-    finally:
-        server.should_exit = True
-        thread.join(10)
-        sock.close()
-        assert not thread.is_alive()
-
-
-async def call(client, name, **args):
-    result = await client.call_tool(name, args)
-    assert not result.is_error, result
-    assert result.structured_content is not None, result
-    return result.structured_content
-
-
-async def collect(client, name, **args):
-    rows, cursor = [], None
-    while True:
-        result = await call(client, name, **args, limit=1, cursor=cursor)
-        value = result.get("page", result)
-        rows.extend(value["items"])
-        cursor = value["next_cursor"]
-        if not cursor:
-            assert len(rows) == value["total"]
-            return rows
+from tests.support.mcp_transport import call as call
+from tests.support.mcp_transport import collect as collect
+from tests.support.mcp_transport import serving as serving
 
 
 def test_real_transports_backend_and_parameter_iteration(tmp_path):

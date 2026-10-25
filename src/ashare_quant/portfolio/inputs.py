@@ -6,16 +6,8 @@ from datetime import date
 from decimal import Decimal, DecimalException
 from pathlib import Path
 
-
-def digest(value):
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-
-
-def require(ok, message):
-    if not ok:
-        raise ValueError(message)
+from ashare_quant.core.validation import digest as digest
+from ashare_quant.core.validation import require as require
 
 
 class InputNumberError(ValueError):

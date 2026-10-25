@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.strategies.files import StrategyFiles
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 @pytest.mark.parametrize("saved,alias", [

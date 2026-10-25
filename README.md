@@ -4,7 +4,7 @@
 
 A宽是本地 A 股策略、回测与模拟后端。A数达负责数据，RQAlpha 负责原生撮合和账户。支持可信自定义 Python 日频/分钟策略、因子计算评价、持久异步任务与历史结果读取；数据覆盖与可用运行模式以本次目录、预检和冻结回执为准。
 
-当前候选版本 `0.12.0.dev21` 使用功能目录和同一份新版 A数达运行时。源码身份随实际文件内容计算，当前候选不继承历史独立验收结论。
+包版本以 [pyproject.toml](pyproject.toml) 为准，A数达依赖以[运行时 pin](src/ashare_quant/providers/data-runtime.json)为准。源码身份随实际文件内容计算，新源码不继承历史独立验收结论。
 
 ## 安装指南
 
@@ -45,6 +45,7 @@ python -m ashare_quant.deployment task-worker
 - [通用分钟回测](docs/backtests.md)：模块入口和边界。
 - [账户历史](docs/paper.md)：只读历史与独立账户运行时边界。
 - [数据与诊断](docs/providers.md)、[开发与契约](docs/development.md)、[迁移说明](docs/migration.md)。
+- [结果分析](docs/result-analysis.md)、[财务质量查询](docs/financial-quality-api.md)、[分钟数据发布](docs/product-minute.md)。
 
 统一入口的 API 默认端口为 `18839`、paper 为 `18818`、web 为 `41839`。Python 工作台前缀 `/api/v1/python`，正式数据前缀 `/api/v1/product`，共享任务状态 `/api/v1/tasks/service`，历史任务 `/api/v1/history`，已发布研究行情 `/api/v1/market`。paper 使用独立状态根。生成契约位于 [docs/contracts](docs/contracts)。
 

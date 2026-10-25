@@ -9,7 +9,7 @@ from ashare_quant.backtests.minute.api import (
     validate_callback,
     validate_reference_calendar,
 )
-from ashare_quant.backtests.minute.inputs import require, stamp
+from ashare_quant.core.validation import require, stamp
 
 
 class DailyQuote(Quote):

@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.core.validation import digest as input_digest
 from ashare_quant.portfolio.corporate_export import attach
-from ashare_quant.portfolio.inputs import digest as input_digest
 from ashare_quant.portfolio.product_reference import owner_digest, source_bindings, validate
 from ashare_quant.storage.artifacts import atomic, canonical, lock, sha
 

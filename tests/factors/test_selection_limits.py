@@ -9,7 +9,7 @@ from ashare_quant.api import create_app
 from ashare_quant.storage.artifacts import atomic, sha
 from ashare_quant.tasks.factors.contracts import EvaluationOptions
 from ashare_quant.tasks.worker import work_one
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 def panel_app(tmp_path, count, dates, *, ranked=False):

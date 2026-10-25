@@ -1,13 +1,14 @@
+
 from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, StrictBool, model_validator
 
 from ashare_quant.contracts import Contract
-from ashare_quant.tasks.contracts import ISODate
+from ashare_quant.core.types import EvidenceSha as Sha
+from ashare_quant.core.types import ISODate
+from ashare_quant.core.types import ResearchSecurity as ResearchSecurity
 
 Alias = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
-Sha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
-ResearchSecurity = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]
 
 
 class ResearchInputRef(Contract):

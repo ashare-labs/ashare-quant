@@ -11,8 +11,8 @@ from ashare_quant.tasks.executor import Configuration
 from ashare_quant.tasks.minute.contracts import PythonCreate
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.worker import work_one
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 def test_environment_update_keeps_database_and_read_only_history(tmp_path, monkeypatch):

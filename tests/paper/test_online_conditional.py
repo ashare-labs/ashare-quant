@@ -11,7 +11,7 @@ from ashare_quant.paper.online import OnlineService
 from ashare_quant.paper.online_contracts import CONDITIONAL_MODEL, OnlineSession
 from ashare_quant.storage.artifacts import digest
 from tests.paper.fixtures import decision
-from tests.paper.test_online import MODE, closing, opening, setup
+from tests.support.paper_online import MODE, closing, opening, setup
 
 
 def conditional(tmp_path):

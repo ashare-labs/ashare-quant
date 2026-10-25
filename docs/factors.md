@@ -99,10 +99,12 @@ IC 使用各观察期实际可配对成员并披露样本数。重叠持有期�
 
 ## 验证与携带
 
+设置 `AQ_WHEEL` 为本次构建的实际 wheel 路径。
+
 ```sh
 python scripts/run_tests.py -q tests/factors tests/minute_tasks tests/test_database_compat.py
 python scripts/generate_contracts.py
-python scripts/verify_wheel.py dist/ashare_quant-0.12.0.dev20-py3-none-any.whl \
+python scripts/verify_wheel.py "$AQ_WHEEL" \
   --extra factor-evaluation --test tests/factors --output /path/to/new/verification
 ```
 

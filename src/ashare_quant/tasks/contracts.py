@@ -1,14 +1,18 @@
 """General queue and wire types, independent of strategy templates and windows."""
-from datetime import date
+
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BeforeValidator, Field, JsonValue
+from pydantic import AwareDatetime, Field
 
 from ashare_quant.contracts import Contract
+from ashare_quant.core.types import ISODate as ISODate
+from ashare_quant.core.types import JSONObject as JSONObject
+from ashare_quant.core.types import ResearchSecurity
+from ashare_quant.core.types import Sha as Sha
+from ashare_quant.core.types import exact_date as exact_date
 
-Sha = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-Security = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]
-JSONObject = dict[str, JsonValue]
+Security = ResearchSecurity
+
 JobID = Annotated[str, Field(pattern=r"^m2job-[0-9a-f]{32}$")]
 ACTIVE_SCHEMAS = ("python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3", "factor-job.v1")
 JobStatus = Literal["queued", "running", "cancelling", "cancelled", "failed", "succeeded"]
@@ -62,14 +66,7 @@ class JobLogs(Contract):
 
 
 
-def exact_date(value):
-    if type(value) is date:
-        return value
-    if type(value) is not str or len(value) != 10 or date.fromisoformat(value).isoformat() != value:
-        raise ValueError("Use an exact YYYY-MM-DD trading date, not a timestamp")
-    return value
 
-ISODate = Annotated[date, BeforeValidator(exact_date)]
 
 
 def execution_presentation(status, manifest, current_source):

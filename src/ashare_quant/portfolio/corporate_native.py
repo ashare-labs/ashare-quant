@@ -13,7 +13,7 @@ from rqalpha.const import INSTRUMENT_TYPE, POSITION_DIRECTION
 from rqalpha.mod.rqalpha_mod_sys_accounts.position_model import StockPosition
 from rqalpha.portfolio.position import POSITION_TYPE_MAP, Position
 
-from ashare_quant.portfolio.inputs import digest, require
+from ashare_quant.core.validation import digest, require
 
 
 def install(host, *, on_stage=None):

@@ -11,8 +11,8 @@ from ashare_quant.mcp.projection import digest, leaves
 from ashare_quant.mcp.server import create_server
 from ashare_quant.storage.artifacts import atomic, sha
 from ashare_quant.tasks.worker import work_one
-from tests.factors.test_exploration import source as panel_source
-from tests.mcp.test_e2e import call, collect, serving
+from tests.support.factor_app import source as panel_source
+from tests.support.mcp_transport import call, collect, serving
 
 source = panel_source
 
@@ -44,9 +44,8 @@ def test_factor_discovery_compute_evaluate_and_frozen_recovery(tmp_path, source)
                     caps = await call(c, "research_capabilities")
                     factor = caps["extensions"]["factors"]
                     assert factor["available"] and factor["evaluation_available"]
-                    assert factor["limits"] == dict(
-                        max_security_sessions=100000, max_input_bytes=33554432
-                    )
+                    # Retired sample/size ceilings must not return through MCP discovery.
+                    assert factor["limits"] == {}
                     assert not caps["extensions"]["python_daily"]["available"]
                     env = factor["environment_id"]
                     listing = await call(c, "discover_factors", environment_id=env, query=factor_id)

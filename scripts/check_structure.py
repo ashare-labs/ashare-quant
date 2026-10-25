@@ -53,6 +53,11 @@ def main():
                     modules = [node.module or ""] if isinstance(node, ast.ImportFrom) else (
                         [a.name for a in node.names] if isinstance(node, ast.Import) else [])
                     for module in modules:
+                        if (rel.parts[:3] == ("src", "ashare_quant", "core")
+                                and module.startswith("ashare_quant.")
+                                and module != "ashare_quant.contracts"
+                                and not module.startswith("ashare_quant.core.")):
+                            errors.append(f"shared primitives import a feature package: {rel}:{node.lineno}")
                         if module.split(".")[0] in {"tests", "scripts", "examples"}:
                             errors.append(f"product imports development material: {rel}:{node.lineno}")
                         if re.search(r"ashare_quant\.(?:m2|round_one|second_batch|execution_six|br1_fixed|d1)(?:[._]|$)", module):

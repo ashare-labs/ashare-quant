@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from ashare_quant.contracts import DomainError
 from ashare_quant.paper.online_contracts import CalendarReplan
 from ashare_quant.storage.artifacts import digest, sha
-from tests.paper.test_online import prepare, setup
+from tests.support.paper_online import prepare, setup
 
 
 def plan_for(config, **changes):

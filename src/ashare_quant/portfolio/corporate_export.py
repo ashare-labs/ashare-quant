@@ -12,8 +12,8 @@ import inspect
 import json
 from pathlib import Path
 
+from ashare_quant.core.validation import digest, require
 from ashare_quant.portfolio.corporate import MODEL, schedule_rows
-from ashare_quant.portfolio.inputs import digest, require
 
 
 def attach(document, schedule, *, accept_date_model=False, owner_module_sha256=None):

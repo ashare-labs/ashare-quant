@@ -1,1 +1,1 @@
-"""M2 contract preparation. No native execution or data acquisition is admitted."""
+"""Daily Python inputs and native execution over frozen owner observations."""

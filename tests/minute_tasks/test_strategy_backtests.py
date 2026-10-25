@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 
 from ashare_quant.strategies.files import StrategyFiles
 from ashare_quant.tasks.history import History
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import execute
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import execute
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, tmp_path):

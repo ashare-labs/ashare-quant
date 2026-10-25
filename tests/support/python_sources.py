@@ -1,4 +1,4 @@
-"""An editable example, served as source; never imported as a strategy."""
+"""Synthetic strategy sources for tests; never served as a product default."""
 
 SOURCE = """from aquant import *
 
@@ -33,7 +33,7 @@ def select_stock(context):
 
 
 def exit_positions(context):
-    # 当前模型要求在结束日收盘前平仓，保留 T+1 约束。
+    # 本测试策略选择在结束日平仓；产品允许保留期末持仓，T+1 约束仍适用。
     if context.current_dt.date() == context.run_params.end_date:
         for security in g.securities:
             order_target(security, 0)

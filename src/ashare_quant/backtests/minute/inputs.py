@@ -3,32 +3,13 @@
 import hashlib
 import json
 import re
-import sys
 from bisect import bisect_left, bisect_right
-from datetime import date, datetime, timedelta
-from decimal import Decimal
+from datetime import date, timedelta
 from pathlib import Path
 
-from ashare_quant.contracts import SHANGHAI
-from ashare_quant.portfolio.inputs import digest, require
-
-
-def stamp(value):
-    require(isinstance(value, str), "MINUTE_AWARE_TIMESTAMP_REQUIRED")
-    result = datetime.fromisoformat(value)
-    require(result.tzinfo is not None, "MINUTE_AWARE_TIMESTAMP_REQUIRED")
-    return result.astimezone(SHANGHAI)
-
-
-def number(value, *, zero=False):
-    require(type(value) in (str, int, float), "MINUTE_NUMBER_TYPE")
-    n = Decimal(str(value))
-    require(
-        n.is_finite() and (n >= 0 if zero else n > 0) and n < Decimal("1e15"),
-        "MINUTE_INVALID_NUMBER",
-    )
-    require(n == 0 or float(n) >= sys.float_info.min, "MINUTE_NUMBER_UNDERFLOW")
-    return n
+from ashare_quant.core.validation import digest, require
+from ashare_quant.core.validation import number as number
+from ashare_quant.core.validation import stamp as stamp
 
 
 class MinuteInputs:

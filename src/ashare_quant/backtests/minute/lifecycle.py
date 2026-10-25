@@ -5,7 +5,7 @@ from datetime import timedelta
 from rqalpha.core.events import EVENT, Event
 from rqalpha.interface import AbstractEventSource
 
-from ashare_quant.backtests.minute.inputs import require, stamp
+from ashare_quant.core.validation import require, stamp
 
 MODEL = "jq_minute"
 

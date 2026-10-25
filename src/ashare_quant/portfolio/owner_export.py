@@ -11,7 +11,7 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-from ashare_quant.portfolio.inputs import digest
+from ashare_quant.core.validation import digest
 
 
 def export(binding, binding_sha256, window, *, accept_model=False):

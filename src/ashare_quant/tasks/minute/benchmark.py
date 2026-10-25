@@ -91,7 +91,7 @@ def observations(data, security, days, at, *, selection_source="strategy"):
     if not getattr(data, "demand", False):
         return {**value, "reason": "BENCHMARK_RELEASE_UNAVAILABLE"}
     require(days == data.days, "PYTHON_BENCHMARK_DATES", "Benchmark must match completed account sessions")
-    from ashare_quant.backtests.minute.inputs import stamp
+    from ashare_quant.core.validation import stamp
     require(stamp(days[-1] + "T15:00:00+08:00") <= at,
             "AQUANT_FUTURE_DATA_REQUEST", "Benchmark cannot include a future session close")
     base_date = data.previous[days[0]]

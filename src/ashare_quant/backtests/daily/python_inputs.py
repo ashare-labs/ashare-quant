@@ -4,7 +4,6 @@ import json
 from datetime import date
 from pathlib import Path
 
-from ashare_quant.backtests.minute.inputs import number, require, stamp
 from ashare_quant.backtests.minute.research import (
     check_price,
     daily_model_bounds,
@@ -13,6 +12,7 @@ from ashare_quant.backtests.minute.research import (
     validate_state_binding,
 )
 from ashare_quant.contracts import DomainError
+from ashare_quant.core.validation import number, require, stamp
 from ashare_quant.portfolio.corporate import schedule_rows
 from ashare_quant.providers.daily.history import frozen_factors, history_prices
 from ashare_quant.storage.artifacts import atomic

@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 from ashare_quant.storage.artifacts import digest
 from ashare_quant.strategies.projects import ProjectFiles
 from ashare_quant.tasks.worker import work_one
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import execute
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import execute
+from tests.support.daily_release import fixed_release as fixed_release
 
 PROJECT_SOURCES = {
     "main.py": '''from .lifecycle import initialize, on_strategy_end

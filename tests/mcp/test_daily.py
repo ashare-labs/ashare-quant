@@ -10,7 +10,7 @@ from ashare_quant.mcp.projection import result_rows
 from ashare_quant.mcp.server import create_server
 from ashare_quant.tasks.worker import work_one
 from tests.mcp.fixture import make_deployment, submission
-from tests.mcp.test_e2e import call, collect, serving
+from tests.support.mcp_transport import call, collect, serving
 
 SOURCE = """from aquant import *
 def initialize(context):

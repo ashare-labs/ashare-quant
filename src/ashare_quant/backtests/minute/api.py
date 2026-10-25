@@ -11,7 +11,7 @@ from datetime import date, datetime
 from enum import Enum
 from types import ModuleType, SimpleNamespace
 
-from ashare_quant.backtests.minute.inputs import number, require, stamp
+from ashare_quant.core.validation import number, require, stamp
 from ashare_quant.strategies.imports import strategy_import
 
 

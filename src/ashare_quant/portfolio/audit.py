@@ -5,7 +5,7 @@ import json
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal, DecimalException, localcontext
 from pathlib import Path
 
-from ashare_quant.portfolio.inputs import digest
+from ashare_quant.core.validation import digest
 
 TOLERANCE = Decimal("0.000001")
 

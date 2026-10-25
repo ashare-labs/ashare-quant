@@ -5,12 +5,10 @@ import os
 import pickle
 import sqlite3
 import subprocess
-import sys
 import tempfile
 import time
 import uuid
 from contextlib import contextmanager
-from importlib import metadata
 from pathlib import Path
 
 import jsonpickle
@@ -18,6 +16,7 @@ import jsonpickle
 from ashare_quant.contracts import DomainError
 from ashare_quant.identity import source_sha256
 from ashare_quant.paper.contracts import CloseInput, Decision, SessionConfig
+from ashare_quant.paper.native_worker import spawn
 from ashare_quant.paper.risk import close_gate, decision_gate, reconcile, reconcile_opening, require
 from ashare_quant.runtime import runtime_fingerprint
 from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, sha
@@ -645,43 +644,8 @@ class PaperService:
                     state, _ = read_checkpoint(root / "native.chk", session["identity"])
                     complete = state["complete"] and state["receipt"]["input_id"] == row["input_id"]
                 if not complete:
-                    paths = [
-                        str(Path(__file__).resolve().parents[2]),
-                        str(metadata.distribution("ashare-data").locate_file("")),
-                        str(metadata.distribution("rqalpha").locate_file("")),
-                    ]
-                    boot = "import json,sys;p,a=json.loads(sys.argv[1]);sys.path[:0]=p;sys.argv=['paper-native',a];from ashare_quant.paper.native import main;main()"
-                    env = {
-                        "PATH": os.defpath,
-                        "PYTHONDONTWRITEBYTECODE": "1",
-                        "TZ": "Asia/Shanghai",
-                        "OPENBLAS_NUM_THREADS": "1",
-                        "OMP_NUM_THREADS": "1",
-                        "MKL_NUM_THREADS": "1",
-                        "NUMEXPR_NUM_THREADS": "1",
-                        "PAPER_PARENT_PID": str(os.getpid()),
-                    }
-                    if fault:
-                        if fault.startswith("checkpoint:"):
-                            env["PROBE_KILL"] = fault.removeprefix("checkpoint:")
-                        else:
-                            env["PAPER_FAULT"] = fault
                     with (root / ("native-" + token + ".log")).open("wb") as log:
-                        process = subprocess.Popen(
-                            [
-                                sys.executable,
-                                "-I",
-                                "-S",
-                                "-B",
-                                "-c",
-                                boot,
-                                json.dumps([paths, str(request_path)]),
-                            ],
-                            env=env,
-                            stdout=log,
-                            stderr=subprocess.STDOUT,
-                            pass_fds=(serial.fileno(), writer.fileno()),
-                        )
+                        process = spawn(request_path, log, serial, writer, fault)
                         if stage:
                             stage("spawned", process)
                         start = heartbeat = time.monotonic()

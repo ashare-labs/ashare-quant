@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
 from ashare_quant.tasks.worker import work_one
-from tests.factors.test_exploration import app as app
-from tests.factors.test_exploration import request
-from tests.factors.test_exploration import source as source
+from tests.support.factor_app import app as app
+from tests.support.factor_app import request
+from tests.support.factor_app import source as source
 
 
 @pytest.mark.parametrize('change', ['same_size_restored_mtime', 'replace', 'symlink', 'missing'])

@@ -5,7 +5,7 @@ import pytest
 from ashare_quant.contracts import DomainError
 from ashare_quant.paper.online_adapter import scoped_action_effect
 from ashare_quant.storage.artifacts import digest, sha
-from tests.paper.test_online import prepare, setup
+from tests.support.paper_online import prepare, setup
 
 
 def test_explicit_empty_migration_preserves_old_identity(tmp_path):

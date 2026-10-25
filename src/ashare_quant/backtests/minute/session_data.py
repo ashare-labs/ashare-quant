@@ -7,7 +7,7 @@ source's unknown historical availability.
 
 from datetime import timedelta
 
-from ashare_quant.backtests.minute.inputs import number, require, stamp
+from ashare_quant.core.validation import number, require, stamp
 
 SCHEMA = "ad-minute-session-observations.v1"
 

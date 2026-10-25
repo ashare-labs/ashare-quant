@@ -13,9 +13,9 @@ from ashare_quant.storage.artifacts import canonical, sha
 from ashare_quant.tasks.evidence import evidence_hash, project_json, verified_copy
 from ashare_quant.tasks.executor import Configuration
 from ashare_quant.tasks.policy import ServicePolicy
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import execute
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import execute
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 @pytest.mark.parametrize("value", [None, True, -1.25e30, "引号\"与\\路径", ["[]{}", {}, [None, 1]],

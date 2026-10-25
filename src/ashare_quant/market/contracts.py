@@ -5,7 +5,8 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from ashare_quant.contracts import Contract
-from ashare_quant.tasks.contracts import JSONObject, Security, Sha
+from ashare_quant.core.types import JSONObject, Sha
+from ashare_quant.core.types import ResearchSecurity as Security
 
 
 class PortfolioSelection(Contract):

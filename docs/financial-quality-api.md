@@ -6,4 +6,4 @@ A point request contains security, field, period, source, timezone-aware as_of a
 
 Coverage accepts optional security and day. The frozen correction ledger distinguishes obsolete trading codes, reviewed same-instrument source aliases, explicit suspended days, delisting and unresolved omissions. No suspension is turned into a zero price or an unlimited-trading claim.
 
-AD 0.10.0.dev17 and AQ 0.12.0.dev19 supply these readers. The account bridge retains its separate runtime. Runtime rebuild inputs and rollback configurations are kept in the configured local deployment; no new persistent service is required.
+The versions in [pyproject.toml](../pyproject.toml) and the [AD runtime pin](../src/ashare_quant/providers/data-runtime.json) supply these readers. The account bridge retains its separate runtime. Runtime rebuild inputs and rollback configurations are kept in the configured local deployment; no new persistent service is required.

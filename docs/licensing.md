@@ -2,11 +2,11 @@
 
 项目权利人尚未为 A宽自有源码指定开源许可证。本次整理保留原有源码预览状态，没有添加 MIT、Apache-2.0 等 LICENSE，也没有授予额外的开源、商业使用或再分发许可。需要这些权限时，应先取得权利人的明确授权；此说明不改变平台条款下已有权利，也不为第三方重新授权。
 
-`ashare-data` 固定为 0.8.0.dev2，源码提交 `0c984cdeca6c63c684e91343955701c9b4e28977`。该提交可从[公开仓库](https://github.com/ashare-labs/ashare-data/commit/0c984cdeca6c63c684e91343955701c9b4e28977)取得；其[随提交许可说明](https://github.com/ashare-labs/ashare-data/blob/0c984cdeca6c63c684e91343955701c9b4e28977/docs/licensing.md)仍未授予额外使用或分发许可。源码可取得不替代许可。本仓库不捆绑 AD 二进制，其他依赖适用各自随包许可；软件权利与行情数据权利分别处理。
+`ashare-data` 的分发版本、源码提交和文件清单以[运行时 pin](../src/ashare_quant/providers/data-runtime.json)为准。当前固定源码 `38628fe9e17fb96a84fd720f7bc67157d936990d` 的说明位于[来源与许可](https://github.com/ashare-labs/ashare-data/blob/38628fe9e17fb96a84fd720f7bc67157d936990d/docs/sources-and-licensing.md)。源码可取得不替代许可。本仓库不捆绑 AD 二进制，其他依赖适用各自随包许可；软件权利与行情数据权利分别处理。
 
 ## 声明来源
 
-2026-10-11 核对时，AQ [已公开的许可说明](https://github.com/ashare-labs/ashare-quant/blob/main/docs/licensing.md)与本地源码预览起点 `0497c7d9d27432ebdbf44e8d26f46db2ebfa14c1` 都明确未指定自有代码开源许可证；固定 dev14 基线未改变这一声明。项目元数据也没有指定 MIT、Apache 或其他自有代码许可证。上面的状态由这些既有材料继承，不是本次新设的发布规则。
+2026-10-11 核对时，AQ [已公开的许可说明](https://github.com/ashare-labs/ashare-quant/blob/main/docs/licensing.md)与本地源码预览起点 `0497c7d9d27432ebdbf44e8d26f46db2ebfa14c1` 都明确未指定自有代码开源许可证；本次内部重构未改变这一声明。项目元数据也没有指定 MIT、Apache 或其他自有代码许可证。上面的状态由这些既有材料继承，不是本次新设的发布规则。
 
 本交付可以作为权利人保留既有声明的源码预览候选；不将“没有开源许可”解释成技术安装失败，也不称为已开放第三方自由使用的开源产品。[GitHub 官方说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)区分公开仓库的查看/fork 权利与进一步的软件使用授权。
 

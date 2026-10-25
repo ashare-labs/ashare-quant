@@ -8,7 +8,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.execution.rqalpha.checkpoint import AtomicFile
 from ashare_quant.paper.service import read_checkpoint
 from ashare_quant.storage.artifacts import atomic, regular
-from tests.paper.test_online import closing, finish, prepare, setup, start
+from tests.support.paper_online import closing, finish, prepare, setup, start
 
 
 @pytest.mark.parametrize("index", [0, 1])

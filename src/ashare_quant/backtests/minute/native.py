@@ -28,9 +28,9 @@ from ashare_quant.backtests.minute.api import (
     order_view,
     validate_callback,
 )
-from ashare_quant.backtests.minute.inputs import require, stamp
 from ashare_quant.backtests.minute.lifecycle import JQEventSource, handle_clocks
 from ashare_quant.contracts import SHANGHAI
+from ashare_quant.core.validation import require, stamp
 from ashare_quant.execution.rqalpha.events import RecordedEventSource
 from ashare_quant.execution.rqalpha.guards import block_rqdata_apis
 from ashare_quant.portfolio.native import Proxy

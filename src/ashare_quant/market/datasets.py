@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.core.validation import digest as history_digest
 from ashare_quant.market.contracts import (
     PortfolioDataset,
     PortfolioPreflight,
@@ -13,7 +14,6 @@ from ashare_quant.market.contracts import (
     PortfolioSelection,
 )
 from ashare_quant.portfolio.inputs import InputNumberError, Inputs
-from ashare_quant.portfolio.inputs import digest as history_digest
 from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, require, sha
 
 
@@ -129,7 +129,7 @@ class Datasets:
     def _read(self, dataset_id):
         from pydantic import TypeAdapter
 
-        from ashare_quant.tasks.contracts import Sha
+        from ashare_quant.core.types import Sha
 
         TypeAdapter(Sha).validate_python(dataset_id)
         require(not self.root.is_symlink())

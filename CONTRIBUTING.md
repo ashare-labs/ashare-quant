@@ -1,6 +1,6 @@
 # Contributing
 
-按业务功能组织代码，不用开发轮次、验收题号或临时版本作为产品目录。产品不得导入 tests、examples、scripts 或历史报告。共用运行能力放 storage、execution 或 tasks；验证器放 tests 或根目录 scripts。删除失去用途的材料，不建立 archives 替代设计判断。
+按业务功能组织代码，不用开发轮次、验收题号或临时版本作为产品目录。产品不得导入 tests、examples、scripts 或历史报告。稳定共用类型与纯校验放 core，持久化、执行和队列能力分别放 storage、execution 或 tasks；core 不依赖业务功能包。验证器放 tests 或根目录 scripts，跨测试模块共用的构造器放 tests/support。删除失去用途的材料，不建立 archives 替代设计判断。
 
 Python 包、模块和 Python 脚本使用 snake_case；文档及普通非 Python 目录使用 kebab-case。公开协议、策略 ID 与数据标签变更须显式说明，不机械改写回执内容。README 保留面向人的五章结构。
 

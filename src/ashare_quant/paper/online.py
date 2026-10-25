@@ -7,16 +7,14 @@ cash or positions. No process stays alive between invocations.
 
 import json
 import os
-import subprocess
-import sys
 import tempfile
 import uuid
 from datetime import datetime, time, timezone
 from decimal import Decimal
-from importlib import metadata
 from pathlib import Path
 
 from ashare_quant.contracts import SHANGHAI
+from ashare_quant.paper.native_worker import spawn
 from ashare_quant.paper.online_contracts import (
     CONDITIONAL_MODEL,
     INTRADAY_MODELS,
@@ -628,34 +626,8 @@ class OnlineService:
 
     @staticmethod
     def _spawn(request, serial, writer, fault, stage):
-        paths = [
-            str(Path(__file__).resolve().parents[2]),
-            str(metadata.distribution("ashare-data").locate_file("")),
-            str(metadata.distribution("rqalpha").locate_file("")),
-        ]
-        boot = "import json,sys;p,a=json.loads(sys.argv[1]);sys.path[:0]=p;sys.argv=['paper-native',a];from ashare_quant.paper.native import main;main()"
-        env = {
-            "PATH": os.defpath,
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "TZ": "Asia/Shanghai",
-            "OPENBLAS_NUM_THREADS": "1",
-            "OMP_NUM_THREADS": "1",
-            "MKL_NUM_THREADS": "1",
-            "NUMEXPR_NUM_THREADS": "1",
-            "PAPER_PARENT_PID": str(os.getpid()),
-        }
-        if fault:
-            env["PROBE_KILL" if fault.startswith("checkpoint:") else "PAPER_FAULT"] = (
-                fault.removeprefix("checkpoint:")
-            )
         with (request.parent / ("native-" + uuid.uuid4().hex + ".log")).open("wb") as log:
-            process = subprocess.Popen(
-                [sys.executable, "-I", "-S", "-B", "-c", boot, json.dumps([paths, str(request)])],
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                pass_fds=(serial.fileno(), writer.fileno()),
-            )
+            process = spawn(request, log, serial, writer, fault)
             try:
                 if stage:
                     stage("spawned", process)

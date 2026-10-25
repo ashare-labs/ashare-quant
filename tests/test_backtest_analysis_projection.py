@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
-from tests.test_result_analysis_api import frozen_fixture, seed_python
+from tests.support.result_history import frozen_fixture, seed_python
 
 
 def seed_listed_result(app, result):

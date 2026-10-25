@@ -13,7 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 from ashare_quant.backtests.minute.bounded import check_price as bounded_check_price
 from ashare_quant.backtests.minute.bounded import envelope, interval
-from ashare_quant.backtests.minute.inputs import number, require, stamp
+from ashare_quant.core.validation import number, require, stamp
 
 SCHEMA = "ad-minute-research.v1"
 PROFILE = "source-labelled-closed-bars.v1"

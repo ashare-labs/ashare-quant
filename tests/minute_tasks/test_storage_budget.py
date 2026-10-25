@@ -12,12 +12,12 @@ from ashare_quant.tasks.minute.contracts import PythonCreate
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.repository import Repository
 from ashare_quant.tasks.worker import work_one
-from tests.factors.test_exploration import app as app
-from tests.factors.test_exploration import request as factor_request
-from tests.factors.test_exploration import source as source
 from tests.minute_tasks.test_api import setup as setup
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import fixed_release as fixed_release
+from tests.support.factor_app import app as app
+from tests.support.factor_app import request as factor_request
+from tests.support.factor_app import source as source
 
 
 def sparse(path, size):

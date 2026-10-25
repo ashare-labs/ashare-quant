@@ -17,9 +17,9 @@ from ashare_quant.tasks.minute.demand import DemandInputs
 from ashare_quant.tasks.minute.evidence import verify_demand
 from ashare_quant.tasks.progress import EngineProgress, RuntimeProgress, snapshot
 from tests.minute_tasks.evidence import evidence
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import execute
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import execute
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 def test_atomic_stream_is_byte_identical_and_journal_roundtrips(tmp_path):

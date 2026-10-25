@@ -1,27 +1,19 @@
-# 当前产品迁移
+# 历史目录迁移与当前入口
 
-固定窗口、七算法与演练入口已退役，当前切换要求见 [正式后端迁移](formal-backend-migration.md)。以下仅记录更早的目录演变，不作为当前接口调用指南。
+本页保留旧文档链接，记录目录演变；当前调用契约见[正式研究接口](formal-backend-migration.md)。早期迁移的固定窗口、模板策略和资源门槛不适用于当前 Python 工作台。
 
-# 功能布局迁移
+## 已完成的目录演变
 
-新版没有旧名 shim。m2 的契约迁入 backtests.daily，策略迁入 strategies.daily，数据适配迁入 providers.daily；tasks 拆为共享 tasks 和 tasks.daily；m2_native 迁入 execution.daily；portfolio_jobs 迁入 tasks.portfolio。daily_portfolio 迁入 portfolio，minute 迁入 backtests.minute，rqprobe 迁入 execution.rqalpha。
+AQ `2aa7829` 与 AD `2fe79d9` 的共同整理确立了功能目录、snake_case Python 命名、kebab-case 文档、五章 README、真实数据不入发布树，以及源码和依赖变更产生新身份的原则。现行贡献规范见[贡献指南](../CONTRIBUTING.md)。当时的包版本、窗口和路由只描述历史，不是今天的容量或入口约束。
 
-共享锁、原子写入和序列化位于 storage，订单预算位于 execution.reservation，当前结果投影位于 tasks。round_one、second_batch、execution_six、d1、br1_fixed 及封存结果服务退出产品；有用验证器和最小 fixtures 留在 tests/scripts，完整历史材料不搬成 archives。
+早期 `m2`、`daily_portfolio`、`rqprobe` 的职责分别进入 backtests/tasks、portfolio 和 execution。`m2job-` 等序列化业务标识仍保留原含义；不要机械改写旧回执、数据库记录或检查点。
 
-HTTP /api/v1/m2 改为 /api/v1/tasks/daily，/api/v1/research 改为 /api/v1/market。CLI job-* 改 task-*，jobs 改 tasks，research-* 改 market-*。组合与 paper 功能前缀保留。
+`/api/v1/tasks/daily/**`、`/api/v1/portfolio/**` 和固定七模板运行入口已退役。`two_day`、`w1`、`w2` 仅属于历史证据，不能用于创建当前研究。当前日频/分钟统一由 `/api/v1/python/jobs` 提交用户代码，不要求固定股票池、额外提交证券池或模板策略；策略按需查询已配置数据。资源与磁盘设置见[任务服务](tasks.md)，可用策略 API 见[Python 工作台](python-workbench.md)。
 
-算法 ID 和部分 wire 标签保留语义，例如 `daily_portfolio.v1`、`m2-jobs.v6`、`m2-job-manifest.v6` 和 `m2job-` ID 前缀。这些是序列化业务标识，没有旧 Python 模块别名。AD 的旧窗口 `m2a` 明确改为 `two_day`，`w1`、`w2` 保留；请求必须使用当前 catalogue 返回的窗口，不能机械改写旧回执。
+策略导入使用 `aquant`，旧 jqdata 等别名的离线转换见[导入迁移](aquant-migration.md)。不恢复已删除的 Python 模块或策略别名。当前仍存在的 CLI/Python/API 入口则属于兼容契约，不能借早期“无旧名 shim”条款删除。
 
-源码路径、模块名、策略 SDK 摘要及包版本都改变，因此新版产生新任务、账户和恢复身份；旧库不能只换目录后继续运行。AQ `0.12.0.dev6` 固定 AD `0.10.0.dev5` 的候选提交、wheel 及代码清单；所有数据域共用这一安装。新身份是 `not_reviewed`，不复用旧 PASS。
+## 历史与交付身份
 
-可信 Python 策略将 `ashare_quant.strategy_api` 改为 `ashare_quant.strategies.api` 后重新注册；组合策略将 `ashare_quant.daily_portfolio.signals` 改为 `ashare_quant.portfolio.signals`。新的源码字节与 SDK 摘要会产生新策略版本，不覆盖旧任务封存的策略。RQAlpha 适配器类路径也已改变，旧检查点只交给原固定环境恢复。
+旧任务和结果通过 `/api/v1/history` 读取；源码变更不授权当前 worker 执行旧任务，也不改写旧文件来继承验收。账户、数据集、冻结发布和模拟运行时保留原身份。数据库升级只在单独核查和显式选择后进行，不因目录整理自动迁移。
 
-旧 fixed/parameters/bound-data 准备页退出，可执行能力集中于 Tasks（准入日频域）与 Portfolio（覆盖的多证券域），分钟仍为本地 CLI。日频 Tasks 包含固定窗口、参数及结束日期、规则/可信 Python 版本、既有数据绑定、任务日志/结果、取消和恢复；文件注册及数据导入仍通过本地 CLI。D1/BR1 历史执行及静态封存结果停供，不将它们声明为新日频任务的等价重放。
-
-验收验证实际注册、导入/绑定、原生账本、失败拒绝、崩溃恢复、取消恢复、API 投影与 wheel 加载。历史回执和封存包保持原字节，不给新源码套用旧审阅 hash。
-
-控制数据库使用 schema 4 的功能型任务表。旧数据库按原后端继续读取；新版本不原地迁移旧任务或账户。
-
-前端用 `scripts/generate_contracts.py` 导出的四份 `docs/contracts/*.openapi.json` 和 `identity.json` 作为完整集合。API、daily、portfolio、paper 的运行时 OpenAPI 与导出共用入口；paper `/api/v1/paper/schema` 返回其当前 OpenAPI。更新前端时先校验四个文件摘要，再生成类型。源码摘要变化不能只改 identity 文件而保留不一致契约。
-
-周一模拟继续使用其已封存代码、解释器和账户。此次候选不迁入封存包、不重刷其源码哈希、不修改恢复绑定；新布局验证不代表旧模拟已换用新版。
+当前 HTTP 契约为 api/tasks/paper 三份 [OpenAPI](contracts)，另有研究 MCP 工具契约。生成流程见[开发指南](development.md)。早期四份 schema、旧 CLI 和固定窗口说明已由这些当前契约取代。

@@ -14,9 +14,9 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
-from ashare_quant.backtests.minute.inputs import MinuteInputs, number
+from ashare_quant.backtests.minute.inputs import MinuteInputs
+from ashare_quant.core.validation import digest, number, require
 from ashare_quant.identity import package_root, source_inventory
-from ashare_quant.portfolio.inputs import digest, require
 from ashare_quant.runtime import runtime_fingerprint
 from ashare_quant.storage.atomic_json import atomic as atomic_json
 from ashare_quant.strategies.imports import validate_imports

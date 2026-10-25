@@ -6,8 +6,10 @@ from typing import Literal
 from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import Contract
+from ashare_quant.core.types import JSONObject, Sha
+from ashare_quant.core.types import ResearchSecurity as Security
 from ashare_quant.strategies.identity import StrategyID
-from ashare_quant.tasks.contracts import JobID, JobView, JSONObject, Security, Sha
+from ashare_quant.tasks.contracts import JobID, JobView
 
 
 class PythonProject(Contract):

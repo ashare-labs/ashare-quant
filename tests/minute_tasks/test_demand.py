@@ -6,9 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.minute_tasks.evidence import evidence
-from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
-from tests.minute_tasks.test_daily import execute
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
+from tests.support.daily_release import daily_jobs as daily_jobs
+from tests.support.daily_release import execute
+from tests.support.daily_release import fixed_release as fixed_release
 
 
 def test_catalogue_reports_calendar_envelope_without_claiming_price_coverage(daily_jobs, fixed_release):

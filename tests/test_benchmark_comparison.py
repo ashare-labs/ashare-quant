@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 from ashare_quant.api import create_app
 from ashare_quant.storage.artifacts import digest
 from tests.analysis.fixtures import browser_fixture
-from tests.minute_tasks.test_benchmark import reference
-from tests.minute_tasks.test_daily import fixed_release as fixed_release
-from tests.test_result_analysis_api import seed_python
+from tests.support.benchmark_release import reference
+from tests.support.daily_release import fixed_release as fixed_release
+from tests.support.result_history import seed_python
 
 
 def retained_result(days, frequency):

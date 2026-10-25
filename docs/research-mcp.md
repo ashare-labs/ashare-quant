@@ -44,14 +44,14 @@ CMES 的 VWAP 是已观测同一行 amount/share-volume，零量保持缺失；�
 uv sync --locked --extra native --extra factor-evaluation --extra mcp
 ```
 
-先按现有部署清单启动 **同一配置** 的 API 和 task-worker。MCP 不会自行启动或改写服务、初始化数据、采集或发布。假定已运行的研究 API 位于 `http://127.0.0.1:8000`：
+先按现有部署清单启动 **同一配置** 的 API 和 task-worker。MCP 不会自行启动或改写服务、初始化数据、采集或发布。假定已运行的研究 API 位于 `http://127.0.0.1:18839`：
 
 ```sh
 # 本地 Codex / DSH 等 MCP host 的子进程入口
-.venv/bin/ashare-quant-mcp --backend-url http://127.0.0.1:8000
+.venv/bin/ashare-quant-mcp --backend-url http://127.0.0.1:18839
 
 # 相同工具逻辑，仅本地 HTTP 调试
-.venv/bin/ashare-quant-mcp --backend-url http://127.0.0.1:8000 \
+.venv/bin/ashare-quant-mcp --backend-url http://127.0.0.1:18839 \
   --transport streamable-http --port 8766
 ```
 

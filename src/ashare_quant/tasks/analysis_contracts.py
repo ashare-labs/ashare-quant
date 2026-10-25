@@ -5,7 +5,8 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from ashare_quant.contracts import Contract
-from ashare_quant.tasks.contracts import JobID, JSONObject, Sha
+from ashare_quant.core.types import JSONObject, Sha
+from ashare_quant.tasks.contracts import JobID
 
 AnalysisVersion = Literal["returns-v1", "returns-v2"]
 BenchmarkSelection = Annotated[str, Field(pattern=r"^(frozen|none|[0-9]{6}\.(XSHG|XSHE))$")]

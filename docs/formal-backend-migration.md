@@ -1,8 +1,8 @@
 # 正式研究后端与前端迁移
 
-此候选继承 `a98b6a5`（研究 MCP、真实因子和日频 Python 组合候选），移除固定七策略、固定日频窗口和演练运行入口。后端不再登记预设算法，也不随 wheel 安装示例源文件、演练行情或演练执行器。开发回归所需旧算法与合成数据位于 `tests/support`、`tests/fixtures`；产品代码不导入它们。
+当前研究入口使用可信自定义 Python，固定七策略、固定日频窗口和演练运行入口已退役。后端不登记预设算法，也不随 wheel 安装示例源文件、演练行情或演练执行器。开发回归所需旧算法与合成数据位于 `tests/support`、`tests/fixtures`；产品代码不导入它们。
 
-此变更尚未部署。当前 Web `0.3.12` / `db3110ab` 的 portfolio、editor 和高级工具仍引用旧接口；必须完成前端迁移后再安排统一切换。此候选没有修改 quant-web，不启动或重启现有 API、Web、worker，也不迁移或清理真实库。
+本页记录当前接口及已退役入口，不作为某台机器的部署状态记录。多文件策略与冻结身份见[策略项目](strategy-projects.md)，账号边缘选择的私人文件空间见[工作空间契约](strategy-workspaces.md)，收益版本与冻结基准派生见[结果分析](result-analysis.md)。安装版本和实际服务身份需在部署时核对。
 
 ## 已移除的接口与入口
 
@@ -30,7 +30,7 @@
 | 通用行情 | `/api/v1/market/stores`、`/market/{alias}/{dataset}` 及 prices/coverage | 保留只读查询；高级工具的“固定样本行情”只是旧页面名称，不代表应删除数据能力 |
 | 环境/频率/运行上限 | `GET /api/v1/python/catalogue` | 只有能力与限制，无 example、预设源码或参数；`frequencies` 为 1m、1d |
 | 本机策略文件 | `GET/POST /api/v1/python/directories`、`GET/PUT /api/v1/python/files` | 固定正式 state 根下目录和 UTF-8 `.py` 读写；[接口契约](strategy-files.md)，保存不执行代码 |
-| 新研究提交 | `POST /api/v1/python/jobs` | 显式 source、frequency、日期、initial_cash、environment_id、幂等键及两项本机研究确认；securities 可省略，parameters 可选 |
+| 新研究提交 | `POST /api/v1/python/jobs` | 显式 source 或完整 project、frequency、日期、initial_cash、environment_id、幂等键及两项本机研究确认；securities 可省略，parameters 可选 |
 | 日频 | 提交 `frequency=1d`，证券和历史由策略 API 提出 | 按需读取固定发布；无外部证券池/预热要求，使用统一可配置资源预算；末持仓按最后可见收盘标记 |
 | 分钟 | 上述提交 `frequency=1m` | 同一按需查询接口与统一预算，支持动态订阅和期末持仓；保留已声明的分钟回溯撮合模型 |
 | 状态、冻结输入、日志、结果 | `GET /api/v1/python/jobs`、`/{id}`、`/{id}/manifest`、`/{id}/logs`、`/{id}/result` | 原异步队列、输入冻结、幂等找回与持久结果保留 |

@@ -23,7 +23,8 @@ from ashare_quant.backtests.minute.bounded import (
     SCHEMA,
     SESSIONS,
 )
-from ashare_quant.backtests.minute.inputs import MinuteInputs, require
+from ashare_quant.backtests.minute.inputs import MinuteInputs
+from ashare_quant.core.validation import require
 from ashare_quant.providers.runtime import pin, verify
 
 AD_COMMIT = pin()["commit"]
