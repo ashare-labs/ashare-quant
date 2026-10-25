@@ -138,3 +138,21 @@ def test_http_progress_refresh_result_and_idempotency_share_same_job(daily_jobs)
         assert client.get("/api/v1/python/jobs/" + job["job_id"]).json()["progress"] == p
         assert client.get("/api/v1/history/jobs/" + job["job_id"]).json()["progress"] == p
         assert client.post("/api/v1/python/jobs", json=body).json()["job_id"] == job["job_id"]
+
+
+@pytest.mark.parametrize("expression,code", [
+    ("MemoryError('simulated allocation failure')", "PYTHON_MEMORY_ALLOCATION_FAILED"),
+    ("OSError(28, 'simulated disk write failure')", "PYTHON_STORAGE_WRITE_FAILED"),
+])
+def test_actual_resource_error_type_is_reported_without_claiming_budget_exhaustion(
+    daily_jobs, expression, code
+):
+    app, jobs, body = daily_jobs
+    body.update(securities=[], end_date=body["start_date"],
+                source=f"def initialize(context): raise {expression}\n")
+    with TestClient(app) as client:
+        job = execute(client, jobs, body)
+        assert job["status"] == "failed"
+        assert job["error"]["code"] == code, job["error"]
+        assert job["progress"]["terminal"] and job["progress"]["current_rss_bytes"] is None
+        assert client.get(f"/api/v1/python/jobs/{job['job_id']}/result").status_code == 409
