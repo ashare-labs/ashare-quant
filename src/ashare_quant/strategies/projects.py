@@ -129,9 +129,9 @@ def rename_directory(source_fd, source, target_fd, target, *, exchange=False):
 
 
 class ProjectFiles:
-    def __init__(self, state_root, *, total_bytes=None):
+    def __init__(self, state_root, *, total_bytes=None, workspace=None):
         policy = ServicePolicy()
-        self.files = StrategyFiles(state_root)
+        self.files = StrategyFiles(state_root, workspace=workspace)
         self.total_bytes = policy.artifact_bytes if total_bytes is None else total_bytes
         self.root = self.files.root
 
@@ -216,13 +216,11 @@ class ProjectFiles:
                         result.append(relative)
                 finally:
                     os.close(child)
-        with self.files.state() as state:
-            try:
-                os.stat("strategies", dir_fd=state, follow_symlinks=False)
-            except FileNotFoundError:
-                return []
-        with self.files.directory([]) as fd:
-            visit(fd, [])
+        try:
+            with self.files.directory([]) as fd:
+                visit(fd, [])
+        except FileNotFoundError:
+            return []
         if len(result) > 1:
             raise DomainError("STRATEGY_PROJECT_ID_CONFLICT", "More than one project has this stable identity", 409,
                               details={"strategy_id": project_id, "paths": sorted(result)})

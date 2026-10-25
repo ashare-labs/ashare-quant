@@ -62,11 +62,17 @@ class PythonJobs(TaskService):
             }
         )
 
-    def create(self, request):
+    def create(self, request, *, workspace=None):
+        from ashare_quant.strategies.files import validate_workspace
+
+        validate_workspace(workspace)
         self.guard()
         with lock(self.root / "creation.lock", timeout=self.repo.policy.admission_wait_seconds):
             existing = self.repo.existing(request)
             if existing:
+                frozen_workspace = json.loads(existing["manifest"])["session"].get("strategy_workspace")
+                require(frozen_workspace == workspace, "STRATEGY_WORKSPACE_CONFLICT",
+                        "The idempotency key belongs to a different storage workspace")
                 return self.view(existing)
             require(
                 request.environment_id == self.environment(),
@@ -84,6 +90,7 @@ class PythonJobs(TaskService):
                 ProjectFiles(
                     self.product.configured().control_db.parent,
                     total_bytes=self.repo.policy.artifact_bytes,
+                    workspace=workspace,
                 ).read_id(request.project.project_id)
             else:
                 sources = {"strategy.py": request.source}
@@ -92,7 +99,8 @@ class PythonJobs(TaskService):
 
                 # The client explicitly supplies the saved file identity. Unsaved edits
                 # may differ; this task freezes its submitted source independently.
-                saved = StrategyFiles(self.product.configured().control_db.parent).read(request.strategy_id)
+                saved = StrategyFiles(self.product.configured().control_db.parent,
+                                      workspace=workspace).read(request.strategy_id)
                 request = request.model_copy(update={"strategy_id": saved["strategy_id"]})
             self.repo.capacity()
             require(
@@ -163,6 +171,8 @@ class PythonJobs(TaskService):
             }
             if benchmark is not None:
                 session["benchmark_release"] = benchmark
+            if workspace is not None:
+                session["strategy_workspace"] = workspace
             if submitted_strategy_id != request.strategy_id:
                 session["submitted_strategy_id"] = submitted_strategy_id
             if request.project is not None:

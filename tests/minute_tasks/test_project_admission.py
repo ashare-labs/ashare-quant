@@ -63,6 +63,30 @@ def test_all_submitted_files_are_frozen_not_replaced_with_saved_sources(project_
         assert runs["identity_model"] == "stable_project_id" and runs["total"] == 1
 
 
+def test_workspace_project_admission_freezes_scope_and_rejects_cross_scope_retry(project_setup, tmp_path):
+    app, jobs, _, _, body = project_setup
+    namespace = "a" * 32
+    files = ProjectFiles(tmp_path, workspace=namespace)
+    saved = files.create("scoped")
+    body["strategy_id"] = saved["strategy_id"]
+    body["project"]["project_id"] = saved["strategy_id"]
+    with TestClient(app) as client:
+        # A project from another namespace cannot be submitted through the legacy root.
+        assert client.post("/api/v1/python/jobs", json=body).status_code == 404
+        response = client.post("/api/v1/python/jobs", json=body,
+                               headers={"X-Quant-Workspace": namespace})
+        assert response.status_code == 201, response.text
+        identifier = response.json()["job_id"]
+        assert jobs.check(jobs.repo.row(identifier)).session["strategy_workspace"] == namespace
+        assert client.post("/api/v1/python/jobs", json=body,
+                           headers={"X-Quant-Workspace": namespace}).json()["job_id"] == identifier
+        for header in ({}, {"X-Quant-Workspace": "b" * 32}):
+            refused = client.post("/api/v1/python/jobs", json=body, headers=header)
+            assert refused.status_code == 409
+            assert refused.json()["error"]["code"] == "STRATEGY_WORKSPACE_CONFLICT"
+        assert len(jobs.repo.rows()) == 1
+
+
 def test_helper_change_changes_immutable_identity_and_repeated_click_is_idempotent(project_setup):
     _, jobs, _, _, body = project_setup
     request = PythonCreate.model_validate(body)

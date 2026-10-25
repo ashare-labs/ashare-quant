@@ -3,6 +3,7 @@
 import errno
 import fcntl
 import os
+import re
 import stat
 import unicodedata
 from contextlib import contextmanager
@@ -15,6 +16,14 @@ from ashare_quant.storage.errors import storage_error
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 PROJECT_DESCRIPTOR = "aquant.toml"
 INTERNAL_PREFIX = ".aquant-"
+
+
+def validate_workspace(workspace):
+    if workspace is not None and (
+        not isinstance(workspace, str) or not re.fullmatch(r"[0-9a-f]{32}", workspace)
+    ):
+        raise DomainError("STRATEGY_WORKSPACE_INVALID", "Use an opaque workspace handle", 422)
+    return workspace
 
 
 def parts(path, *, file=False):
@@ -134,11 +143,17 @@ def classification(fd):
 
 
 class StrategyFiles:
-    def __init__(self, state_root):
+    def __init__(self, state_root, *, workspace=None):
         self.state_root = Path(state_root)
         if not self.state_root.is_absolute():
             raise ValueError("Strategy storage requires the resolved deployment state root")
-        self.root = self.state_root / "strategies"
+        # An opaque storage namespace supplied by a trusted edge adapter. AQ does
+        # not authenticate users; its listener must remain private to that adapter.
+        validate_workspace(workspace)
+        self.root_parts = ("strategies",) if workspace is None else (
+            "workspaces", workspace, "strategies",
+        )
+        self.root = self.state_root.joinpath(*self.root_parts)
 
     @contextmanager
     def state(self):
@@ -170,9 +185,10 @@ class StrategyFiles:
                 child = open_directory(fd, member)
                 os.close(fd)
                 fd = child
-            child = open_directory(fd, "strategies", create=create or create_root)
-            os.close(fd)
-            fd = child
+            for member in self.root_parts:
+                child = open_directory(fd, member, create=create or create_root)
+                os.close(fd)
+                fd = child
             for member in members:
                 classification(fd)
                 if create:

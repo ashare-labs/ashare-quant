@@ -6,7 +6,7 @@ from fastapi import Query, Request
 from pydantic import Field, field_validator, model_validator
 
 from ashare_quant.contracts import Contract, DomainError
-from ashare_quant.strategies.files import StrategyFiles, parts, source_bytes
+from ashare_quant.strategies.files import StrategyFiles, parts, source_bytes, validate_workspace
 from ashare_quant.strategies.identity import PROJECT_ID_PATTERN, StrategyID
 from ashare_quant.strategies.projects import ProjectFiles, validate_project_sources
 
@@ -93,8 +93,20 @@ class ProjectMove(StrategyPath):
         return value
 
 
+def workspace_handle(request):
+    values = request.headers.getlist("x-quant-workspace")
+    if len(values) > 1:
+        raise DomainError("STRATEGY_WORKSPACE_INVALID", "Use one workspace handle", 422)
+    return validate_workspace(values[0] if values else None)
+
+
 def mount(app, product):
     prefix = "/api/v1/python"
+
+    @app.get(prefix + "/workspace-capabilities")
+    def workspace_capabilities():
+        return {"contract": "aq.strategy-workspaces.v1", "header": "X-Quant-Workspace",
+                "legacy_root": "header_absent", "execution_isolation": False}
 
     def validate_query(request, allowed):
         if (set(request.query_params) - allowed
@@ -103,13 +115,13 @@ def mount(app, product):
 
     def files(request, *, query=False):
         validate_query(request, {"path"} if query else set())
-        return StrategyFiles(product.configured().control_db.parent)
+        return StrategyFiles(product.configured().control_db.parent, workspace=workspace_handle(request))
 
     def projects(request, *, query=False):
         validate_query(request, {"path", "strategy_id"} if query else set())
         policy = app.state.python_jobs.repo.policy
         return ProjectFiles(product.configured().control_db.parent,
-                            total_bytes=policy.artifact_bytes)
+                            total_bytes=policy.artifact_bytes, workspace=workspace_handle(request))
 
     @app.get(prefix + "/directories")
     def list_strategy_directory(

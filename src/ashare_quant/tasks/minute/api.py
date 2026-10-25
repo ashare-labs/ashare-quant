@@ -5,6 +5,7 @@ from fastapi import Request
 from ashare_quant.contracts import DomainError
 from ashare_quant.strategies.backtests import mount as mount_backtests
 from ashare_quant.strategies.files_api import mount as mount_files
+from ashare_quant.strategies.files_api import workspace_handle
 from ashare_quant.tasks.analysis_contracts import ResultAnalysis
 from ashare_quant.tasks.api import ActionRequest
 from ashare_quant.tasks.contracts import JobID, JobLogs
@@ -89,7 +90,7 @@ def mount(app, store, configuration=None):
     @app.post(prefix + "/jobs", status_code=201)
     def create(body: PythonCreate, request: Request) -> PythonJobView:
         closed(request)
-        return jobs.create(body)
+        return jobs.create(body, workspace=workspace_handle(request))
 
     @app.get(prefix + "/jobs")
     def listing(request: Request) -> PythonJobList:
