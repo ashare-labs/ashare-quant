@@ -56,3 +56,15 @@ offset, limit, items`。`unassigned_count` 为全部 Python 未归属记录数�
 
 客户端在策略列表、单次结果、历史只读源码和当前文件编辑之间保留同一 `strategy_id`。
 旧 request 没有身份时显示未归属，不猜配。接口使用现有状态库及不可变任务证据，没有第二份运行记录。
+
+## 执行用时
+
+每行可选 `progress` 复用任务详情同一份、当前 attempt 已校验的进度快照。`elapsed_seconds`
+是 worker 开始执行至采样的单调时钟用时，包含准备、策略运行和封存发布，不包含排队，
+不以 `updated_at-created_at` 或浏览器计时推算。`started_at`、`sampled_at` 是观测时间；
+`finished_at` 仅在最终采样已记录时提供。老版本已明确标记 `terminal=true` 的原始快照
+以其 `sampled_at` 作为结束观测时间，只读投影，不改写旧文件。
+
+数据库终态而没有最终采样时，`terminal=true` 仅表示任务已结束，`finished_at=null`；
+耗时只是最后一次可靠观测，不能当完整耗时。没有进度的旧记录返回 null。客户端沿用
+现有运行中轮询；完整终态用时保持不变，缺失值显示未知，不重跑历史策略补时间。

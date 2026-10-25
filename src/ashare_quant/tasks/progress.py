@@ -91,9 +91,11 @@ class RuntimeProgress:
                 if current is not None:
                     self.last_current = current
                 self.sequence += 1
+                sampled_at = now()
                 value = {"job_id": self.job_id, "attempt": self.attempt,
-                         "sequence": self.sequence, "sampled_at": now(),
+                         "sequence": self.sequence, "sampled_at": sampled_at,
                          "started_at": self.started_at,
+                         "finished_at": sampled_at if terminal else None,
                          "elapsed_seconds": max(0, time.monotonic() - self.started),
                          "phase": self.override or child.get("phase", "preparing"),
                          "completed_trading_days": child.get("completed_trading_days"),
@@ -123,6 +125,11 @@ def snapshot(root, row):
         value = TaskProgress.model_validate_json(path.read_bytes())
         if value.job_id != row["job_id"] or value.attempt != row["attempt_count"]:
             return None
+        # Older final snapshots recorded the finish observation as sampled_at.
+        # A database terminal state alone cannot turn a stale sample into a
+        # measured full duration (e.g. the worker died before its final sample).
+        if value.terminal and value.finished_at is None:
+            value = value.model_copy(update={"finished_at": value.sampled_at})
         terminal = row["status"] in {"succeeded", "failed", "cancelled"}
         if terminal:
             value = value.model_copy(update={"terminal": True, "current_rss_bytes": None})

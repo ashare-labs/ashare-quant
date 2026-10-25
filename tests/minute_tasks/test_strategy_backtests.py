@@ -49,6 +49,10 @@ def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, t
         assert success['summary']['benchmark_return'] is None
         assert success['analysis_error'] is None
         assert success['result_available']
+        assert success['progress'] == client.get('/api/v1/history/jobs/' + first['job_id']).json()['progress']
+        assert success['progress']['elapsed_seconds'] > 0
+        assert success['progress']['finished_at'] == success['progress']['sampled_at']
+        assert next(r for r in result['items'] if r['job_id'] == pending['job_id'])['progress'] is None
         assert all(r['summary'] is None for r in result['items'] if r['job_id'] != first['job_id'])
         assert client.get('/api/v1/python/backtests',params={"strategy_id":b}).json()['items'][0]['job_id'] == other['job_id']
         assert client.get('/api/v1/python/backtests').json()['items'][0]['job_id'] == unknown['job_id']
@@ -62,6 +66,7 @@ def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, t
         assert old['total'] == 3
         assert all(r['execution_state'] == 'runtime_unavailable' and not r['can_cancel'] for r in old['items'])
         assert accepted.read_bytes() == original
+        assert next(r for r in old['items'] if r['job_id'] == first['job_id'])['progress'] == success['progress']
         assert client.get(success['result']['href']).json()['summary'] == frozen_summary
 
 

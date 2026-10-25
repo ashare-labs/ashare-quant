@@ -3692,7 +3692,7 @@
             "type": "string"
           },
           "backend_version": {
-            "default": "0.12.0.dev29",
+            "default": "0.12.0.dev30",
             "title": "Backend Version",
             "type": "string"
           },
@@ -4429,6 +4429,16 @@
             "title": "Name",
             "type": "string"
           },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "result": {
             "anyOf": [
               {
@@ -4884,6 +4894,18 @@
             "title": "Elapsed Seconds",
             "type": "number"
           },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
           "job_id": {
             "pattern": "^m2job-[0-9a-f]{32}$",
             "title": "Job Id",
@@ -5045,7 +5067,7 @@
   },
   "info": {
     "title": "A宽 backend",
-    "version": "0.12.0.dev29"
+    "version": "0.12.0.dev30"
   },
   "openapi": "3.1.0",
   "paths": {

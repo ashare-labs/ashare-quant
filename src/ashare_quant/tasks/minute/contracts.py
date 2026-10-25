@@ -74,6 +74,7 @@ class TaskProgress(Contract):
     sequence: int = Field(ge=1)
     sampled_at: AwareDatetime
     started_at: AwareDatetime
+    finished_at: AwareDatetime | None = None
     elapsed_seconds: float = Field(ge=0, allow_inf_nan=False)
     phase: Literal["preparing", "executing", "finalizing", "publishing"]
     completed_trading_days: int | None = Field(default=None, ge=0)

@@ -10,6 +10,7 @@ from ashare_quant.contracts import Contract, DomainError
 from ashare_quant.strategies.identity import StrategyID
 from ashare_quant.tasks.contracts import JobID, JSONObject, ResultReference
 from ashare_quant.tasks.history import FAMILIES
+from ashare_quant.tasks.minute.contracts import TaskProgress
 
 
 class StrategyBacktest(Contract):
@@ -22,6 +23,7 @@ class StrategyBacktest(Contract):
     initial_cash: float
     created_at: AwareDatetime
     updated_at: AwareDatetime
+    progress: TaskProgress | None = None
     status: str
     stored_status: str
     display_status: str
@@ -87,6 +89,7 @@ def listing(history, strategy_id, limit, offset):
             **{k: request[k] for k in ("name", "start_date", "end_date", "initial_cash")},
             "strategy_id": request.get("strategy_id"),
             "frequency": request.get("frequency", "1m"),
+            "progress": view.get("progress"),
             "can_cancel": view["execution_state"] == "current_runtime"
                           and view["stored_status"] in {"queued", "running"},
             "result_available": available, "result_error": result_error,

@@ -62,6 +62,7 @@ def test_sampling_is_small_single_snapshot_and_terminal_state_is_authoritative(t
             first["current_rss_bytes"] > 0 and first["peak_rss_bytes"] >= first["current_rss_bytes"]
         )
         assert first["completed_trading_days"] == 2
+        assert first["finished_at"] is None
         progress.sample()
         second = snapshot(tmp_path, row)
         assert (
@@ -72,6 +73,7 @@ def test_sampling_is_small_single_snapshot_and_terminal_state_is_authoritative(t
         assert sorted(p.name for p in tmp_path.iterdir()) == ["phase.json", "progress.json"]
         terminal = snapshot(tmp_path, row | {"status": "cancelled"})
         assert terminal["terminal"] and terminal["current_rss_bytes"] is None
+        assert terminal["finished_at"] is None
         assert snapshot(tmp_path, row | {"attempt_count": 2}) is None
     finally:
         process.terminate()
@@ -79,8 +81,28 @@ def test_sampling_is_small_single_snapshot_and_terminal_state_is_authoritative(t
         progress.finish()
     frozen = snapshot(tmp_path, row | {"status": "failed"})
     assert frozen["terminal"] and frozen["last_rss_bytes"] > 0
+    assert frozen["finished_at"] == frozen["sampled_at"]
     (tmp_path / "progress.json").write_text("{broken")
     assert snapshot(tmp_path, row) is None
+
+
+def test_legacy_finish_observation_is_read_only_and_missing_time_stays_unknown(tmp_path):
+    row = {"job_id": "m2job-00000000000000000000000000000001", "attempt_count": 1,
+           "status": "succeeded"}
+    assert snapshot(tmp_path, row) is None
+    value = {"job_id": row["job_id"], "attempt": 1, "sequence": 4,
+             "started_at": "2026-10-25T01:00:00Z", "sampled_at": "2026-10-25T01:00:26Z",
+             "elapsed_seconds": 26.86, "phase": "publishing", "terminal": True}
+    path = tmp_path / "progress.json"
+    path.write_text(json.dumps(value))
+    original = path.read_bytes()
+    complete = snapshot(tmp_path, row)
+    assert complete["finished_at"] == complete["sampled_at"]
+    assert complete["elapsed_seconds"] == 26.86 and path.read_bytes() == original
+    value["terminal"] = False
+    path.write_text(json.dumps(value))
+    assert snapshot(tmp_path, row)["finished_at"] is None
+    assert snapshot(tmp_path, row | {"attempt_count": 2}) is None
 
 
 @pytest.mark.parametrize(
