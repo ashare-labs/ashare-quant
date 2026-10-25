@@ -272,7 +272,12 @@ def _benchmark(benchmark, daily):
         if any(value is None or value <= 0 for value in values):
             raise AnalysisInputError("invalid_benchmark_value")
         levels = np.array([initial, *values])
-        returns = levels[1:] / levels[:-1] - 1
+        with np.errstate(all="ignore"):
+            returns = levels[1:] / levels[:-1] - 1
+            normalized = levels / initial
+        if (not np.isfinite(returns).all() or not np.isfinite(normalized).all()
+                or np.any(returns <= -1) or np.any(normalized <= 0)):
+            raise AnalysisInputError("invalid_benchmark_value")
         return returns, {**info, "status": "ok", "reason": None}, None
     except (AnalysisInputError, AttributeError) as exc:
         reason = exc.code if isinstance(exc, AnalysisInputError) else "invalid_benchmark"
@@ -290,8 +295,10 @@ def _monthly(series, ep, *, relative=False):
         value = number(ep.cum_returns_final(np.asarray(returns))) if None not in returns else None
         b_value = number(ep.cum_returns_final(np.asarray(bench))) if None not in bench else None
         difference = value - b_value if value is not None and b_value is not None else None
-        excess = (number((1 + value) / (1 + b_value) - 1)
-                  if relative and difference is not None and b_value > -1 else difference)
+        excess = difference
+        if relative:
+            excess = (number((1 + value) / (1 + b_value) - 1)
+                      if difference is not None and b_value > -1 else None)
         output.append({"month": month, "return": value, "benchmark_return": b_value,
                        "excess_return": excess,
                        **({"return_difference": difference * 100 if difference is not None else None}

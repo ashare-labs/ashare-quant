@@ -72,7 +72,7 @@ def test_alpha_beta_and_information_ratio_are_not_replaced_by_relative_division(
         k:v for k,v in old["metrics"].items() if k != "excess_return"}
 
 
-@pytest.mark.parametrize("kind", ["missing", "gap", "invalid"])
+@pytest.mark.parametrize("kind", ["missing", "gap", "invalid", "underflow", "overflow"])
 def test_absent_or_invalid_reference_has_no_invented_relative_return(kind):
     source = result([100, 100, 100])
     bench = benchmark([100, 100, 100], source["preparation"]["trading_dates"])
@@ -80,8 +80,13 @@ def test_absent_or_invalid_reference_has_no_invented_relative_return(kind):
         bench = None
     elif kind == "gap":
         bench["points"].pop()
-    else:
+    elif kind == "invalid":
         bench["points"][0]["value"] = 0
+    elif kind == "underflow":
+        bench["points"][0]["value"] = 1e-300
+    else:
+        bench["initial_value"] = 1e-300
+        bench["points"][0]["value"] = 1e300
     out = analyze(source, benchmark=bench, calculation_version="returns-v2")
     assert value(out, "net_return") == 0
     assert value(out, "excess_return") is None

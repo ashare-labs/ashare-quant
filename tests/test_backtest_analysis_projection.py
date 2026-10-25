@@ -15,14 +15,16 @@ def seed_listed_result(app, result):
     })
 
 
-def listed(client):
-    response = client.get("/api/v1/python/backtests", params={"strategy_id": "research/example.py"})
+def listed(client, analysis_version="returns-v1"):
+    response = client.get("/api/v1/python/backtests", params={"strategy_id": "research/example.py",
+                                                            "analysis_version": analysis_version})
     assert response.status_code == 200, response.text
     return response.json()["items"][0]
 
 
 @pytest.mark.parametrize("benchmark", ["available", "flat", "not_selected", "gap"])
-def test_list_matches_all_analysis_metrics_without_replaying_or_market_reads(tmp_path, monkeypatch, benchmark):
+@pytest.mark.parametrize("version", ["returns-v1", "returns-v2"])
+def test_list_matches_all_analysis_metrics_without_replaying_or_market_reads(tmp_path, monkeypatch, benchmark, version):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     result = frozen_fixture()
     if benchmark == "flat":
@@ -52,9 +54,9 @@ def test_list_matches_all_analysis_metrics_without_replaying_or_market_reads(tmp
 
     monkeypatch.setattr(app.state.history, "result_projection", counted_result)
     with TestClient(app) as client:
-        item = listed(client)
+        item = listed(client, version)
         assert reads == [result["job_id"]]  # Don't reload a second result for analysis.
-        response = client.get(f"/api/v1/history/jobs/{result['job_id']}/analysis")
+        response = client.get(f"/api/v1/history/jobs/{result['job_id']}/analysis", params={"analysis_version": version})
         assert response.status_code == 200, response.text
         analysis = response.json()
         assert item["result_available"] and item["result_error"] is None and item["analysis_error"] is None
@@ -68,7 +70,7 @@ def test_list_matches_all_analysis_metrics_without_replaying_or_market_reads(tmp
             assert item["summary"]["benchmark_return"] is None
         else:
             assert item["summary"]["benchmark_return"] == pytest.approx(expected)
-        assert listed(client) == item
+        assert listed(client, version) == item
         assert client.get(f"/api/v1/history/jobs/{result['job_id']}/result").json() == result
     assert before == {p.name: p.read_bytes() for p in root.iterdir()}
     assert original_row == app.state.history.repo.row(result["job_id"])

@@ -114,14 +114,20 @@ class History(TaskService):
         return StreamingResponse(chunks(), media_type="application/json",
                                  background=BackgroundTask(context.__exit__, None, None, None))
 
-    def analysis(self, job_id):
+    def analysis(self, job_id, *, analysis_version="returns-v1", benchmark="frozen"):
         from ashare_quant.tasks.result_analysis import analyze
 
         with self.result_stream(job_id) as (stream, snapshot_sha256, family):
             if family != "python":
                 raise DomainError("RESULT_ANALYSIS_UNSUPPORTED", "Analysis requires a frozen Python account result", 422)
             result = project_json(stream, {"job_id", "summary", "preparation", "native"})
-        return analyze(result, snapshot_sha256)
+        selected = None
+        if analysis_version == "returns-v2":
+            from ashare_quant.tasks.benchmark_comparison import comparison
+
+            manifest = self.check(self.repo.row(job_id))
+            selected = comparison(result, manifest["session"], benchmark)
+        return analyze(result, snapshot_sha256, calculation_version=analysis_version, comparison=selected)
 
     @contextmanager
     def result_stream(self, job_id):

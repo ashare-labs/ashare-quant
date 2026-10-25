@@ -8,6 +8,7 @@ from pydantic import AwareDatetime
 
 from ashare_quant.contracts import Contract, DomainError
 from ashare_quant.strategies.identity import StrategyID
+from ashare_quant.tasks.analysis_contracts import AnalysisVersion
 from ashare_quant.tasks.contracts import JobID, JSONObject, ResultReference
 from ashare_quant.tasks.history import FAMILIES
 from ashare_quant.tasks.minute.contracts import TaskProgress
@@ -39,6 +40,7 @@ class StrategyBacktest(Contract):
 
 
 class StrategyBacktests(Contract):
+    analysis_version: AnalysisVersion = "returns-v1"
     strategy_id: StrategyID | None
     identity_model: str = "saved_relative_path"
     total: int
@@ -48,7 +50,7 @@ class StrategyBacktests(Contract):
     items: list[StrategyBacktest]
 
 
-def listing(history, strategy_id, limit, offset):
+def listing(history, strategy_id, limit, offset, *, analysis_version="returns-v1"):
     selected, unassigned = [], 0
     for row in history.repo.rows():
         manifest = json.loads(row["manifest"])
@@ -75,7 +77,7 @@ def listing(history, strategy_id, limit, offset):
                 from ashare_quant.tasks.result_analysis import analyze
 
                 try:
-                    analysis = analyze(result, view["result"]["snapshot_sha256"])
+                    analysis = analyze(result, view["result"]["snapshot_sha256"], calculation_version=analysis_version)
                     # A read-time projection, never a replacement of published.json.
                     # Keep every unavailable metric null, including absent benchmarks.
                     summary = {**(summary or {}),
@@ -95,7 +97,7 @@ def listing(history, strategy_id, limit, offset):
             "result_available": available, "result_error": result_error,
             "analysis_error": analysis_error, "summary": summary,
         })
-    return {"strategy_id": strategy_id,
+    return {"strategy_id": strategy_id, "analysis_version": analysis_version,
             "identity_model": "stable_project_id" if strategy_id and strategy_id.startswith("aqproj-") else "saved_relative_path",
             "total": len(selected), "offset": offset, "limit": limit,
             "unassigned_count": unassigned, "items": items}
@@ -108,10 +110,11 @@ def mount(app):
         strategy_id: StrategyID | None = None,
         limit: int = Query(default=25, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
+        analysis_version: AnalysisVersion = "returns-v1",
     ) -> StrategyBacktests:
-        allowed = {"strategy_id", "limit", "offset"}
+        allowed = {"strategy_id", "limit", "offset", "analysis_version"}
         if (set(request.query_params) - allowed
                 or any(len(request.query_params.getlist(k)) > 1 for k in allowed)):
             raise DomainError("STRATEGY_QUERY_UNSUPPORTED", "Use only the documented fields", 422)
         # An omitted identity explicitly selects unassigned legacy/imported runs.
-        return listing(app.state.history, strategy_id, limit, offset)
+        return listing(app.state.history, strategy_id, limit, offset, analysis_version=analysis_version)

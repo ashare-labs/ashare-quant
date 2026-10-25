@@ -5,8 +5,13 @@ from fastapi import Request
 from ashare_quant.contracts import DomainError
 from ashare_quant.strategies.backtests import mount as mount_backtests
 from ashare_quant.strategies.files_api import mount as mount_files
-from ashare_quant.tasks.analysis_contracts import ResultAnalysis
+from ashare_quant.tasks.analysis_contracts import (
+    AnalysisVersion,
+    BenchmarkSelection,
+    ResultAnalysis,
+)
 from ashare_quant.tasks.api import ActionRequest
+from ashare_quant.tasks.benchmark_comparison import check_query
 from ashare_quant.tasks.contracts import JobID, JobLogs
 from ashare_quant.tasks.minute.contracts import (
     PythonCreate,
@@ -123,7 +128,9 @@ def mount(app, store, configuration=None):
         jobs.check(jobs.repo.row(job_id))
         return app.state.history.result_response(job_id)
 
-    @app.get(prefix + "/jobs/{job_id}/analysis", include_in_schema=False)
-    @app.get(prefix + "/jobs/{job_id}/result/analysis")
-    def analysis(job_id: JobID) -> ResultAnalysis:
-        return app.state.history.analysis(job_id)
+    @app.get(prefix + "/jobs/{job_id}/analysis", include_in_schema=False, response_model_exclude_unset=True)
+    @app.get(prefix + "/jobs/{job_id}/result/analysis", response_model_exclude_unset=True)
+    def analysis(job_id: JobID, request: Request, analysis_version: AnalysisVersion = "returns-v1",
+                 benchmark: BenchmarkSelection = "frozen") -> ResultAnalysis:
+        check_query(request, analysis_version, benchmark)
+        return app.state.history.analysis(job_id, analysis_version=analysis_version, benchmark=benchmark)
