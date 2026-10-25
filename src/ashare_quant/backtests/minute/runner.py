@@ -69,14 +69,13 @@ def run_backtest(
     accept_assumed=False,
     accept_state_replay=False,
     accept_research=False,
-    timeout=120,
+    timeout=None,
 ):
     """Execute a trusted JQ-style script. No collection, browser or task DB access."""
     source = Path(strategy).read_bytes()
-    require(len(source) <= 256 * 1024, "MINUTE_STRATEGY_TOO_LARGE")
     compile(source, str(strategy), "exec")
     validate_imports(source)
-    require(type(timeout) in (int, float) and 0 < timeout <= 3600, "MINUTE_TIMEOUT_RANGE")
+    require(timeout is None or (type(timeout) in (int, float) and 0 < timeout < float("inf")), "MINUTE_TIMEOUT_RANGE")
     settings = {**DEFAULTS, **(config or {})}
     require(set(settings) == set(DEFAULTS), "MINUTE_UNKNOWN_CONFIG")
     for key, value in settings.items():

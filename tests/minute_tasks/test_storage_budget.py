@@ -161,7 +161,7 @@ def test_publication_itself_is_included_in_task_budget(daily_jobs):
     result = jobs.get(job.job_id)
     assert result.status == "failed" and result.result is None
     assert result.error["code"] == "M2_JOB_ARTIFACT_LIMIT", result.error
-    assert result.error["details"]["additional_bytes"] > 1
+    assert result.error["details"]["observed"] > result.error["details"]["limit"]
     assert not (root / "published.json").exists()
 
 

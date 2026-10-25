@@ -74,8 +74,6 @@ class DailyAPI(API):
         self.securities(sid)
         require(unit in {"daily", "1d"}, f"AQUANT_FREQUENCY_UNSUPPORTED:{unit}")
         require(count is None or (type(count) is int and 0 < count), "AQUANT_HISTORY_COUNT")
-        if not getattr(self.host.data, "demand", False):
-            require(count is None or count <= 10000, "AQUANT_HISTORY_COUNT")
         fields = [fields] if isinstance(fields, str) else list(fields)
         require(
             fields
@@ -173,7 +171,6 @@ class DailyAPI(API):
         ids = self.securities(self.universe if security_list is None else security_list)
         if getattr(self.host.data, "demand", False):
             require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
-            self.host.data.check_budget(len(ids) * count)
         import pandas as pd
 
         frames = {
@@ -248,12 +245,6 @@ class DailyAPI(API):
         end = self.parse_end(end_date) if end_date is not None else None
         require(start is None or start <= str((end or self.host.at).date()), "AQUANT_DAILY_DATE_ORDER")
         ids = self.securities(security)
-        if getattr(self.host.data, "demand", False):
-            size = count if type(count) is int else sum(
-                (start is None or d >= start) and stamp(d + "T15:00:00+08:00") <= (end or self.host.at)
-                for d in self.host.data.calendar
-            )
-            self.host.data.check_budget(len(ids) * size)
         frames = {
             s: self._history(
                 s,

@@ -5,6 +5,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.minute_tasks.evidence import evidence
 from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
 from tests.minute_tasks.test_daily import execute
 from tests.minute_tasks.test_daily import fixed_release as fixed_release
@@ -161,7 +162,7 @@ def handle_data(context, data):
         result = client.get(job["result"]["href"]).json()
         assert result["native"]["real_strategy_executed"]
         assert set(result["native"]["final_account"]["positions"]) == {"600000.XSHG", "600036.XSHG"}
-        artifact = json.loads((jobs.directory(job["job_id"]) / "input.json").read_text())
+        artifact = evidence(jobs.directory(job["job_id"]))
         assert "000001.XSHE" not in artifact["securities"]  # Query != native instruments.
         assert {q["count"] for q in artifact["queries"] if q["api"] == "daily_history"} >= {60}
         assert result["native"]["data_input_sha256"] == result["preparation"]["input_sha256"]
@@ -254,7 +255,7 @@ def handle_data(context,data):
         assert job["status"] == "succeeded", job.get("error")
         result = client.get(job["result"]["href"]).json()
         assert result["preparation"]["securities"] == []
-        frozen = json.loads((jobs.directory(job["job_id"]) / "input.json").read_text())
+        frozen = evidence(jobs.directory(job["job_id"]))
         assert frozen["corporate_schedules"] == {}
         assert all(r["open"] is None for r in frozen["daily"])
 
@@ -331,7 +332,7 @@ def handle_data(context,data):
         result = client.get(job["result"]["href"]).json()
         assert result["summary"]["trade_count"] == 2
         assert set(result["native"]["final_account"]["positions"]) == {"600036.XSHG", "600000.XSHG"}
-        artifact = json.loads((jobs.directory(job["job_id"]) / "input.json").read_text())
+        artifact = evidence(jobs.directory(job["job_id"]))
         assert "000001.XSHE" not in artifact["securities"]
 
 
@@ -356,7 +357,7 @@ def handle_data(context,data):
     ],
     indirect=["daily_jobs"],
 )
-def test_configured_data_budgets_are_reported_without_partial_results(daily_jobs, call, resource):
+def test_retired_data_gates_do_not_truncate_or_refuse_queries(daily_jobs, call, resource):
     app, jobs, body = daily_jobs
     body.pop("securities")
     body.update(
@@ -365,13 +366,11 @@ def test_configured_data_budgets_are_reported_without_partial_results(daily_jobs
     )
     with TestClient(app) as client:
         job = execute(client, jobs, body)
-        assert job["status"] == "failed"
-        assert "PYTHON_DATA_BUDGET" in job["error"]["message"], job["error"]
-        assert (
-            resource in job["error"]["message"]
-            or job["error"].get("details", {}).get("resource") == resource
-        )
-        assert client.get("/api/v1/python/jobs/" + job["job_id"] + "/result").status_code == 409
+        assert job["status"] == "succeeded", job.get("error")
+        assert resource not in client.get("/api/v1/tasks/service").json()["policy"]
+        assert client.get("/api/v1/python/jobs/" + job["job_id"] + "/result").status_code == 200
+        frozen = evidence(jobs.directory(job["job_id"]))
+        assert sum(len(q["dates"]) for q in frozen["queries"] if q["api"] == "daily_history") == 4
 
 
 @pytest.mark.parametrize(
@@ -464,6 +463,6 @@ def handle_data(context,data):
         job = execute(client, jobs, body)
         assert job["status"] == "succeeded", job.get("error")
         root = jobs.directory(job["job_id"])
-        document = json.loads((root / "input.json").read_text())
+        document = evidence(root)
         assert document["corporate_schedules"] == {}
         assert not (root / "execution-cache").exists()

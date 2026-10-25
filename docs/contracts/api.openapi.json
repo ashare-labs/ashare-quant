@@ -3017,6 +3017,16 @@
             "title": "Phase",
             "type": "string"
           },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "recovery_required": {
             "title": "Recovery Required",
             "type": "boolean"
@@ -3502,7 +3512,7 @@
                 "type": "null"
               }
             ],
-            "default": "3eb3f6903baa4bf7c4ce9c80b44d7850b445107e",
+            "default": "1da924989d93da9793579950c845490114ba586b",
             "title": "Commit"
           },
           "name": {
@@ -3520,16 +3530,16 @@
                 "type": "null"
               }
             ],
-            "default": "74aaa57f656bb895311348d52e85b0567eef5fe7",
+            "default": "b7342863aa82e2e7f1ebe11eb6f6e1c1ea128e7b",
             "title": "Tree"
           },
           "version": {
-            "default": "0.10.0.dev22",
+            "default": "0.10.0.dev24",
             "title": "Version",
             "type": "string"
           },
           "wheel_sha256": {
-            "default": "f24240ecf375355f8484233cd024eab6177845ca722f60343e32063ddb9268f6",
+            "default": "39dd29d8bb624fa275cae37a5af1736750d8151c318da7f9f565ec994ad71ced",
             "title": "Wheel Sha256",
             "type": "string"
           }
@@ -4112,37 +4122,10 @@
             "title": "Artifact Bytes",
             "type": "integer"
           },
-          "cached_rows": {
-            "default": 250000,
-            "minimum": 1.0,
-            "title": "Cached Rows",
-            "type": "integer"
-          },
-          "cpu_seconds": {
-            "default": 120,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Cpu Seconds",
-            "type": "integer"
-          },
           "disk_free_bytes": {
             "default": 1073741824,
             "minimum": 1048576.0,
             "title": "Disk Free Bytes",
-            "type": "integer"
-          },
-          "execution_seconds": {
-            "default": 120,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Execution Seconds",
-            "type": "integer"
-          },
-          "file_bytes": {
-            "default": 67108864,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1048576.0,
-            "title": "File Bytes",
             "type": "integer"
           },
           "max_attempts": {
@@ -4166,50 +4149,10 @@
             "title": "Max Workers",
             "type": "integer"
           },
-          "open_files": {
-            "default": 256,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 64.0,
-            "title": "Open Files",
-            "type": "integer"
-          },
-          "output_bytes": {
-            "default": 1048576,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1024.0,
-            "title": "Output Bytes",
-            "type": "integer"
-          },
-          "preparation_seconds": {
-            "default": 60,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 1.0,
-            "title": "Preparation Seconds",
-            "type": "integer"
-          },
-          "query_rows": {
-            "default": 100000,
-            "minimum": 1.0,
-            "title": "Query Rows",
-            "type": "integer"
-          },
-          "read_rows": {
-            "default": 1000000,
-            "minimum": 1.0,
-            "title": "Read Rows",
-            "type": "integer"
-          },
           "retained_artifact_bytes": {
             "default": 512000000000,
             "minimum": 1048576.0,
             "title": "Retained Artifact Bytes",
-            "type": "integer"
-          },
-          "rss_bytes": {
-            "default": 1073741824,
-            "maximum": 9.223372036854776e+18,
-            "minimum": 16777216.0,
-            "title": "Rss Bytes",
             "type": "integer"
           },
           "schema_version": {
@@ -4902,6 +4845,145 @@
           "created_at"
         ],
         "title": "StrategyVersion",
+        "type": "object"
+      },
+      "TaskProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "minimum": 1.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "completed_trading_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Trading Days"
+          },
+          "current_rss_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rss Bytes"
+          },
+          "elapsed_seconds": {
+            "minimum": 0.0,
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "job_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "last_rss_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rss Bytes"
+          },
+          "memory_scope": {
+            "const": "strategy_process",
+            "default": "strategy_process",
+            "title": "Memory Scope",
+            "type": "string"
+          },
+          "peak_rss_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Rss Bytes"
+          },
+          "phase": {
+            "enum": [
+              "preparing",
+              "executing",
+              "finalizing",
+              "publishing"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "sampled_at": {
+            "format": "date-time",
+            "title": "Sampled At",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "simulation_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulation Date"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "terminal": {
+            "default": false,
+            "title": "Terminal",
+            "type": "boolean"
+          },
+          "total_trading_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Trading Days"
+          }
+        },
+        "required": [
+          "job_id",
+          "attempt",
+          "sequence",
+          "sampled_at",
+          "started_at",
+          "elapsed_seconds",
+          "phase"
+        ],
+        "title": "TaskProgress",
         "type": "object"
       },
       "TradingFacts": {

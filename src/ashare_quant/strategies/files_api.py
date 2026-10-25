@@ -30,7 +30,7 @@ class StrategySave(StrategyPath):
     @classmethod
     def utf8_source(cls, value):
         if isinstance(value, str):
-            source_bytes(value, max_bytes=None)
+            source_bytes(value)
         return value
 
 
@@ -103,14 +103,13 @@ def mount(app, product):
 
     def files(request, *, query=False):
         validate_query(request, {"path"} if query else set())
-        return StrategyFiles(product.configured().control_db.parent,
-                             file_bytes=app.state.python_jobs.repo.policy.file_bytes)
+        return StrategyFiles(product.configured().control_db.parent)
 
     def projects(request, *, query=False):
         validate_query(request, {"path", "strategy_id"} if query else set())
         policy = app.state.python_jobs.repo.policy
         return ProjectFiles(product.configured().control_db.parent,
-                            file_bytes=policy.file_bytes, total_bytes=policy.artifact_bytes)
+                            total_bytes=policy.artifact_bytes)
 
     @app.get(prefix + "/directories")
     def list_strategy_directory(

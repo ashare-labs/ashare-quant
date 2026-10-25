@@ -1,6 +1,6 @@
 """General market selection, independent of the fixed daily evaluation protocol."""
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, model_validator
@@ -39,10 +39,9 @@ class ProductMinuteSelection(Contract):
     def bounds(self):
         if (
             self.start > self.end
-            or self.end - self.start > timedelta(days=60)
             or any(value.second or value.microsecond for value in (self.start, self.end))
         ):
-            raise ValueError("Choose ordered, whole-minute timestamps spanning at most 60 days")
+            raise ValueError("Choose ordered, whole-minute timestamps")
         return self
 
 

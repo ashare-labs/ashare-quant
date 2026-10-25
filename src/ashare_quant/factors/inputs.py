@@ -9,10 +9,8 @@ from pathlib import Path
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.factors.evaluation_inputs import market_labels, snapshot_labels, source_basis
-from ashare_quant.storage.artifacts import canonical, digest, regular, require, sha
+from ashare_quant.storage.artifacts import digest, regular, require, sha
 
-MAX_BYTES = 32 * 1024 * 1024
-MAX_CELLS = 100_000
 SCHEMAS = {
     "alpha191.panel.v1": "alpha191",
     "qlib_alpha158.panel.v1": "qlib_alpha158",
@@ -58,11 +56,9 @@ def validate_panel(payload):
                     )
 
 
-def bounded_json(path):
+def source_json(path):
     path = Path(path)
-    require(path.stat().st_size <= MAX_BYTES, "FACTOR_INPUT_LIMIT", "Input exceeds 32 MiB")
     raw = regular(path)
-    require(len(raw) <= MAX_BYTES, "FACTOR_INPUT_LIMIT", "Input exceeds 32 MiB")
     return raw, json.loads(raw)
 
 
@@ -70,7 +66,7 @@ class Sources:
     def __init__(self, specifications=None, product=None):
         if specifications is None:
             path = os.environ.get("ASHARE_QUANT_FACTOR_SOURCES")
-            specifications = bounded_json(path)[1] if path else {}
+            specifications = source_json(path)[1] if path else {}
         require(isinstance(specifications, dict), "FACTOR_SOURCE_CONFIG", "Use a source mapping")
         self.specifications = deepcopy(specifications)
         self.product = product
@@ -116,7 +112,7 @@ class Sources:
         require(spec is not None, "FACTOR_SOURCE_NOT_FOUND", "Select a registered frozen source")
         if spec["kind"] == "market_release":
             return spec, None
-        raw, payload = bounded_json(spec["path"])
+        raw, payload = source_json(spec["path"])
         require(
             sha(raw) == spec["sha256"], "FACTOR_SOURCE_CHANGED", "Registered input bytes changed"
         )
@@ -298,11 +294,6 @@ class Sources:
                 "FACTOR_EMPTY_WINDOW",
                 "No declared trading sessions in the selected interval",
             )
-            require(
-                len(selected) * len(request.securities) <= MAX_CELLS,
-                "FACTOR_INPUT_LIMIT",
-                "Narrow the selection to at most 100000 security sessions",
-            )
             if kind in {"alpha191", "qlib_alpha158"}:
                 validate_panel(payload)
                 securities = payload["securities"]
@@ -349,11 +340,6 @@ class Sources:
                     "network_used": False,
                     "universe_policy": "explicit_fixed_selection; missing observations retained",
                 },
-            )
-            require(
-                len(canonical(frozen)) <= MAX_BYTES,
-                "FACTOR_INPUT_LIMIT",
-                "Frozen selection exceeds 32 MiB",
             )
             return frozen
         except DataError as exc:

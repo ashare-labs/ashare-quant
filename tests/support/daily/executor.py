@@ -13,10 +13,10 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.identity import package_root, source_sha256
 from ashare_quant.runtime import runtime_fingerprint
 from ashare_quant.storage.artifacts import lock, regular, require, sha
-from ashare_quant.strategies.python.supervision import BoundedOutput
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.process import stop
 from ashare_quant.tasks.release import EXECUTION_SOURCE_SHA256, EXECUTION_VERSION
+from tests.support.legacy_python.output import BoundedOutput
 
 
 @dataclass(frozen=True)
@@ -132,13 +132,13 @@ class Executor:
                 process = subprocess.Popen(command, env=self.environment(), cwd=job_dir,
                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                            pass_fds=(*lock_fds, preparation.fileno()), start_new_session=True)
-                capture = BoundedOutput(process.stdout, log, self.policy.output_bytes)
+                capture = BoundedOutput(process.stdout, log, getattr(self.policy, "output_bytes", 1048576))
                 started = time.monotonic()
                 try:
                     while process.poll() is None:
                         if capture.exceeded.is_set():
                             raise DomainError("M2_JOB_OUTPUT_LIMIT", "Preparation output limit exceeded", 503)
-                        if time.monotonic() - started > self.policy.preparation_seconds:
+                        if time.monotonic() - started > getattr(self.policy, "preparation_seconds", 10):
                             raise DomainError("M2_JOB_PREFLIGHT_TIMEOUT", "Fixed executor preparation timed out", 503)
                         time.sleep(0.03)
                 finally:

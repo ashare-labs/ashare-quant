@@ -49,7 +49,7 @@ def execute(args):
         assert args["control"] is not None
         threading.Thread(
             target=watch_control,
-            args=(args["control"], args["resource_limits"]["execution_seconds"]),
+            args=(args["control"], args["resource_limits"].get("execution_seconds", 120)),
             daemon=True,
         ).start()
     from ashare_quant.execution.rqalpha.guards import install_network_guard

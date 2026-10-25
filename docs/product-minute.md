@@ -22,7 +22,7 @@ source. Select the returned ID explicitly for an HF read:
 
 Send that body to `POST /api/v1/product/minute/prices`. Omitting `source` selects
 TDX; `auto` is not an implicit fallback. Timestamps require offsets and whole
-minutes. Bounds are inclusive, one security and at most 60 days / 15,000 rows.
+minutes. Bounds are inclusive, one security and the complete requested range, without fixed day or row ceilings.
 BJ retains the exact native identifier `BJ.920000` rather than a guessed mapping.
 The existing daily `/prices` endpoint and its `auto` source policy are unchanged.
 

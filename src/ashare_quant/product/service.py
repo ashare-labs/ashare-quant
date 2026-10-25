@@ -35,7 +35,7 @@ class Product:
 
         self.store = store
         self.tasks = TaskService(store)
-        self.datasets = Datasets(self.tasks.root, self.tasks.repo.policy.file_bytes)
+        self.datasets = Datasets(self.tasks.root)
         self.configuration = deepcopy(configuration)
         self.configuration_error = None
         self.configuration_changed = False

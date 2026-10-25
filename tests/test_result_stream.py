@@ -105,9 +105,9 @@ def initialize(context):
         assert item["analysis_error"] is None
         assert evidence_hash(root, "published.json") == (digest, size)
     changed = create_app(str(jobs.repo.store.path), diagnostics_configuration={},
-                         daily_tasks_configuration=Configuration(None, ServicePolicy(file_bytes=1024*1024)))
+                         daily_tasks_configuration=Configuration(None, ServicePolicy.from_frozen({"file_bytes": 1024*1024})))
     with TestClient(changed) as client:
-        assert client.get("/api/v1/tasks/service").json()["policy"]["file_bytes"] == 1024*1024
+        assert "file_bytes" not in client.get("/api/v1/tasks/service").json()["policy"]
         response = client.get(f"/api/v1/history/jobs/{job_id}/result")
         assert response.status_code == 200 and sha(response.content) == digest
         assert client.get(f"/api/v1/history/jobs/{job_id}/analysis").status_code == 200

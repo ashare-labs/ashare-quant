@@ -70,7 +70,7 @@ class FactorJobs(TaskService):
             environment_id=self.environment(),
             items=catalogue(version),
             evaluation_available=evaluation_available(),
-            limits=dict(max_security_sessions=100000, max_input_bytes=33554432),
+            limits={},
         )
 
     def create(self, request):

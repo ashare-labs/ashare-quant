@@ -3,10 +3,12 @@
 import ast
 import json
 import uuid
+from collections import deque
 
 from ashare_quant import __version__
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, require, sha
+from ashare_quant.storage.streams import atomic_json, file_hash, reading
 from ashare_quant.tasks.base import TaskService
 from ashare_quant.tasks.contracts import ResultReference
 from ashare_quant.tasks.minute.contracts import (
@@ -14,9 +16,11 @@ from ashare_quant.tasks.minute.contracts import (
     PythonManifest,
     PythonResult,
     PythonScope,
+    TaskProgress,
 )
 from ashare_quant.tasks.minute.executor import Executor
 from ashare_quant.tasks.minute.repository import Repository
+from ashare_quant.tasks.progress import snapshot
 from ashare_quant.tasks.storage_budget import admit_storage, check_task_storage
 
 
@@ -75,11 +79,11 @@ class PythonJobs(TaskService):
 
                 sources = validate_project_sources(
                     request.project.entrypoint, request.project.files,
-                    file_bytes=self.repo.policy.file_bytes, total_bytes=self.repo.policy.artifact_bytes,
+                    total_bytes=self.repo.policy.artifact_bytes,
                 )
                 ProjectFiles(
                     self.product.configured().control_db.parent,
-                    file_bytes=self.repo.policy.file_bytes, total_bytes=self.repo.policy.artifact_bytes,
+                    total_bytes=self.repo.policy.artifact_bytes,
                 ).read_id(request.project.project_id)
             else:
                 sources = {"strategy.py": request.source}
@@ -100,8 +104,6 @@ class PythonJobs(TaskService):
             require(len(canonical(request.parameters)) <= 16384,
                     "PYTHON_PARAMETER_SIZE", "Parameters must fit 16 KiB")
             for name, source in sources.items():
-                require(len(source.encode()) <= self.repo.policy.file_bytes,
-                        "PYTHON_SOURCE_SIZE", "Source exceeds the configured file_bytes resource budget")
                 try:
                     tree = ast.parse(source, filename=name)
                     from ashare_quant.strategies.imports import MIGRATION_MESSAGE, legacy_nodes
@@ -233,7 +235,8 @@ class PythonJobs(TaskService):
         path = self.directory(view.job_id) / "phase.json"
         if phase == "running" and path.exists():
             phase = json.loads(regular(path)).get("phase", "running")
-        return view.model_copy(update={"phase": phase})
+        observed = snapshot(self.directory(view.job_id), row)
+        return view.model_copy(update={"phase": phase, "progress": TaskProgress.model_validate(observed) if observed else None})
 
     def list(self):
         return PythonJobList(
@@ -277,21 +280,27 @@ class PythonJobs(TaskService):
         native = json.loads(regular(root / "result.json"))
         proof = json.loads(regular(root / (invocation + ".proof.json")))
         require(
-            proof["complete"] and proof["receipt_sha256"] == digest(native), "PYTHON_RESULT_CHANGED"
+            proof["complete"] and proof["receipt_sha256"] == file_hash(root / "result.json"), "PYTHON_RESULT_CHANGED"
         )
         preparation = json.loads(regular(root / "preparation.json"))
         require(
-            preparation["input_sha256"] == digest(json.loads(regular(root / "input.json"))),
+            preparation["input_sha256"] == file_hash(root / "input.json"),
             "PYTHON_INPUT_CHANGED",
         )
         if manifest.schema_version in {"python-demand-job.v2", "python-project-job.v3"}:
             require(native.get("data_input_sha256") == preparation["input_sha256"],
                     "PYTHON_INPUT_CHANGED", "Completed result does not bind its actual data reads")
-        events = []
-        for line in regular(root / "events.jsonl").decode().splitlines():
-            event = json.loads(line)
-            if event.get("event") in {"log", "record"} or event.get("kind") in {"log", "record"}:
-                events.append(event)
+        from ashare_quant.tasks.minute.evidence import verify_demand
+        verify_demand(root)
+        events = deque(maxlen=500)
+        event_file = root / "events.jsonl.gz"
+        if not event_file.exists():
+            event_file = root / "events.jsonl"
+        with reading(event_file, text=True) as stream:
+            for line in stream:
+                event = json.loads(line)
+                if event.get("event", event.get("kind")) in {"log", "record"}:
+                    events.append(event)
         values = [manifest.request.initial_cash] + [r["total_value"] for r in native["accounts"]]
         peak, drawdown = values[0], 0.0
         for value in values:
@@ -304,7 +313,7 @@ class PythonJobs(TaskService):
             parameters=manifest.request.parameters,
             preparation=preparation,
             native=native,
-            logs=tuple(events[-500:]),
+            logs=tuple(events),
             summary={
                 "initial_cash": values[0],
                 "final_equity": native["final_account"]["total_value"],
@@ -316,14 +325,14 @@ class PythonJobs(TaskService):
                 "order_count": len(native["orders"]),
             },
         )
-        raw = canonical(value)
-        check_task_storage(root, self.repo.policy, additional_bytes=len(raw),
-                           host_policy=getattr(self, "host_policy", None))
-        atomic(root / "published.json", raw)
+        snapshot_sha = atomic_json(root / "published.json", value,
+                                   before_publish=lambda: check_task_storage(
+                                       root, self.repo.policy,
+                                       host_policy=getattr(self, "host_policy", None)))
         return ResultReference(
             result_id=manifest.job_id,
             href=f"/api/v1/python/jobs/{manifest.job_id}/result",
-            snapshot_sha256=sha(canonical(value)),
+            snapshot_sha256=snapshot_sha,
             evidence_manifest_sha256=digest(manifest),
             publication=f"publication-{attempt_count}",
         )

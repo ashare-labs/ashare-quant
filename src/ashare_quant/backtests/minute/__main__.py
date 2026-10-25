@@ -21,7 +21,7 @@ def main():
         help="accept an explicit supported bounded research schema and its assumptions",
     )
     p.add_argument("--preflight", action="store_true")
-    p.add_argument("--timeout", type=float, default=120)
+    p.add_argument("--timeout", type=float, default=None, help="Optional caller-requested cancellation deadline; none by default")
     a = p.parse_args()
     if a.preflight:
         result = MinuteInputs(

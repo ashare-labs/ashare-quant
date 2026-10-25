@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 
 from ashare_quant.contracts import Contract
 from ashare_quant.strategies.identity import StrategyID
@@ -68,10 +68,36 @@ class PythonManifest(Contract):
     files: dict[str, Sha]
 
 
+class TaskProgress(Contract):
+    job_id: JobID
+    attempt: int = Field(ge=1)
+    sequence: int = Field(ge=1)
+    sampled_at: AwareDatetime
+    started_at: AwareDatetime
+    elapsed_seconds: float = Field(ge=0, allow_inf_nan=False)
+    phase: Literal["preparing", "executing", "finalizing", "publishing"]
+    completed_trading_days: int | None = Field(default=None, ge=0)
+    total_trading_days: int | None = Field(default=None, ge=1)
+    simulation_date: date | None = None
+    current_rss_bytes: int | None = Field(default=None, ge=0)
+    last_rss_bytes: int | None = Field(default=None, ge=0)
+    peak_rss_bytes: int | None = Field(default=None, ge=0)
+    memory_scope: Literal["strategy_process"] = "strategy_process"
+    terminal: bool = False
+
+    @model_validator(mode="after")
+    def counts(self):
+        if (self.total_trading_days is not None and self.completed_trading_days is not None
+                and self.completed_trading_days > self.total_trading_days):
+            raise ValueError("Completed days exceed the frozen execution scope")
+        return self
+
+
 class PythonJobView(JobView):
     contract_version: Literal["python-minute-jobs.v1"] = "python-minute-jobs.v1"
     request: PythonCreate
     phase: str = "queued"
+    progress: TaskProgress | None = None
 
 
 class PythonJobList(Contract):

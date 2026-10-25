@@ -398,11 +398,6 @@ class API:
         demand = getattr(self.host.data, "demand", False)
         require((demand and count is None and start is not None) or (type(count) is int and count > 0),
                 "AQUANT_HISTORY_COUNT")
-        if demand:
-            if count is not None:
-                self.host.data.check_budget(count)
-        else:
-            require(count <= 10000, "AQUANT_HISTORY_COUNT")
         fields = [fields] if isinstance(fields, str) else list(fields)
         require(
             fields
@@ -507,7 +502,6 @@ class API:
         ids = self.securities(self.universe if security_list is None else security_list)
         if getattr(self.host.data, "demand", False):
             require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
-            self.host.data.check_budget(len(ids) * count)
         import pandas as pd
 
         frames = {s: self._history(s, count, unit, [field]) for s in ids}
@@ -605,8 +599,6 @@ class API:
         end, start = boundary(end_date), boundary(start_date, True)
         require(start is None or start <= (end or self.host.at), "AQUANT_PRICE_DATE_ORDER")
         fields = fields or ["open", "high", "low", "close", "volume", "money"]
-        if demand and type(count) is int:
-            self.host.data.check_budget(len(ids)*count)
         frames = {s: self._history(s, count, frequency, fields, end=end, start=start) for s in ids}
         if isinstance(security, str):
             return frames[security]
@@ -630,7 +622,7 @@ class API:
             "AQUANT_DAILY_FIELDS_UNSUPPORTED",
         )
         require(
-            count is None or (type(count) is int and 0 < count <= 10000 and start is None),
+            count is None or (type(count) is int and 0 < count and start is None),
             "AQUANT_DAILY_COUNT_OR_START_REQUIRED",
         )
 

@@ -19,6 +19,8 @@ from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
 from ashare_quant.tasks.worker import work_one
+from tests.minute_tasks.evidence import events as read_events
+from tests.minute_tasks.evidence import evidence
 from tests.support.python_sources import DAILY_SOURCE
 
 IDS = ["600000.XSHG", "000001.XSHE"]
@@ -113,6 +115,7 @@ def fixed_release(tmp_path, request):
                 )
             )
         if omissions.get("minutes"):
+            minute_start, minute_end = omissions.get("minute_range", [18, 23])
             for n, sid in enumerate(ids, 1):
                 item = writer.parquet(c, """
                     SELECT 2::INTEGER series_id,instrument_id,trade_date,
@@ -125,9 +128,9 @@ def fixed_release(tmp_path, request):
                       (SELECT range AS minute FROM range(571,691)
                        UNION ALL SELECT range FROM range(781,901)) m
                     WHERE instrument_id=? AND trade_date BETWEEN ? AND ?
-                """, [n, days[18], days[23]], f"minutes{n}")
+                """, [n, days[minute_start], days[minute_end]], f"minutes{n}")
                 files.append(dict(item, table="bars_1m", series_id=2, instrument_id=n,
-                                  rows=6*240, first_date=days[18], last_date=days[23], duplicate_keys=0))
+                                  rows=(minute_end-minute_start+1)*240, first_date=days[minute_start], last_date=days[minute_end], duplicate_keys=0))
         evidence = []
         coverage, captures, actions = [], [], []
         for sid in ids:
@@ -295,7 +298,7 @@ def test_daily_python_preparation_native_equity_parameters_and_reload(daily_jobs
         result = client.get(job["result"]["href"]).json()
         assert result["native"]["real_strategy_executed"]
         assert result["native"]["schema"] == "aq-python-daily-result.v1"
-        assert result["preparation"]["daily_rows"] == 132  # Actual 5-bar lookback plus execution days.
+        assert result["preparation"]["daily_rows"] >= 132  # Actual reads include cache misses; windows are not retained forever.
         assert len(result["native"]["accounts"]) == 61
         assert result["summary"]["trade_count"] > 4
         assert result["summary"]["final_equity"] != 100000
@@ -303,7 +306,7 @@ def test_daily_python_preparation_native_equity_parameters_and_reload(daily_jobs
         assert all(
             t["at"][11:16] == "09:30" and t["amount"] == 100 for t in result["native"]["trades"]
         )
-        frozen = json.loads((jobs.directory(job["job_id"]) / "input.json").read_text())
+        frozen = evidence(jobs.directory(job["job_id"]))
         prices = {(r["security"], r["date"]): r for r in frozen["daily"]}
         assert all(
             t["price"] == float(prices[t["security"], t["at"][:10]]["open"])
@@ -317,10 +320,7 @@ def test_daily_python_preparation_native_equity_parameters_and_reload(daily_jobs
                 for s, p in final["positions"].items()
             )
         )
-        events = [
-            json.loads(line)
-            for line in (jobs.directory(job["job_id"]) / "events.jsonl").read_text().splitlines()
-        ]
+        events = read_events(jobs.directory(job["job_id"]))
         reads = [r for r in events if r["kind"] == "daily_history_read"]
         assert reads and all(r["dates"][-1] < r["at"][:10] for r in reads)
         second = execute(
@@ -465,6 +465,8 @@ def test_running_daily_python_can_cancel_without_result_or_resume(daily_jobs):
         job = client.get("/api/v1/python/jobs/" + job_id).json()
         assert stopped and stopped[0].status_code == 200
         assert job["status"] == "cancelled" and not job["can_resume"]
+        assert job["progress"]["terminal"] and job["progress"]["current_rss_bytes"] is None
+        assert job["progress"]["completed_trading_days"] == 0
         assert client.get("/api/v1/python/jobs/" + job_id + "/result").status_code == 409
 
 
@@ -562,10 +564,7 @@ def read_daily(context):
         assert job["status"] == "succeeded", job.get("error")
         result = client.get(job["result"]["href"]).json()
         assert result["preparation"]["history_factors"]["dataset_id"] == identity
-        events = [
-            json.loads(line)
-            for line in (jobs.directory(job_id) / "events.jsonl").read_text().splitlines()
-        ]
+        events = read_events(jobs.directory(job_id))
         reads = [r for r in events if r["kind"] == "daily_history_read"]
         assert {r["price_basis"] for r in reads} == {"raw", "pre", "post"}
         assert all(r["receipt_sha256"] for r in reads if r["price_basis"] != "raw")

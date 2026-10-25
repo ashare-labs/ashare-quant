@@ -22,7 +22,7 @@ def run(arguments):
         require(arguments["control"] is not None, "PORTFOLIO_CONTROL_REQUIRED")
         threading.Thread(
             target=watch_control,
-            args=(arguments["control"], arguments["resource_limits"]["execution_seconds"]),
+            args=(arguments["control"], arguments["resource_limits"].get("execution_seconds", 120)),
             daemon=True,
         ).start()
     from ashare_quant.execution.rqalpha.guards import install_network_guard

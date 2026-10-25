@@ -84,7 +84,7 @@ class DailyPythonInputs:
         require(doc["source_refs"] and doc["daily_receipt"], "PYTHON_DAILY_EVIDENCE_REQUIRED")
         self.ids = tuple(doc["securities"])
         require(
-            0 < len(self.ids) <= 8 and len(self.ids) == len(set(self.ids)), "PYTHON_DAILY_UNIVERSE"
+            bool(self.ids) and len(self.ids) == len(set(self.ids)), "PYTHON_DAILY_UNIVERSE"
         )
         require(
             all(
@@ -96,7 +96,7 @@ class DailyPythonInputs:
         )
         self.calendar, self.days = doc["calendar"], doc["days"]
         require(
-            self.calendar == sorted(set(self.calendar)) and self.days and len(self.days) <= 126,
+            self.calendar == sorted(set(self.calendar)) and self.days,
             "PYTHON_DAILY_CALENDAR",
         )
         for d in self.calendar:

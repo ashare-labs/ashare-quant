@@ -62,7 +62,7 @@ Alpha143 的 seed、Alpha146 的 m 要求显式数值。
 
 请求固定 environment_id、幂等键、factor_id、definition、source_id、证券、history_start、
 start_date、end_date、parameters 和 rank_policy。`label_end` 仅在评价时使用，必须不早于信号结束日。
-证券数量和日历跨度没有独立上限；按实际输入量保留100000个证券交易日和32 MiB输入预算，并共用队列/资源保护。
+证券数量、日历跨度、输入行数和单文件大小没有独立测试上限；共用任务产物、磁盘及并发保护。
 登记后选定输入复制进任务目录并校验摘要；之后来源变更不会改变已接受任务。
 相同幂等键和相同请求返回原任务，不会重复计算。不同请求复用键会拒绝。
 
@@ -125,4 +125,4 @@ Nonfinite Qlib results are JSON null with `QLIB_NAN` or signed infinity status;
 only finite OK cells enter `ashare_data.factors.evaluation.evaluate`.
 No processor fit, feature normalization beyond official formulas, or model training.
 
-证券选择不再限制100只，评价min_assets仅要求整数且至少2；日期不再限制十年，保留日期顺序和实际来源覆盖。完整选择一次组成截面后统一计算/排名，不分小股票池分别算排名。既有100000证券交易日及32MiB输入资源预算、原生CPU/RSS/时间/文件保护不变，没有用新的证券数或年数阈值替代旧门槛。
+证券选择不再限制100只，评价min_assets仅要求整数且至少2；日期不再限制十年，保留日期顺序和实际来源覆盖。完整选择一次组成截面后统一计算/排名，不分小股票池分别算排名。100000证券交易日、32MiB输入以及原生CPU/RSS/时间/单文件测试门槛也已删除；没有转移或提高阈值。完整截面排名保留，真实缺失和无效数值照常报告，任务产物及磁盘保护仍独立生效。

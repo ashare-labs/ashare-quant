@@ -291,9 +291,9 @@ def test_policy_budgets_replace_single_file_256_kib_limit(projects, tmp_path):
     files = StrategyFiles(tmp_path.resolve())
     files.save("legacy.py", large)
     assert files.read("legacy.py")["source"] == large
-    small = ProjectFiles(tmp_path.resolve(), file_bytes=1024, total_bytes=1200)
+    small = ProjectFiles(tmp_path.resolve(), total_bytes=1200)
     current = small.create("small")
-    for sources, code in (({"main.py": "中" * 342}, "STRATEGY_SOURCE_SIZE"),
+    for sources, code in (({"main.py": "中" * 401}, "STRATEGY_PROJECT_SIZE"),
                           ({"main.py": "#" * 700, "helper.py": "#" * 700}, "STRATEGY_PROJECT_SIZE")):
         with pytest.raises(DomainError) as refused:
             save(small, current, sources)

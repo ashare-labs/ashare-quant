@@ -14,14 +14,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.identity import package_root
 from ashare_quant.storage.artifacts import lock, worker_slot
 from ashare_quant.storage.upgrade import upgrade_copy
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.process import stop
 from ashare_quant.tasks.repository import Repository
 from tests.support.app import create_app
-from tests.support.daily.executor import Configuration, Executor
+from tests.support.daily.executor import Configuration
 
 
 def row(repo, number):
@@ -213,59 +212,38 @@ def test_upgrade_wal_snapshot_preserves_original_sidecars(tmp_path):
         db.close()
 
 
-def test_preparation_output_bound_uses_actual_process(tmp_path, monkeypatch):
-    executor = Executor(tmp_path, Configuration(tmp_path), ServicePolicy(output_bytes=1024))
-    monkeypatch.setattr(
-        executor, "command", lambda *a: [sys.executable, "-c", "print('x' * 2000000)"]
-    )
-    with pytest.raises(DomainError) as error:
-        executor.immediate("prepare", tmp_path, "w1", "overflow")
-    assert error.value.code == "M2_JOB_OUTPUT_LIMIT"
-    assert (tmp_path / "overflow.runner.log").stat().st_size <= 1024
+def test_preparation_output_is_complete_without_a_retired_byte_gate(tmp_path, monkeypatch):
+    from ashare_quant.tasks.executor import Configuration as RuntimeConfiguration
+    from ashare_quant.tasks.executor import Executor as RuntimeExecutor
+    executor = RuntimeExecutor(tmp_path, RuntimeConfiguration(tmp_path))
+    command = "import pathlib; print('x' * 2000000); pathlib.Path('attempt.proof.json').write_text('{}')"
+    monkeypatch.setattr(executor, "command", lambda *a: [sys.executable, "-c", command], raising=False)
+    assert executor.immediate("prepare", tmp_path, "attempt") == {}
+    assert (tmp_path / "attempt.runner.log").stat().st_size == 2000001
 
 
 @pytest.mark.parametrize("mode", ["wall", "rss", "file", "cpu"])
-def test_child_resource_limits_are_enforced_by_real_process(tmp_path, mode):
-    policy = ServicePolicy(
-        cpu_seconds=1 if mode == "cpu" else 10,
-        execution_seconds=1 if mode == "wall" else 10,
-        rss_bytes=64 * 1024 * 1024,
-        file_bytes=1024 * 1024,
-    )
+def test_retired_process_gates_do_not_stop_valid_work(tmp_path, mode):
+    policy = dict(cpu_seconds=1, execution_seconds=1, rss_bytes=64*1024*1024,
+                  file_bytes=1024*1024, open_files=1)
     actions = {
-        "wall": "time.sleep(8)",
-        "cpu": "exec('while True: pass')",
-        "rss": "data=bytearray(96*1024*1024); time.sleep(5)",
-        "file": "open('large','wb').write(b'x' * (2*1024*1024))",
+        "wall": "time.sleep(1.5)",
+        "cpu": "deadline=time.monotonic()+1.5; exec('while time.monotonic()<deadline: pass')",
+        "rss": "data=bytearray(96*1024*1024); time.sleep(.2)",
+        "file": "open('large','wb').write(b'x'*(2*1024*1024))",
     }
     code = (
-        "import json,os,time; from ashare_quant.tasks.process import child_limits; child_limits(json.loads(os.environ['TEST_POLICY']),os.getppid(),'run','resource.json'); open('ready','w').write('ok'); "
+        "import json,os,time; from ashare_quant.tasks.process import child_limits; "
+        "child_limits(json.loads(os.environ['TEST_POLICY']),os.getppid(),'run','resource.json'); "
         + actions[mode]
     )
-    process = subprocess.Popen(
-        [sys.executable, "-c", code],
-        cwd=tmp_path,
-        env=os.environ | {"TEST_POLICY": policy.model_dump_json(), "PYTHONPATH": str(package_root())},
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    process = subprocess.Popen([sys.executable,"-c",code],cwd=tmp_path,
+                env=os.environ | {"TEST_POLICY":json.dumps(policy)},start_new_session=True)
     try:
-        assert process.wait(timeout=12) != 0
-        assert (tmp_path / "ready").read_text() == "ok"
-        reason = json.loads((tmp_path / "resource.json").read_text())
-        assert reason["code"] == "M2_JOB_RESOURCE_LIMIT"
-        assert (
-            reason["details"]["resource"]
-            == {
-                "wall": "wall_seconds",
-                "rss": "rss_bytes",
-                "file": "file_bytes",
-                "cpu": "cpu_seconds",
-            }[mode]
-        )
-        if mode == "file":
-            assert (tmp_path / "large").stat().st_size <= policy.file_bytes
+        assert process.wait(timeout=8)==0
+        assert not (tmp_path/'resource.json').exists()
+        if mode=='file':
+            assert (tmp_path/'large').stat().st_size==2*1024*1024
     finally:
         stop(process)
 

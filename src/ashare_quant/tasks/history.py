@@ -19,6 +19,7 @@ from ashare_quant.tasks.evidence import (
     project_json,
     verified_copy,
 )
+from ashare_quant.tasks.progress import snapshot
 
 FAMILIES = {
     "m2-job-manifest.v6": "daily",
@@ -78,6 +79,7 @@ class History(TaskService):
             "attempt_count": row["attempt_count"], "result": result,
             "error": json.loads(row["error"]) if row["error"] else None,
             "read_only": True, "can_resume": False,
+            "progress": snapshot(self.directory(row["job_id"]), row),
             "original_service_identity": manifest.get("service_identity"),
             "verification": "frozen_integrity_only",
         }

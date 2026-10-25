@@ -4,6 +4,7 @@ Only actual API calls determine historical demand. No strategy discovery pass ru
 Execution retains the existing observed-state/corporate model, loaded per security/day.
 """
 
+from collections.abc import Mapping
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.portfolio.corporate import MODEL, schedule_rows
 from ashare_quant.providers.daily.history import frozen_factors, history_prices
 from ashare_quant.storage.artifacts import atomic, digest
+from ashare_quant.storage.streams import Journal, compress, file_hash
 from ashare_quant.tasks.minute.prepare import prepare_market, require
 from ashare_quant.tasks.policy import ServicePolicy
 
@@ -48,18 +50,46 @@ def run_scope(pin, start, end, *, release=None):
     return days, calendar
 
 
+class DayValues(Mapping):
+    """Calendar-sized keys, one lazily generated day's clocks at a time."""
+    def __init__(self, days, factory):
+        self.days, self.factory, self.day, self.value = days, factory, None, None
+
+    def __getitem__(self, day):
+        if day not in self.days:
+            raise KeyError(day)
+        if self.day != day:
+            self.day, self.value = day, self.factory(day)
+        return self.value
+
+    def __iter__(self):
+        return iter(self.days)
+
+    def __len__(self):
+        return len(self.days)
+
+
+def periods(day):
+    return [(stamp(day + "T09:30:00+08:00"), stamp(day + "T11:30:00+08:00")),
+            (stamp(day + "T13:00:00+08:00"), stamp(day + "T15:00:00+08:00"))]
+
+
 class ReferenceSnapshot(ReleasedReferences):
-    """Task-local results of actual frozen reference queries, charged to its budget."""
+    """Reuse corporate reference queries for the current security, never all prior securities."""
 
     def __init__(self, data):
         super().__init__(data.pin, data.pin, release=data.owner.release)
-        self.data, self.cache = data, {}
+        self.data, self.cache, self.security = data, {}, None
+
+    def scope(self, security):
+        if self.security != security:
+            self.cache.clear()
+            self.security = security
 
     def query(self, table, condition, parameters):
         key = table, condition, tuple(parameters)
         if key not in self.cache:
             rows = super().query(table, condition, parameters)
-            self.data.check_budget(len(rows))
             self.data.reference_rows += len(rows)
             self.data._retain(
                 {"api": "execution_references", "table": table,
@@ -93,31 +123,24 @@ class DemandInputs:
         self.previous = {d: self.calendar[self.calendar.index(d) - 1] for d in self.days}
         self.ids = []  # Native instruments encountered; distinct from API.universe and read cache.
         self.register(request.securities)
-        self.rows, self.minutes, self.components, self.corporate = {}, {}, {}, {}
-        self.reads, self.queries, self.read_count = [], [], 0
+        self.rows, self.history_rows, self.minutes, self.components, self.corporate = {}, {}, {}, {}, {}
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.reads = Journal(self.root / "reads.jsonl.gz")
+        self.queries = Journal(self.root / "queries.jsonl.gz")
+        self.corporate_evidence = Journal(self.root / "corporate.jsonl.gz")
+        self.read_count, self.daily_read_rows, self.component_day = 0, 0, None
         self.references, self.reference_rows, self.benchmark_rows = None, 0, 0
         self.bars, self.gaps = {}, {}
         self.corporate_actions, self.actions = [], []
         self.factors = frozen_factors(self.root, factors)
-        self.ends, self.clocks, self.sessions = {}, {}, {}
-        for day in self.days:
-            periods = [
-                (stamp(day + "T09:30:00+08:00"), stamp(day + "T11:30:00+08:00")),
-                (stamp(day + "T13:00:00+08:00"), stamp(day + "T15:00:00+08:00")),
-            ]
-            self.sessions[day] = periods
-            self.clocks[day] = (
-                [stamp(day + "T09:30:00+08:00")]
-                if self.frequency == "1d"
-                else [
-                    a + timedelta(minutes=n)
-                    for a, b in periods
-                    for n in range(1, int((b - a).total_seconds() / 60) + 1)
-                ]
-            )
-            self.ends[day] = self.clocks[day]
+        self.sessions = DayValues(self.days, periods)
+        self.clocks = DayValues(self.days, lambda day:
+            [stamp(day + "T09:30:00+08:00")] if self.frequency == "1d" else
+            [a + timedelta(minutes=n) for a, b in periods(day)
+             for n in range(1, int((b-a).total_seconds()/60)+1)])
+        self.ends = self.clocks
         self.document = {
-            "schema": "aq-python-demand-input.v2",
+            "schema": "aq-python-demand-input.v3",
             "real_market_data": True,
             "release": pin,
             "frequency": self.frequency,
@@ -134,35 +157,20 @@ class DemandInputs:
         if benchmark is not None:
             self.document["benchmark_release"] = benchmark
 
-    def check_budget(self, rows):
-        require(
-            type(rows) is int and 0 <= rows <= self.policy.query_rows,
-            "PYTHON_DATA_BUDGET",
-            "Query exceeds configured query_rows",
-            {"resource": "query_rows", "requested": rows, "limit": self.policy.query_rows},
-        )
-
     def _retain(self, response, count):
         self.read_count += count
-        require(
-            self.read_count <= self.policy.read_rows,
-            "PYTHON_DATA_BUDGET",
-            "Frozen reads exceed configured read_rows",
-            {"resource": "read_rows", "observed": self.read_count, "limit": self.policy.read_rows},
-        )
-        require(
-            len(self.rows)
-            + sum(len(v) for v in self.minutes.values())
-            + len(self.bars)
-            + len(self.gaps)
-            + self.reference_rows
-            + self.benchmark_rows
-            <= self.policy.cached_rows,
-            "PYTHON_DATA_BUDGET",
-            "Cache exceeds configured cached_rows",
-            {"resource": "cached_rows", "limit": self.policy.cached_rows},
-        )
         self.reads.append(response)
+
+    def advance_day(self, day):
+        if day != self.component_day:
+            # Only execution data expires. Positions, orders and entitlements live
+            # in the native account and must survive subscription/cache changes.
+            self.rows.clear()
+            self.components.clear()
+            self.bars.clear()
+            self.gaps.clear()
+            self.corporate.clear()
+            self.component_day = day
 
     def securities(self, ids):
         require(
@@ -187,7 +195,6 @@ class DemandInputs:
         while True:
             response = self.owner.catalogue(limit=500, offset=offset, as_of=as_of)
             items.extend(r for r in response["securities"] if r.get("asset_class", "equity") == "equity")
-            self.check_budget(len(items))
             if offset + len(response["securities"]) >= response["total"]:
                 break
             offset += len(response["securities"])
@@ -206,14 +213,15 @@ class DemandInputs:
         )
         return items, receipt
 
-    def _daily(self, sid, days):
-        missing = [d for d in days if (sid, d) not in self.rows]
+    def _daily(self, sid, days, *, history=False):
+        cache = self.history_rows if history else self.rows
+        missing = [d for d in days if (sid, d) not in cache]
         if missing:
             # Only the requested bounded range, never all published securities.
             response = self.owner.prices([sid], missing[0], missing[-1])
             observed = {r["date"]: r for r in response["rows"]}
             for d in missing:
-                self.rows[sid, d] = observed.get(d)
+                cache[sid, d] = observed.get(d)
             self._retain(
                 {
                     "api": "prices",
@@ -222,10 +230,19 @@ class DemandInputs:
                     "end": missing[-1],
                     "receipt": response["receipt"],
                     "gaps": response["gaps"],
+                    "data": response["rows"],
                 },
                 len(response["rows"]),
             )
-        return [self.rows[sid, d] for d in days]
+            self.daily_read_rows += len(response["rows"])
+        result = [cache[sid, d] for d in days]
+        # The latest requested window, not the history of every request. Returned
+        # rows remain owned by the caller; eviction never truncates its result.
+        if history:
+            self.history_rows = {(sid, d): row for d, row in zip(days, result)}
+        else:
+            self.rows = {(sid, d): row for d, row in zip(days, result)}
+        return result
 
     def _row(self, sid, day):
         row = self._daily(sid, [day])[0]
@@ -264,25 +281,29 @@ class DemandInputs:
             {"start": start},
         )
         days = [d for d in eligible if start is None or d >= start]
-        self.check_budget(count if count is not None else len(days))
         selected = []
         if count is not None:
             # Expand backwards only when pause filtering actually needs older rows.
             while days and len(selected) < count:
                 take = min(len(days), count - len(selected))
                 batch, days = days[-take:], days[:-take]
-                self._daily(sid, batch)
-                for d in reversed(batch):
-                    row = self._row(sid, d)
-                    if skip_paused and self.is_paused(sid, d):
+                batch_rows = self._daily(sid, batch, history=True)
+                for d, row in reversed(list(zip(batch, batch_rows))):
+                    require(row is not None, "PYTHON_DAILY_GAP",
+                            f"Requested daily observation is missing: {sid} on {d}",
+                            {"security": sid, "date": d})
+                    if skip_paused and self.is_paused(sid, d, row=row):
                         continue
                     selected.append(row)
             selected.reverse()
         else:
-            self._daily(sid, days)
-            selected = [
-                self._row(sid, d) for d in days if not skip_paused or not self.is_paused(sid, d)
-            ]
+            selected = []
+            for d, row in zip(days, self._daily(sid, days, history=True)):
+                require(row is not None, "PYTHON_DAILY_GAP",
+                        f"Requested daily observation is missing: {sid} on {d}",
+                        {"security": sid, "date": d})
+                if not skip_paused or not self.is_paused(sid, d, row=row):
+                    selected.append(row)
         require(
             selected and (count is None or len(selected) == count),
             "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
@@ -321,8 +342,8 @@ class DemandInputs:
         receipt["receipt_sha256"] = digest(receipt)
         return history_prices(rows, receipt, self.factors, adjustment, basis_date)
 
-    def is_paused(self, sid, day):
-        value = self._row(sid, day).get("tradestatus")
+    def is_paused(self, sid, day, *, row=None):
+        value = (row if row is not None else self._row(sid, day)).get("tradestatus")
         require(
             value in {"0", "1"},
             "PYTHON_DAILY_HISTORY_STATE_GAP",
@@ -350,7 +371,7 @@ class DemandInputs:
                     "bar_end": at.isoformat(),
                     "source_label": at.isoformat(),
                 }
-            self.minutes[sid, day] = rows
+            self.minutes = {(sid, day): rows}
             self._retain(
                 {
                     "api": "minute_prices",
@@ -358,6 +379,7 @@ class DemandInputs:
                     "date": day,
                     "binding": response["binding"],
                     "response_sha256": digest(response),
+                    "data": response["rows"],
                 },
                 len(rows),
             )
@@ -382,7 +404,6 @@ class DemandInputs:
                 t = stamp(f"{day}T{minute // 60:02d}:{minute % 60:02d}:00+08:00")
                 if t <= cutoff and (include_now or t != at) and (start is None or t >= start):
                     slots.append(t)
-                    self.check_budget(len(slots))
                     if count is not None and len(slots) == count:
                         break
             if count is not None and len(slots) == count:
@@ -460,6 +481,7 @@ class DemandInputs:
         if key not in self.corporate:
             if self.references is None:
                 self.references = ReferenceSnapshot(self)
+            self.references.scope(sid)
             view = ReleasedCorporateView(self.references, [sid], start, day)
             corp = view.export_aq(
                 [sid],
@@ -471,6 +493,7 @@ class DemandInputs:
             doc = {"corporate_schedule": corp, "corporate_account_model": MODEL}
             actions = schedule_rows(doc, [sid], {"start": start, "end": day}, self.calendar)
             self.corporate[key] = corp
+            self.corporate_evidence.append({"key": key, "schedule": corp})
             known = {a["entitlement_key"]: digest(a) for a in self.corporate_actions}
             for action in actions:
                 if action["entitlement_key"] not in known:
@@ -484,6 +507,7 @@ class DemandInputs:
         return self.corporate[key]
 
     def component(self, sid, day):
+        self.advance_day(day)
         key = sid, day
         if key not in self.components:
             self.register([sid])
@@ -532,9 +556,12 @@ class DemandInputs:
 
                 directory = self.root / "execution-cache" / f"{sid}-{day}"
                 directory.mkdir(parents=True, exist_ok=True)
-                prepare(self.pin, req, directory, owner=self.owner, corporate=corp)
+                packed = directory / "input.json.gz"
+                if not packed.exists():
+                    prepare(self.pin, req, directory, owner=self.owner, corporate=corp)
+                    compress(directory / "input.json")
                 part = MinuteInputs(
-                    directory / "input.json",
+                    packed,
                     accept_assumed=True,
                     accept_state_replay=True,
                     accept_research=True,
@@ -547,6 +574,8 @@ class DemandInputs:
                         "security": sid,
                         "date": day,
                         "input_sha256": part.sha256,
+                        "file": packed.relative_to(self.root).as_posix(),
+                        "sha256": file_hash(packed),
                     },
                     len(part.bars),
                 )
@@ -625,9 +654,10 @@ class DemandInputs:
             "frequency": self.frequency,
             "securities": list(self.ids),
             "trading_dates": self.days,
-            "daily_rows": sum(r is not None for r in self.rows.values()),
+            "daily_rows": self.daily_read_rows,
+            "daily_row_count_basis": "actual rows read, including evicted-window rereads",
             "history_factors": self.document["history_factors"],
-            "corporate_schedule_sha256": digest(self.corporate),
+            "corporate_schedule_sha256": file_hash(self.root / "corporate.jsonl.gz"),
             "historical_pit_verified": False,
             "state_visibility": self.state_visibility,
             "resource_budget": self.policy.model_dump(mode="json"),
@@ -637,10 +667,8 @@ class DemandInputs:
     def finalize(self):
         self.document.update(
             securities=list(self.ids),
-            daily=[r for r in self.rows.values() if r is not None],
-            reads=self.reads,
-            queries=self.queries,
-            corporate_schedules=self.corporate,
+            evidence=[journal.seal() for journal in
+                      (self.reads, self.queries, self.corporate_evidence)],
         )
         atomic(self.root / "input.json", self.document)
         report = {
@@ -654,6 +682,8 @@ class DemandInputs:
         return report
 
     def close(self):
+        for journal in (self.reads, self.queries, self.corporate_evidence):
+            journal.close()
         if self.references is not None:
             self.references.close()
             self.references = None

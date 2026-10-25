@@ -1,11 +1,12 @@
 """Existing cash-market callbacks and empty accounts need no reference prices."""
 
-import json
+
 import math
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.minute_tasks.evidence import events as read_events
 from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
 from tests.minute_tasks.test_daily import execute
 from tests.minute_tasks.test_daily import fixed_release as fixed_release
@@ -65,7 +66,7 @@ def after(c):
         assert result["summary"]["trade_count"] == 0
         assert result["native"]["final_account"]["positions"] == {}
         assert result["native"]["corporate_entitlements"] == {}
-        events = [json.loads(line) for line in (jobs.directory(job["job_id"]) / "events.jsonl").read_text().splitlines()]
+        events = read_events(jobs.directory(job["job_id"]))
         assert [e["name"] for e in events if e["kind"] == "callback_start"] == [
             "initialize", "before", "opened", "after",
         ]

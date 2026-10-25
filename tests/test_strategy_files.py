@@ -219,20 +219,13 @@ def test_nonregular_and_non_utf8_files_are_not_read(files):
     assert (files.root / "bad.py").read_bytes() == b"\xff"
 
 
-def test_source_limit_counts_utf8_bytes_and_bounds_reads(tmp_path):
-    limit = 4096
-    files = StrategyFiles(tmp_path.resolve(), file_bytes=limit)
-    source = "#" * limit
-    files.save("limit.py", source)
-    assert files.read("limit.py")["source"] == source
-    with pytest.raises(DomainError) as refused:
-        files.save("limit.py", "中" * (limit // 3 + 1), overwrite=True)
-    assert refused.value.code == "STRATEGY_SOURCE_SIZE"
-    assert files.read("limit.py")["source"] == source
-    (files.root / "limit.py").write_bytes(b"#" * (limit + 1))
-    with pytest.raises(DomainError) as refused:
-        files.read("limit.py")
-    assert refused.value.code == "STRATEGY_SOURCE_SIZE"
+def test_single_file_has_no_retired_size_gate(tmp_path):
+    files = StrategyFiles(tmp_path.resolve())
+    source = "#" * (64 * 1024 * 1024 + 1)
+    files.save("large.py", source)
+    assert files.read("large.py")["source"] == source
+    files.save("large.py", "#中文", overwrite=True)
+    assert files.read("large.py")["source"] == "#中文"
 
 
 def test_long_filename_fits_even_with_atomic_temporary_file(files):

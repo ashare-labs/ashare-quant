@@ -47,7 +47,9 @@ class MinuteInputs:
         require(type(accept_assumed) is bool, "MINUTE_VISIBILITY_OPT_IN_MUST_BE_BOOLEAN")
         require(type(accept_state_replay) is bool, "MINUTE_STATE_OPT_IN_MUST_BE_BOOLEAN")
         require(type(accept_research) is bool, "MINUTE_RESEARCH_OPT_IN_MUST_BE_BOOLEAN")
-        raw = Path(path).read_bytes()
+        from ashare_quant.storage.streams import reading
+        with reading(path) as stream:
+            raw = stream.read()
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self.document = doc = json.loads(raw)
         self.generic_research = doc["schema"] == generic.SCHEMA
@@ -93,7 +95,7 @@ class MinuteInputs:
         )
         self.ids = tuple(doc["securities"])
         require(
-            0 < len(self.ids) <= 20 and len(set(self.ids)) == len(self.ids),
+            bool(self.ids) and len(set(self.ids)) == len(self.ids),
             "MINUTE_BOUNDED_UNIVERSE_REQUIRED",
         )
         require(
@@ -114,10 +116,6 @@ class MinuteInputs:
             "MINUTE_PREVIOUS_SUCCESSOR_AND_CONTIGUOUS_DAYS_REQUIRED",
         )
         self.corporate_research = self.generic_research and research.is_corporate(doc)
-        require(
-            len(self.days) <= (512 if self.corporate_research else 60),
-            "MINUTE_WINDOW_TOO_LARGE",
-        )
         self.previous = {d: self.calendar[self.calendar.index(d) - 1] for d in self.days}
         self.sessions, self.clocks, self.ends = {}, {}, {}
         for d in self.days:

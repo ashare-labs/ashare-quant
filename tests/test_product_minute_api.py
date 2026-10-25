@@ -121,7 +121,6 @@ def test_closed_request_rejects_override_paths_and_cross_origin(client):
     [
         {"start": "2026-06-02T09:30"},
         {"start": "2026-06-02T09:30:01+08:00"},
-        {"end": "2026-09-02T09:31:00+08:00"},
         {"security": "920000.XBSE"},
     ],
 )
@@ -132,3 +131,7 @@ def test_invalid_window_or_rewritten_native_identity_is_rejected(override):
 
 def test_exact_native_bj_identity_is_supported():
     assert ProductMinuteSelection(**{**QUERY, "security": "BJ.920000"}).security == "BJ.920000"
+
+
+def test_minute_product_accepts_any_ordered_whole_minute_range():
+    assert ProductMinuteSelection(**{**QUERY, "end": "2036-09-02T09:31:00+08:00"}).end.year == 2036

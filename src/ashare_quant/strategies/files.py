@@ -11,9 +11,7 @@ from pathlib import Path
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import AtomicWriteUncertain, atomic
 from ashare_quant.storage.errors import storage_error
-from ashare_quant.tasks.policy import ServicePolicy
 
-MAX_SOURCE_BYTES = ServicePolicy().file_bytes
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 PROJECT_DESCRIPTOR = "aquant.toml"
 INTERNAL_PREFIX = ".aquant-"
@@ -50,14 +48,11 @@ def regular(info):
         raise DomainError("STRATEGY_PATH_UNSAFE", "Linked strategy files are not supported", 403)
 
 
-def source_bytes(source, *, max_bytes=MAX_SOURCE_BYTES):
+def source_bytes(source):
     try:
         raw = source.encode("utf-8")
     except UnicodeEncodeError as exc:
         raise DomainError("STRATEGY_SOURCE_ENCODING", "Source is not valid UTF-8", 422) from exc
-    if max_bytes is not None and len(raw) > max_bytes:
-        raise DomainError("STRATEGY_SOURCE_SIZE", "Source exceeds the service file_bytes budget", 422,
-                          details={"file_bytes": max_bytes})
     return raw
 
 
@@ -139,12 +134,11 @@ def classification(fd):
 
 
 class StrategyFiles:
-    def __init__(self, state_root, *, file_bytes=None):
+    def __init__(self, state_root):
         self.state_root = Path(state_root)
         if not self.state_root.is_absolute():
             raise ValueError("Strategy storage requires the resolved deployment state root")
         self.root = self.state_root / "strategies"
-        self.file_bytes = MAX_SOURCE_BYTES if file_bytes is None else file_bytes
 
     @contextmanager
     def state(self):
@@ -222,7 +216,7 @@ class StrategyFiles:
                             from ashare_quant.strategies.projects import descriptor
                             child = open_directory(fd, name)
                             try:
-                                metadata = descriptor(child, optional=True, file_bytes=self.file_bytes)
+                                metadata = descriptor(child, optional=True)
                             finally:
                                 os.close(child)
                             if metadata is not None:
@@ -263,10 +257,7 @@ class StrategyFiles:
                 regular(info)
                 path = "/".join([*resolved, stored_name(directory, members[-1], info)])
                 parts(path, file=True)
-                raw = stream.read(self.file_bytes + 1)
-        if len(raw) > self.file_bytes:
-            raise DomainError("STRATEGY_SOURCE_SIZE", "Source exceeds the service file_bytes budget", 422,
-                              details={"file_bytes": self.file_bytes})
+                raw = stream.read()
         try:
             source = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -275,7 +266,7 @@ class StrategyFiles:
 
     def save(self, path, source, *, overwrite=False):
         members = parts(path, file=True)
-        raw = source_bytes(source, max_bytes=self.file_bytes)
+        raw = source_bytes(source)
         resolved = []
         with operation(path, "save"), self.lock(), self.directory(
             members[:-1], create_root=True, resolved=resolved,

@@ -9,8 +9,6 @@ from ashare_quant.portfolio.inputs import digest as input_digest
 from ashare_quant.portfolio.product_reference import owner_digest, source_bindings, validate
 from ashare_quant.storage.artifacts import atomic, canonical, lock, sha
 
-MAX_BYTES = 64 * 1024 * 1024
-
 
 def require(condition, detail):
     if not condition:
@@ -48,10 +46,9 @@ def _read(root, name):
     require(name in {"input.json", "manifest.json", "corporate-schedule.json", "coverage.json"},
             "release file name")
     path = root / name
-    require(not path.is_symlink() and path.is_file() and path.stat().st_size <= MAX_BYTES,
-            "release file missing, linked or oversized")
+    require(not path.is_symlink() and path.is_file(),
+            "release file missing or linked")
     raw = path.read_bytes()
-    require(len(raw) <= MAX_BYTES, "release file size")
     return raw, json.loads(raw)
 
 
@@ -143,7 +140,6 @@ def _consume(release, selection, config, references):
     })
     validate(document)
     raw = canonical(document)
-    require(len(raw) <= MAX_BYTES, "consumer input size")
     captured.update({"corporate-schedule.json": schedule_raw, "coverage.json": coverage_raw,
                      "input.json": raw})
     inputs = config.control_db.parent / "inputs"

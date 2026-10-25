@@ -6,8 +6,9 @@ import time
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import lock, regular, worker_slot
-from ashare_quant.strategies.python.supervision import BoundedOutput
+from ashare_quant.strategies.python.supervision import ProcessOutput
 from ashare_quant.tasks.process import stop
+from ashare_quant.tasks.progress import RuntimeProgress
 from ashare_quant.tasks.storage_budget import check_task_storage
 
 
@@ -80,6 +81,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
     process, proof, reference, error = None, None, None, None
     interrupted = False
     capture = None
+    progress = RuntimeProgress(root, job_id, row["attempt_count"])
 
     def notify(name):
         if stage:
@@ -113,30 +115,25 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                     pass_fds=lock_fds,
                     start_new_session=True,
                 )
-                capture = BoundedOutput(process.stdout, log, jobs.repo.policy.output_bytes)
+                progress.attach(process)
+                capture = ProcessOutput(process.stdout, log)
                 try:
                     jobs.repo.child_started(job_id, token, process.pid)
                     notify("spawned")
-                    started, heartbeat = time.monotonic(), 0
+                    heartbeat, checked_storage = 0, time.monotonic()
                     while process.poll() is None:
                         notify("poll")
-                        if capture.exceeded.is_set():
-                            raise DomainError(
-                                "PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit"
-                            )
+                        if capture.failed.is_set():
+                            raise DomainError("M2_JOB_OUTPUT_FAILED", "Process output could not be retained")
                         if time.monotonic() - heartbeat >= 0.25:
-                            storage()
+                            if time.monotonic() - checked_storage >= 2:
+                                storage()
+                                checked_storage = time.monotonic()
                             if jobs.repo.heartbeat(job_id, token):
                                 stop(process)
                                 cancelled = True
                                 break
                             heartbeat = time.monotonic()
-                        if time.monotonic() - started > jobs.repo.policy.execution_seconds:
-                            stop(process)
-                            raise DomainError(
-                                "M2_JOB_EXECUTION_TIMEOUT",
-                                "Bounded native child exceeded its execution timeout",
-                            )
                         time.sleep(0.03)
                 finally:
                     stop(process)
@@ -144,8 +141,6 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                         capture.finish()
                     finally:
                         process.stdout.close()
-                if capture.exceeded.is_set():
-                    raise DomainError("PYTHON_OUTPUT_LIMIT", "Attempt output exceeded its fixed byte limit")
             notify("child_exited")
             storage()
             if process.returncode == 0:
@@ -181,6 +176,7 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
         cancelled = jobs.repo.heartbeat(job_id, token)
         if not cancelled and error is None and proof["complete"]:
             notify("before_publish")
+            progress.phase("publishing")
             reference = jobs.publish(
                 root, manifest, invocation, row["attempt_count"], jobs.repo.logs(job_id)
             )
@@ -219,6 +215,9 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                 error["inspection_error"] = getattr(exc, "code", type(exc).__name__)
     # Conditional UPDATE under an immediate transaction resolves cancellation
     # versus publication. A stale worker can never turn the row into success.
-    jobs.repo.finish(job_id, token, proof=proof, result=reference, error=error)
+    try:
+        jobs.repo.finish(job_id, token, proof=proof, result=reference, error=error)
+    finally:
+        progress.finish()
     if interrupted:
         raise KeyboardInterrupt

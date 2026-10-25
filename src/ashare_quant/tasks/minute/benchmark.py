@@ -42,7 +42,6 @@ def observations(data, security, days, at):
             "AQUANT_FUTURE_DATA_REQUEST", "Benchmark cannot include a future session close")
     base_date = data.previous[days[0]]
     wanted = [base_date, *days]
-    data.check_budget(len(wanted))
     owner = data.owner
     if security not in owner.release.identifiers and data.benchmark_pin is not None:
         value["release"] = data.benchmark_pin
@@ -73,7 +72,6 @@ def observations(data, security, days, at):
             prices.append({"date": day, "close": close})
         else:
             missing.append(day)
-    data.check_budget(len(response["rows"]))
     data.benchmark_rows = len(response["rows"])
     data._retain({
         "api": "benchmark_prices", "security": security, "start": base_date, "end": days[-1],

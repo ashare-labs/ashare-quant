@@ -9,6 +9,12 @@ from pydantic import Field
 
 from ashare_quant.contracts import Contract
 
+RETIRED_LIMITS = frozenset({
+    "module_load_seconds", "callback_seconds", "execution_seconds", "preparation_seconds",
+    "output_bytes", "file_bytes", "rss_bytes", "cpu_seconds", "open_files",
+    "query_rows", "cached_rows", "read_rows",
+})
+
 
 class ServicePolicy(Contract):
     schema_version: Literal["m2-job-service-policy.v1"] = "m2-job-service-policy.v1"
@@ -18,17 +24,6 @@ class ServicePolicy(Contract):
     max_pending: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 32
     max_attempts: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 8
     admission_wait_seconds: Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)] = 2
-    execution_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 120
-    preparation_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-1)] = 60
-    output_bytes: Annotated[int, Field(strict=True, ge=1024, le=2**63-1)] = 1048576
-    file_bytes: Annotated[int, Field(strict=True, ge=1048576, le=2**63-1)] = 67108864
-    rss_bytes: Annotated[int, Field(strict=True, ge=16777216, le=2**63-1)] = 1073741824
-    cpu_seconds: Annotated[int, Field(strict=True, ge=1, le=2**63-2)] = 120
-    open_files: Annotated[int, Field(strict=True, ge=64, le=2**63-1)] = 256
-    # Demand reads are budgeted independently of the trading subscription.
-    query_rows: Annotated[int, Field(strict=True, ge=1)] = 100000
-    cached_rows: Annotated[int, Field(strict=True, ge=1)] = 250000
-    read_rows: Annotated[int, Field(strict=True, ge=1)] = 1000000
     # Retained bytes per task, not a lifetime quota shared by historical results.
     artifact_bytes: Annotated[int, Field(strict=True, ge=1048576)] = 536870912
     # Decimal GB, deliberately separate from the per-task binary MiB budget.
@@ -41,10 +36,10 @@ class ServicePolicy(Contract):
         if not value:
             return None
         parsed = json.loads(value)
-        retired = {"module_load_seconds", "callback_seconds"}
-        if isinstance(parsed, dict) and retired.intersection(parsed):
-            warnings.warn("Ignored retired module_load_seconds/callback_seconds settings; "
-                          "callbacks use the whole-task resource budgets", UserWarning, stacklevel=2)
+        if isinstance(parsed, dict) and RETIRED_LIMITS.intersection(parsed):
+            warnings.warn("Ignored retired execution limits: " +
+                          ", ".join(sorted(RETIRED_LIMITS.intersection(parsed))),
+                          UserWarning, stacklevel=2)
         return cls.from_frozen(parsed)
 
     @classmethod
@@ -58,7 +53,7 @@ class ServicePolicy(Contract):
         if not isinstance(value, dict):
             return cls.model_validate(value)
         return cls.model_validate({k: v for k, v in value.items()
-                                   if k not in {"module_load_seconds", "callback_seconds"}})
+                                   if k not in RETIRED_LIMITS})
 
 
 class ServiceStatus(Contract):

@@ -37,7 +37,7 @@ class PortfolioJobs(TaskService):
         self.repo = Repository(store, self.repo.policy)
         self.executor = Executor(self.root, self.config, self.repo.policy)
         self.strategies = Registry(store)
-        self.datasets = Datasets(self.root, self.repo.policy.file_bytes)
+        self.datasets = Datasets(self.root)
 
     def identity(self):
         return PortfolioIdentity(backend_version=__version__, source_sha256=self.source)

@@ -10,6 +10,8 @@ import pytest
 from ashare_data.storage.cmes_release import import_cmes
 from fastapi.testclient import TestClient
 
+from tests.minute_tasks.evidence import events as read_events
+from tests.minute_tasks.evidence import evidence
 from tests.minute_tasks.test_daily import daily_jobs as daily_jobs
 from tests.minute_tasks.test_daily import execute
 from tests.minute_tasks.test_daily import fixed_release as fixed_release
@@ -63,7 +65,7 @@ def trade(c):
         assert result["summary"]["trade_count"] == 1
         assert set(result["native"]["final_account"]["positions"]) == {"600000.XSHG"}
         root = jobs.directory(job["job_id"])
-        frozen = json.loads((root / "input.json").read_text())
+        frozen = evidence(root)
         assert frozen["benchmark_release"] == pin
         assert selected not in frozen["securities"]
         assert json.loads((root / "session.json").read_text())["benchmark_release"] == pin
@@ -79,7 +81,7 @@ def trade(c):
             assert benchmark["reason"] == {"base": "BENCHMARK_BASE_MISSING", "middle": "BENCHMARK_DAILY_GAP",
                                            "unknown": "BENCHMARK_SECURITY_UNAVAILABLE"}[gap]
             assert benchmark["missing_dates"] == (dates if gap == "unknown" else missing)
-        events = [json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()]
+        events = read_events(root)
         assert sum(e.get("kind") == "callback_start" and e.get("name") == "initialize" for e in events) == 1
         assert client.post("/api/v1/python/jobs", json=body).json()["job_id"] == job["job_id"]
         assert client.get('/api/v1/history/jobs/' + job['job_id'] + '/result').json() == result

@@ -30,7 +30,7 @@ def run(args):
 
         threading.Thread(
             target=watch_control,
-            args=(args["control"], args["resource_limits"]["execution_seconds"]),
+            args=(args["control"],),
             daemon=True,
         ).start()
         install_network_guard()

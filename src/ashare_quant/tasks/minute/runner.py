@@ -7,6 +7,7 @@ import traceback
 from pathlib import Path
 
 from ashare_quant.storage.artifacts import atomic, digest, regular, require, sha
+from ashare_quant.storage.streams import atomic_json, file_hash
 
 
 def run(args):
@@ -31,7 +32,7 @@ def run(args):
 
         threading.Thread(
             target=watch_control,
-            args=(args["control"], args["resource_limits"]["execution_seconds"]),
+            args=(args["control"],),
             daemon=True,
         ).start()
         install_network_guard()
@@ -48,7 +49,8 @@ def run(args):
         project = request.project
         if project is not None:
             require(digest(project) == session.get("project_sha256"), "PYTHON_PROJECT_CHANGED")
-        atomic(root / "phase.json", {"phase": "preparing"})
+        from ashare_quant.tasks.progress import EngineProgress
+        progress = EngineProgress(root, args["invocation"])
         print("Preparing frozen market data", flush=True)
         config = {**DEFAULTS, "initial_cash": request.initial_cash}
         demand = session.get("data_access") == "demand.v2"
@@ -72,7 +74,8 @@ def run(args):
                 data = MinuteInputs(root / "input.json", accept_assumed=True,
                                     accept_state_replay=True, accept_research=True)
         data.validate_execution(config)
-        atomic(root / "phase.json", {"phase": "executing"})
+        progress.update(phase="executing", total_trading_days=len(data.days), force=True)
+        data.progress = progress
         print("Running Python strategy", flush=True)
         identity = digest(
             {
@@ -92,26 +95,26 @@ def run(args):
                 parameters=request.parameters,
                 project=project,
             )
+            progress.update(phase="finalizing", force=True)
             if demand:
                 report = data.finalize()
                 result["data_input_sha256"] = report["input_sha256"]
         finally:
             if demand:
                 data.close()
-        atomic(root / "result.json", result)
-        atomic(root / "completed.json", {"result_sha256": digest(result)})
+        result_hash = atomic_json(root / "result.json", result)
+        atomic(root / "completed.json", {"result_sha256": result_hash})
+        progress.update(force=True)  # Include final result serialization in the measured peak.
         complete = True
     elif (root / "completed.json").exists():
-        complete = json.loads(regular(root / "completed.json"))["result_sha256"] == digest(
-            json.loads(regular(root / "result.json"))
-        )
+        complete = json.loads(regular(root / "completed.json"))["result_sha256"] == file_hash(root / "result.json")
     proof = {
         "cursor": int(complete),
         "complete": complete,
         "checkpoint_sha256": None,
         "session_sha256": digest(session),
         "session_file_sha256": sha(regular(root / "session.json")),
-        "receipt_sha256": digest(json.loads(regular(root / "result.json"))) if complete else None,
+        "receipt_sha256": file_hash(root / "result.json") if complete else None,
     }
     atomic(root / (args["invocation"] + ".proof.json"), proof)
 
@@ -139,6 +142,12 @@ if __name__ == "__main__":
         underlying = getattr(getattr(exc, "error", None), "exc_val", exc)
         source_file, source_line = source_location(underlying, args["root"])
         cause_code = getattr(underlying, "code", None)
+        if isinstance(underlying, MemoryError):
+            cause_code = "PYTHON_MEMORY_ALLOCATION_FAILED"
+        elif isinstance(underlying, OSError):
+            import errno
+            if underlying.errno in {errno.ENOSPC, errno.EDQUOT}:
+                cause_code = "PYTHON_STORAGE_WRITE_FAILED"
         message = f"{source_file} 第 {source_line} 行：" if source_file else ""
         message += (f"{cause_code}: " if cause_code else "") + str(underlying)
         atomic(

@@ -40,7 +40,7 @@ def module_name(member):
             and member != "__pycache__" and unicodedata.normalize("NFKC", member) == member)
 
 
-def validate_project_sources(entrypoint, files, *, file_bytes=None, total_bytes=None):
+def validate_project_sources(entrypoint, files, *, total_bytes=None):
     """Validate a snapshot without importing code, changing names, or checking syntax.
 
     Limits are service budgets supplied by the caller, not project-count limits.
@@ -65,7 +65,7 @@ def validate_project_sources(entrypoint, files, *, file_bytes=None, total_bytes=
         modules.add(tuple(name_key(member) for member in identifiers))
         directories.update(tuple(name_key(member) for member in identifiers[:index])
                            for index in range(1, len(identifiers)))
-        total += len(source_bytes(source, max_bytes=file_bytes))
+        total += len(source_bytes(source))
         if total_bytes is not None and total > total_bytes:
             raise DomainError("STRATEGY_PROJECT_SIZE", "Project exceeds the service artifact_bytes budget", 422,
                               details={"artifact_bytes": total_bytes})
@@ -76,21 +76,18 @@ def validate_project_sources(entrypoint, files, *, file_bytes=None, total_bytes=
     return files
 
 
-def read_bytes(fd, name, limit):
+def read_bytes(fd, name):
     regular(os.stat(name, dir_fd=fd, follow_symlinks=False))
     child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
     with os.fdopen(child, "rb") as stream:
         regular(os.fstat(stream.fileno()))
-        raw = stream.read(limit + 1)
-    if len(raw) > limit:
-        raise DomainError("STRATEGY_SOURCE_SIZE", "File exceeds the service file_bytes budget", 422,
-                          details={"file_bytes": limit})
+        raw = stream.read()
     return raw
 
 
-def descriptor(fd, *, optional=False, file_bytes=None):
+def descriptor(fd, *, optional=False):
     try:
-        raw = read_bytes(fd, PROJECT_DESCRIPTOR, file_bytes or ServicePolicy().file_bytes)
+        raw = read_bytes(fd, PROJECT_DESCRIPTOR)
     except FileNotFoundError:
         if optional:
             return None
@@ -132,10 +129,9 @@ def rename_directory(source_fd, source, target_fd, target, *, exchange=False):
 
 
 class ProjectFiles:
-    def __init__(self, state_root, *, file_bytes=None, total_bytes=None):
+    def __init__(self, state_root, *, total_bytes=None):
         policy = ServicePolicy()
-        self.files = StrategyFiles(state_root, file_bytes=file_bytes)
-        self.file_bytes = self.files.file_bytes
+        self.files = StrategyFiles(state_root)
         self.total_bytes = policy.artifact_bytes if total_bytes is None else total_bytes
         self.root = self.files.root
 
@@ -170,7 +166,7 @@ class ProjectFiles:
                 if not name.endswith(".py"):
                     raise invalid("Project directories may contain only aquant.toml and Python source files")
                 try:
-                    raw = read_bytes(fd, name, self.file_bytes)
+                    raw = read_bytes(fd, name)
                     budget[0] += len(raw)
                     if budget[0] > self.total_bytes:
                         raise DomainError("STRATEGY_PROJECT_SIZE", "Project exceeds the service artifact_bytes budget", 422,
@@ -188,10 +184,10 @@ class ProjectFiles:
         if not members:
             raise invalid("Specify a project directory")
         with self.files.directory(members, project=True, resolved=resolved) as fd:
-            metadata = descriptor(fd, file_bytes=self.file_bytes)
+            metadata = descriptor(fd)
             sources = self._sources(fd)
             validate_project_sources(metadata["entrypoint"], sources,
-                                     file_bytes=self.file_bytes, total_bytes=self.total_bytes)
+                                     total_bytes=self.total_bytes)
         snapshot = {"project_id": metadata["project_id"], "entrypoint": metadata["entrypoint"], "files": sources}
         return {"path": "/".join(resolved), "strategy_id": metadata["project_id"],
                 "entrypoint": metadata["entrypoint"], "files": sources, "revision": digest(snapshot)}
@@ -213,7 +209,7 @@ class ProjectFiles:
                     continue
                 child = open_directory(fd, name)
                 try:
-                    metadata = descriptor(child, optional=True, file_bytes=self.file_bytes)
+                    metadata = descriptor(child, optional=True)
                     if metadata is None:
                         visit(child, [*prefix, name])
                     elif metadata["project_id"] == project_id:
@@ -263,7 +259,7 @@ class ProjectFiles:
                             child = open_directory(current, component, create=True)
                             os.close(current)
                             current = child
-                        atomic(members[-1], source_bytes(source, max_bytes=self.file_bytes),
+                        atomic(members[-1], source_bytes(source),
                                dir_fd=current, overwrite=False)
                     finally:
                         os.close(current)
@@ -286,7 +282,7 @@ class ProjectFiles:
         if not members:
             raise invalid("Specify a new project directory")
         sources = {entrypoint: ""}
-        validate_project_sources(entrypoint, sources, file_bytes=self.file_bytes, total_bytes=self.total_bytes)
+        validate_project_sources(entrypoint, sources, total_bytes=self.total_bytes)
         with operation(path, "create"), self.files.lock(exclusive=True), self.files.directory(
             members[:-1], create_root=True, resolved=resolved,
         ) as parent:
@@ -313,7 +309,7 @@ class ProjectFiles:
         return current
 
     def save(self, path, strategy_id, entrypoint, files, expected_revision):
-        validate_project_sources(entrypoint, files, file_bytes=self.file_bytes, total_bytes=self.total_bytes)
+        validate_project_sources(entrypoint, files, total_bytes=self.total_bytes)
         with operation(path, "save"), self.files.lock(exclusive=True):
             current = self._expected(path, strategy_id, expected_revision)
             members = parts(current["path"])

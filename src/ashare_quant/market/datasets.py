@@ -109,21 +109,12 @@ def validate(document, selection):
 
 
 class Datasets:
-    def __init__(self, root, file_bytes=67108864):
+    def __init__(self, root):
         self.root = root / "portfolio-data"
-        self.file_bytes = file_bytes
 
     def bounded_file(self, path):
-        if Path(path).stat().st_size > self.file_bytes:
-            raise DomainError(
-                "PORTFOLIO_INPUT_RESOURCE_LIMIT",
-                "Export exceeds this service's file_bytes budget",
-                422,
-                details={"file_bytes": self.file_bytes},
-            )
-        raw = regular(path)
-        require(len(raw) <= self.file_bytes, "PORTFOLIO_INPUT_RESOURCE_LIMIT")
-        return raw
+        # Compatibility name; source exports have no unrelated per-file ceiling.
+        return regular(path)
 
     def read(self, dataset_id):
         try:

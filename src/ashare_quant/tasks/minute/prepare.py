@@ -44,7 +44,6 @@ def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20, *, release=N
         "Requested dates need trading days, a previous and a following session",
     )
     if frequency == "1d":
-        require(len(days) <= 126, "PYTHON_SCOPE_LIMIT", "Use at most 126 daily sessions")
         require(
             calendar.index(days[0]) >= warmup_sessions,
             "PYTHON_WARMUP_GAP",
@@ -53,11 +52,6 @@ def scope(pin, ids, start, end, frequency="1m", warmup_sessions=20, *, release=N
         return days, calendar[
             calendar.index(days[0]) - warmup_sessions : calendar.index(days[-1]) + 2
         ]
-    require(
-        len(days) <= 23 and len(days) * len(ids) * 240 <= 20000,
-        "PYTHON_SCOPE_LIMIT",
-        "Use at most 23 sessions and 20000 stock-minutes per local task",
-    )
     return days, calendar[calendar.index(days[0]) - 1 : calendar.index(days[-1]) + 2]
 
 

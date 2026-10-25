@@ -39,8 +39,8 @@ def trade(context):
 
 
 @pytest.mark.parametrize("daily_jobs,delay,status", [({}, 6, "succeeded"),
-                                                     ({"execution_seconds": 2}, 5, "failed")], indirect=["daily_jobs"])
-def test_no_unadvertised_callback_gate_but_actual_attempt_timeout(daily_jobs, delay, status):
+                                                     ({"execution_seconds": 2, "preparation_seconds": 1, "cpu_seconds": 1, "rss_bytes": 1, "output_bytes": 1, "file_bytes": 1, "open_files": 1}, 5, "succeeded")], indirect=["daily_jobs"])
+def test_no_callback_or_elapsed_time_gate_even_with_legacy_configuration(daily_jobs, delay, status):
     app, jobs, body = daily_jobs
     body.update(securities=[], end_date=body["start_date"],
                 source=f"import time\ndef initialize(context): time.sleep({delay})\n")

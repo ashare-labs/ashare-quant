@@ -36,6 +36,7 @@ from ashare_quant.execution.rqalpha.guards import block_rqdata_apis
 from ashare_quant.portfolio.native import Proxy
 from ashare_quant.portfolio.native import Source as DailySource
 from ashare_quant.portfolio.participation import strict_lot_capacity
+from ashare_quant.storage.streams import Journal
 
 runtime = {}
 __config__ = {"priority": 1000}
@@ -349,7 +350,8 @@ class Mod(AbstractMod):
 
             install_budget_account(env)
         if self.jq_lifecycle:
-            self.handle_times = {d: set(handle_clocks(d)) for d in self.data.days}
+            from ashare_quant.tasks.minute.demand import DayValues
+            self.handle_times = DayValues(self.data.days, lambda d: set(handle_clocks(d)))
             env.event_bus.add_listener(EVENT.USER, self.user_clock)
         env.set_data_source(source_class(self))
         env.set_price_board(board_class(self))
@@ -386,6 +388,9 @@ class Mod(AbstractMod):
             EVENT.PRE_BAR: "bar",
             EVENT.PRE_AFTER_TRADING: "after",
         }[event.event_type]
+        progress = getattr(self.data, "progress", None)
+        if progress is not None:
+            progress.update(simulation_date=self.day)
         self.emit("clock", phase=self.phase)
         if getattr(self.data, "demand", False):
             # Retained positions and orders still need today's execution facts,
@@ -458,16 +463,12 @@ class Mod(AbstractMod):
 
     def emit(self, kind, **payload):
         self.seq += 1
-        with (runtime["root"] / "events.jsonl").open("a") as stream:
-            stream.write(
-                json.dumps(
-                    {"seq": self.seq, "at": self.at.isoformat(), "kind": kind, **payload},
-                    ensure_ascii=False,
-                    allow_nan=False,
-                    default=str,
-                )
-                + "\n"
-            )
+        value = {"seq": self.seq, "at": self.at.isoformat(), "kind": kind, **payload}
+        if runtime.get("events") is not None:
+            runtime["events"].append(value)
+        else:
+            with (runtime["root"] / "events.jsonl").open("a") as stream:
+                stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False, default=str) + "\n")
 
     def initialize(self):
         from rqalpha.api import subscribe
@@ -636,6 +637,10 @@ class Mod(AbstractMod):
                     action["security"], POSITION_DIRECTION.LONG
                 ).record(action)
         self.accounts.append({"at": self.at.isoformat(), **self.account()})
+        progress = getattr(self.data, "progress", None)
+        if progress is not None:
+            progress.update(completed_trading_days=len(self.accounts), simulation_date=self.day,
+                            force=len(self.accounts) == len(self.data.days))
 
     def finish(self, event):
         self.refresh_valuation()
@@ -781,7 +786,7 @@ def run_native(root, data, source, config, identity, *, parameters=None, project
     project_loader = FrozenProject(root, project) if project is not None else None
 
     records = []
-    for d in data.days:
+    for d in ([] if config.get("lifecycle") == "jq_minute" else data.days):
         events = [
             ("BEFORE_TRADING", stamp(d + "T09:00:00+08:00")),
             *(("BAR", at) for at in data.clocks[d]),
@@ -795,6 +800,7 @@ def run_native(root, data, source, config, identity, *, parameters=None, project
     runtime.update(
         root=root, data=data, source=source, config=config, identity=identity, records=records,
         parameters=parameters or {}, project_loader=project_loader,
+        events=Journal(root / "events.jsonl.gz") if getattr(data, "demand", False) else None,
     )
     requested = {
         "base": {
@@ -878,6 +884,8 @@ def after_trading(context): runtime["mod"].dispatch("after")
         require(result and result.get("pythonminute"), "MINUTE_NATIVE_COMPLETION_MISSING")
         return result["pythonminute"]
     finally:
+        if runtime.get("events") is not None:
+            runtime["events"].close()
         runtime["project_loader"] = None
         if previous_aquant is None:
             sys.modules.pop("aquant", None)

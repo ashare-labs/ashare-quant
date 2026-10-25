@@ -84,12 +84,13 @@ def test_eleven_year_scope_runs_and_inverted_dates_refuse(tmp_path):
         assert client.post("/api/v1/factors/jobs", json=body | {"history_start": "2025-01-01"}).status_code == 422
 
 
-def test_actual_cell_budget_and_evaluation_minimum_remain_explicit(tmp_path):
+def test_full_panel_above_retired_cell_ceiling_and_evaluation_minimum(tmp_path):
     dates = pd.bdate_range("2024-01-02", periods=21).strftime("%Y-%m-%d").tolist()
     app, body = panel_app(tmp_path, 5000, dates)
     with TestClient(app) as client:
-        result = client.post("/api/v1/factors/jobs", json=body)
-        assert result.status_code == 409 and result.json()["error"]["code"] == "FACTOR_INPUT_LIMIT"
+        result = run(client, app, body)
+        assert len(result["rows"]) == 105000
+        assert result["summary"]["valid_cells"] == 80000
     assert EvaluationOptions(min_assets=100001).min_assets == 100001
     for value in (1, True, 2.5):
         with pytest.raises(ValidationError):
