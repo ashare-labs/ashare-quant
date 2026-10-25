@@ -71,6 +71,8 @@
 
 `POST /api/v1/python/jobs` 的 `securities` 为可选兼容字段，旧客户端提供时仅作为初始订阅；`warmup_sessions` 继续接受以保留旧请求身份，新任务历史不受其值限制。单文件新任务清单为 `python-demand-job.v2`，项目为 `python-project-job.v3`，旧 `python-minute-job.v1` 及已发布结果仍可只读校验。中断的任意 Python 不自动重跑或断点恢复。
 
+`product/config` 仍保留旧 portfolio 的 `warmup_sessions=120`、`preflight_required` 和证券范围说明。当前 Python 工作台不以这些元数据限制历史长度或要求额外预检提交；可执行能力以 `/api/v1/python/catalogue` 和上述任务契约为准。实际查询仍校验所选冻结发布的真实覆盖和业务语义。
+
 `/python/catalogue` 返回环境身份、`external_securities_required=False` 和统一预算。客户端须在提交前保存完整原请求，网络重试复用同一幂等键和环境身份；返回/刷新只读任务，不能自动产生新任务。可信本机代码和回溯模型两项确认仍进入请求；这不是恶意代码沙箱。
 
 `data_availability` 返回冻结发布身份、日历首尾和具备前后交易日的执行日期边界。
