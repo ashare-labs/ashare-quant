@@ -23,9 +23,10 @@ def configured_release(config):
     }
 
 
-def observations(data, security, days, at):
+def observations(data, security, days, at, *, selection_source="strategy"):
     value = {
         "schema": "aq-benchmark-prices.v1", "security": security,
+        "selection_source": selection_source,
         "status": "not_selected" if security is None else "unavailable",
         "price_basis": "published_close_price_return", "base": None, "prices": [],
         "missing_dates": [], "reason": None, "release": None, "receipt": None,

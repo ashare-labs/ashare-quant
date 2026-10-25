@@ -654,7 +654,8 @@ class Mod(AbstractMod):
             )
         from ashare_quant.tasks.minute.benchmark import observations
         benchmark = observations(self.data, self.api.benchmark,
-                                 [row["at"][:10] for row in self.accounts], self.at)
+                                 [row["at"][:10] for row in self.accounts], self.at,
+                                 selection_source=self.api.benchmark_source)
         self.result = {
             "schema": "aq-python-minute-result.v1",
             "identity": runtime["identity"],

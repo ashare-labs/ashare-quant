@@ -67,7 +67,9 @@ def mount(app, store, configuration=None):
             "frequency": "1m",
             "frequencies": ["1m", "1d"],
             "benchmark": {
-                "selection": "set_benchmark_in_initialize",
+                "selection": "default_or_set_benchmark_in_initialize",
+                "default_security": "000300.XSHG",
+                "explicit_none": "set_benchmark(None)",
                 "supplemental_release": benchmark,
                 "price_basis": "published_close_price_return",
                 "missing_reference": "strategy_result_retained; comparison_unavailable",

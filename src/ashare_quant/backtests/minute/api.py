@@ -272,13 +272,16 @@ class API:
         self.context, self.g = Context(host), SimpleNamespace()
         self.universe = list(host.data.ids)
         self.schedules = []
-        self.benchmark = None
+        self.benchmark = "000300.XSHG"
+        self.benchmark_source = "default"
 
     def set_benchmark(self, security):
         require(self.host.phase == "initialize", "AQUANT_BENCHMARK_ONLY_IN_INITIALIZE")
-        require(isinstance(security, str) and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security),
-                "AQUANT_BENCHMARK_SECURITY_REQUIRED:use_one_exchange_qualified_security")
+        require(security is None or isinstance(security, str)
+                and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security),
+                "AQUANT_BENCHMARK_SECURITY_REQUIRED:use_one_exchange_qualified_security_or_None")
         self.benchmark = security
+        self.benchmark_source = "strategy"
         self.host.emit("benchmark_selected", security=security)
 
     def _order_view(self, order):
