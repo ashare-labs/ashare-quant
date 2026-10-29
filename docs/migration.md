@@ -1,6 +1,8 @@
 # 历史目录迁移与当前入口
 
-本页保留旧文档链接，记录目录演变；当前调用契约见[正式研究接口](formal-backend-migration.md)。早期迁移的固定窗口、模板策略和资源门槛不适用于当前 Python 工作台。
+> 历史目录说明。现行文档地图见 [索引](README.md)。部署端口与 quant-web 配对见仓库 README 和 [数据运行](data-runtime.md)。
+
+本页保留旧文档链接，记录目录演变。现行 HTTP 以 [contracts](contracts) 为准。已退役路由的删除记录见 [正式研究接口](formal-backend-migration.md)。早期迁移的固定窗口、模板策略和资源门槛不适用于当前 Python 工作台。
 
 ## 已完成的目录演变
 

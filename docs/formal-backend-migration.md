@@ -1,8 +1,10 @@
 # 正式研究后端与前端迁移
 
+> 历史切换记录。路由删除表仍可用来核对已退役接口。现行本机入口是 ashare-local（API `18839`、Web `41839`）与 quant-web 的配对部署，见 [文档索引](README.md)。文末「切换顺序」只保留当时的改造步骤。
+
 当前研究入口使用可信自定义 Python，固定七策略、固定日频窗口和演练运行入口已退役。后端不登记预设算法，也不随 wheel 安装示例源文件、演练行情或演练执行器。开发回归所需旧算法与合成数据位于 `tests/support`、`tests/fixtures`；产品代码不导入它们。
 
-本页记录当前接口及已退役入口，不作为某台机器的部署状态记录。多文件策略与冻结身份见[策略项目](strategy-projects.md)，账号边缘选择的私人文件空间见[工作空间契约](strategy-workspaces.md)，收益版本与冻结基准派生见[结果分析](result-analysis.md)。安装版本和实际服务身份需在部署时核对。
+本页记录迁移当时的接口对照和已退役入口，不作为某台机器的部署状态记录。多文件策略与冻结身份见[策略项目](strategy-projects.md)，账号边缘选择的私人文件空间见[工作空间契约](strategy-workspaces.md)，收益版本与冻结基准派生见[结果分析](result-analysis.md)。安装版本和实际服务身份需在部署时核对。策略运行以 [Python 工作台](python-workbench.md) 为准。
 
 ## 已移除的接口与入口
 
@@ -66,9 +68,11 @@
 
 保留 10 项研究工具和 3 项因子工具。`daily`、`portfolio` family 仅用于历史查找/状态/日志/结果，取消明确拒绝；自定义日频使用 `python_daily`，不能继续将 `daily` 当新提交入口。能力发现标明只读家族；submit_strategy/submit_factor 仍走原 HTTP、冻结输入、共享 worker 和原生计算。
 
+下列步骤记录迁移当时的前端改造顺序。现行部署以 [文档索引](README.md) 的 ashare-local（API `18839`、Web `41839`）与 quant-web 配对为准。
+
 1. 前端移除七模板和演练菜单/按钮/自动种子；新建策略由用户提供源码与参数，接入 PythonCreate 并显示真实频率限制与确认项。
 2. 新状态页使用 Python/因子详情、日志、结果、取消和共享 service；恢复按钮遵守 can_resume，不能把重新提交描述成断点恢复。
 3. 旧记录页切 `/history`，按只读标记禁用所有运行按钮；paper/runs 留作历史查看。数据工具接真实发布/查询/诊断。
-4. 前后端联合验收后，另行授权停止/备份/切换同配置 API、worker、MCP。不能将此后端单独覆盖当前仍依赖旧接口的 Web。
+4. 前后端联合验收后，另行授权停止/备份/切换同配置 API、worker、MCP。当时替换的是仍调用已退役接口的页面；现行界面是同一清单上的 quant-web。
 
 完整当前契约见 [HTTP OpenAPI](contracts/api.openapi.json)、[任务 OpenAPI](contracts/tasks.openapi.json)、[MCP 工具](contracts/research-mcp.tools.json)。

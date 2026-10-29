@@ -1,6 +1,8 @@
 # Python 策略工作台
 
-策略导入使用 `from aquant import *`、命名导入或 `import aquant as api`；模块由 A宽 worker 绑定。旧入口迁移、安装和历史记录保护见 [aquant 迁移指南](aquant-migration.md)。
+> 现行说明：策略怎么写、怎么提交以本页为准。单文件、项目、工作空间和回测归属是配套契约，地图见 [文档索引](README.md)。
+
+策略导入使用 `from aquant import *`、命名导入或 `import aquant as api`；模块由 A宽 worker 绑定。已保存文件的导入改写见 [aquant 迁移工具](aquant-migration.md)。
 
 提交当前 Python 源码、频率、日期、资金和参数即可创建研究任务。证券、字段和历史长度由策略在 API 调用中提出；新任务不要求另交证券池或预热天数。任务接受时固定发布身份和源码，运行时按实际需求读取同一发布，最后将查询回执与结果绑定。源码和 `initialize` 只执行一次，不做静态依赖猜测或预执行收集。
 

@@ -47,11 +47,11 @@ python -m ashare_quant.deployment --deployment /data/product/deployment.json tas
 python -m ashare_quant.deployment --deployment /data/product/deployment.json paper
 ```
 
-API 和任务 worker 共用同一 `control_db`，paper 使用同一清单的 `paper_root`。默认端口分别为 `18839`、`18818`。`commands` 输出 Web 所需 `FRONTEND_PORT=41839`、`ASHARE_API_URL` 和 `ASHARE_PAPER_URL`，在 quant-web 目录按其说明启动。命令不安装自启，不连接券商，也不采集数据。
+API 和任务 worker 共用同一 `control_db`，paper 使用同一清单的 `paper_root`。正式本机入口 ashare-local 与 quant-web 配对，默认端口是 API `18839`、paper `18818`、Web `41839`。候选或隔离验收清单里的其他端口不是这个正式入口。`commands` 输出该清单上的 `FRONTEND_PORT`、`ASHARE_API_URL` 和 `ASHARE_PAPER_URL`，在 quant-web 目录按其说明启动。命令不安装自启，不连接券商，也不采集数据。
 
 旧 `ashare-quant` / `python -m ashare_quant.cli` 命令选择清单后也使用同一状态、端口和完整备份入口。显式 `--db` 与清单冲突时拒绝；未选清单时，涉及状态的旧命令必须明确提供 `--db` 或 `ASHARE_QUANT_DB`，不会在当前目录另建默认库。
 
-通用 product API 支持真实证券目录、日期及参考集合选择，先检查覆盖再发布。当前 Web 的组合页面尚待迁移，不能把旧页面接到此候选直接运行。发布保留真实来源、交易状态、派生价限与独立公司行动计划，需确认页面展示的回溯研究模型。缺证会明确拒绝；用户可另外选择 `price_only_no_limits` 价格诊断，但它不承担经济回测语义，已有公司行动计划也不能在任务中被剥离。缺行情或预热数据始终拒绝执行。
+通用 product API 支持真实证券目录、日期及参考集合选择，先检查覆盖再发布。正式界面是同一清单上的 quant-web。已退役的组合页面不再接到本 API；旧结果走 `/history`。发布保留真实来源、交易状态、派生价限与独立公司行动计划，需确认页面展示的回溯研究模型。缺证会明确拒绝；用户可另外选择 `price_only_no_limits` 价格诊断，但它不承担经济回测语义，已有公司行动计划也不能在任务中被剥离。缺行情或预热数据始终拒绝执行。
 
 ## 发布繁忙时重试
 

@@ -1,5 +1,7 @@
 # aquant 策略入口迁移
 
+> 导入改写工具。策略运行与提交以 [Python 策略工作台](python-workbench.md) 为准。本页说明已保存文件从 `jqdata` 改为 `aquant` 的准备、审核和应用。部署配对见 [文档索引](README.md)。
+
 策略运行 API 现名为 `aquant`。日频和分钟使用同一入口：
 
 ```python

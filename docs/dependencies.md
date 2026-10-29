@@ -12,7 +12,7 @@
 | `src/ashare_quant/runtime-lock.json` | 核心运行时版本快照；产品验证实际安装版本及恢复身份 | 锁定环境运行 `python scripts/freeze_runtime.py` |
 | `src/ashare_quant/native-runtime-lock.json` | 原生运行时版本快照；native 执行准入使用 | 同一环境运行 `python scripts/freeze_runtime.py --native` |
 | `src/ashare_quant/lock.sha256` | `uv.lock` 的摘要；运行清单及恢复准入使用 | 上述生成器同时更新，不能手填 |
-| `src/ashare_quant/providers/data-runtime.json` | 唯一 AD 的提交、wheel 和安装代码身份；不是另一套解析结果 | 按 [开发指南](development.md) 配对并运行 pin_data_runtime.py |
+| `src/ashare_quant/providers/data-runtime.json` | 唯一 AD 的提交、wheel 和安装代码身份；不是另一套解析结果。wheel pin 与 `unpublished_candidate` 由 AD 流水线写入，文档不另定版本 | 按 [开发指南](development.md)，由 AD 流水线配对并运行 pin_data_runtime.py |
 
 两个 runtime JSON 是从锁定安装环境得到的验收快照，不是安装输入。生成器核对安装版本等于 uv.lock 后才输出；加 `--check` 会只读验证快照，漂移时失败。core/native 快照不可合并：核心安装不要求 RQAlpha，原生执行需要验证完整 native 依赖。native extra 的显式约束还进入 wheel 元数据，限定已支持的原生环境，保留这些声明。
 

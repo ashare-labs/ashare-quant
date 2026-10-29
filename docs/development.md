@@ -18,6 +18,6 @@ uv build
 
 契约生成不启动服务，只使用临时库和空 paper 根。api/tasks/paper 三份 OpenAPI 与 identity.json 是前端对接来源；MCP 工具契约由 `scripts/export_mcp.py` 生成。最终提交前重生成并核对源码身份和 schema，不手工修改 JSON。脚本职责与执行顺序见[脚本指南](../scripts/README.md)。
 
-依赖的声明、唯一锁文件、运行时快照和按需导出各有独立职责，见 [依赖指南](dependencies.md)。更新依赖时先改 pyproject 的约束；若更新 AD，再用 scripts/stage_owner.py 从明确源码构建 wheel、scripts/pin_data_runtime.py 固定真实身份。运行 `uv lock`、`uv sync --locked --extra native` 后，分别运行 `python scripts/freeze_runtime.py` 和 `python scripts/freeze_runtime.py --native` 生成快照，再用上面的 `--check` 命令核对。没有依赖变化时不重建锁或快照。
+依赖的声明、唯一锁文件、运行时快照和按需导出各有独立职责，见 [依赖指南](dependencies.md)。更新依赖时先改 pyproject 的约束。若更新 AD，由 AD 流水线用 scripts/stage_owner.py 从明确源码构建 wheel，并用 scripts/pin_data_runtime.py 写入真实身份；wheel pin 与 `unpublished_candidate` 以该流水线产出为准，文档不另定版本。运行 `uv lock`、`uv sync --locked --extra native` 后，分别运行 `python scripts/freeze_runtime.py` 和 `python scripts/freeze_runtime.py --native` 生成快照，再用上面的 `--check` 命令核对。没有依赖变化时不重建锁或快照。
 
 依赖锁及运行时快照参与源码和恢复身份；它们改变时重生成契约并交接新的 identity，不覆盖旧账户。仓内没有 CI 配置；以上检查是本地验收入口，`verify_wheel.py` 也在干净安装中执行两种快照检查。不得同时装旧 AD 核心和另一套读端。回放、审计统一 scripts，输出写明确新目录。

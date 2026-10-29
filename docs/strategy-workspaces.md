@@ -1,5 +1,7 @@
 # 策略存储工作空间
 
+> 现行契约：`X-Quant-Workspace`。工作台行为见 [Python 策略工作台](python-workbench.md)，地图见 [文档索引](README.md)。
+
 供同机可信产品服务使用的存储命名空间，不包含账号业务，不是 Python 沙箱。AQ HTTP 和 stdio MCP 仍属于可信本机所有者；不要把这个标识当成用户凭据，也不要向朋友直接暴露引擎入口。
 
 `GET /api/v1/python/workspace-capabilities` 返回 `aq.strategy-workspaces.v1`。产品服务必须先检查该契约，旧引擎可能忽略未知 Header，不能降级到全局目录。
