@@ -8,11 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.paper.api import create_app
+from ashare_quant.paper.errors import error_value
 from ashare_quant.paper.replay import advance, bind, build, close_for
 from ashare_quant.paper.service import PaperService
 from ashare_quant.portfolio.signals import decide
 from ashare_quant.storage.artifacts import digest
-from tests.support.paper_api import create_app
 from tests.support.portfolio_reference import generate
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -136,29 +137,26 @@ def test_http_cannot_replace_bound_receipt_or_close(tmp_path):
     d, inputs = build(service, sid, "2020-02-03", None)
     altered = d.model_dump(mode="json")
     altered["targets"]["000001.XSHE"] += 100
+    with pytest.raises(DomainError) as receipt_err:
+        service.prepare(sid, altered)
+    assert receipt_err.value.code == "PAPER_STRATEGY_RECEIPT_CHANGED"
+    intent = service.prepare(sid, d)["intent_id"]
+    _, cfg = service.session(sid)
+    close = close_for(cfg, d, inputs, intent).model_dump(mode="json")
+    close["rows"][0]["close"] = "10.01"
+    with pytest.raises(DomainError) as close_err:
+        service.seal_close(sid, close)
+    assert close_err.value.code == "PAPER_REPLAY_CLOSE_CHANGED"
+    first = advance(service, sid, "2020-02-03", None)
+    assert advance(service, sid, "2020-02-03", None) == first
     with TestClient(create_app(service.root)) as api:
         base = f"/api/v1/paper/sessions/{sid}"
         assert api.get("/api/v1/paper/sessions").json()["sessions"][0]["id"] == sid
-        assert (
-            api.post(base + "/decisions", json=altered).json()["error"]["code"]
-            == "PAPER_STRATEGY_RECEIPT_CHANGED"
-        )
-        intent = api.post(base + "/decisions", json=d.model_dump(mode="json")).json()["intent_id"]
-        _, cfg = service.session(sid)
-        close = close_for(cfg, d, inputs, intent).model_dump(mode="json")
-        close["rows"][0]["close"] = "10.01"
-        assert (
-            api.post(base + "/closes", json=close).json()["error"]["code"]
-            == "PAPER_REPLAY_CLOSE_CHANGED"
-        )
-        payload = {"day": "2020-02-03", "expected_parent": None, "reason": "local acceptance"}
-        first = api.post(base + "/advance", json=payload)
-        assert first.status_code == 200, first.text
-        assert api.post(base + "/advance", json=payload).json() == first.json()
-        view = api.get(base + "/view").json()
+        view_res = api.get(base + "/view")
+        view = view_res.json()
         assert view["report"]["checkpoint_sha256"] == view["head"]
         assert view["continuous_paper_accepted"] is False
-        assert first.headers["cache-control"] == "no-store"
+        assert view_res.headers["cache-control"] == "no-store"
 
 
 def test_binding_tamper_hides_results_and_prevents_execution(tmp_path):
@@ -271,7 +269,8 @@ def test_data_failures_return_readable_api_actions_without_writes(tmp_path, scen
         sid = service.create(cfg)["id"]
         payload = decision(cfg, 0, (100, 100))
         payload["rows"][0]["selected_watermark"] = "2023-12-29"
-        suffix = "/decisions"
+        with pytest.raises(DomainError) as rejected:
+            service.prepare(sid, payload)
     else:
 
         def change(doc):
@@ -294,13 +293,11 @@ def test_data_failures_return_readable_api_actions_without_writes(tmp_path, scen
                 ]
 
         service, sid = bound(tmp_path, change=change)
-        payload = {"day": "2020-02-03", "expected_parent": None, "reason": "readable gate check"}
-        suffix = "/advance"
-    with TestClient(create_app(service.root)) as api:
-        response = api.post(f"/api/v1/paper/sessions/{sid}" + suffix, json=payload)
-        assert response.status_code == 409
-        error = response.json()["error"]
-        assert error["code"] == code and text in error["message"]
-        assert error["next_action"] and error["retryable"] is False
+        with pytest.raises(DomainError) as rejected:
+            advance(service, sid, "2020-02-03", None)
+    assert rejected.value.status == 409
+    error = error_value(rejected.value)
+    assert error["code"] == code and text in error["message"]
+    assert error["next_action"] and error["retryable"] is False
     status = service.status(sid)
     assert status["session"]["head"] is None and not status["days"]

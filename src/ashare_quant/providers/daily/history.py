@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ashare_data import DataError, Store
 from ashare_data.core.model import digest
-from ashare_data.providers.cmes_factors import CMESFactorView
+from ashare_data.providers.cmes import CMESFactorView
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import atomic, regular, require, sha

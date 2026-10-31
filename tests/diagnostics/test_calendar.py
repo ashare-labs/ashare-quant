@@ -15,7 +15,7 @@ from ashare_quant.api import create_app
 from ashare_quant.contracts import DomainError
 from ashare_quant.diagnostics.contracts import DiagnosticQuery
 from ashare_quant.diagnostics.service import Diagnostics
-from tests.support.legacy_provider.owner_wire import verify_runtime
+from ashare_quant.providers.runtime import verify as verify_runtime
 
 
 @pytest.fixture(scope="module")

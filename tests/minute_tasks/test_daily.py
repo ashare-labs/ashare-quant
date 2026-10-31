@@ -232,7 +232,7 @@ def test_daily_adjusted_history_uses_frozen_owner_snapshot(
     daily_jobs, tmp_path, monkeypatch, frequency,
 ):
     from ashare_data import Store
-    from ashare_data.providers.cmes_factors import import_cmes_factors
+    from ashare_data.providers.cmes import import_cmes_factors
 
     from ashare_quant.providers.daily.history import configured_factors
 

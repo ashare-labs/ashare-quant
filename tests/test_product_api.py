@@ -13,9 +13,9 @@ from ashare_quant.api import create_app
 from ashare_quant.contracts import DataQuery, DomainError
 from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
+from ashare_quant.market.contracts import PortfolioDataset
 from ashare_quant.market.reader import DailyResearchRow, ResearchCoverageQuery, ResearchQuery
 from ashare_quant.product import publication, service
-from tests.support.portfolio.contracts import PortfolioDataset
 
 P = "/api/v1/product"
 SELECTION = {

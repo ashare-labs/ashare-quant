@@ -15,12 +15,13 @@ from fastapi.testclient import TestClient
 
 import ashare_quant.storage.compatibility as database_compat
 import ashare_quant.storage.lifecycle as database_lifecycle
+from ashare_quant.api import create_app
 from ashare_quant.cli import main
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.store import Store
+from ashare_quant.tasks.executor import Configuration
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.repository import Repository
-from tests.support.app import create_app
 
 
 def inventory(root):
@@ -111,15 +112,13 @@ def test_reopen_with_fixed_policy_never_opens_original_sqlite(tmp_path, monkeypa
 
 
 def test_policy_override_does_not_write_database_or_sidecars(tmp_path):
-    from tests.support.daily.executor import Configuration
-
     path = tmp_path / "control.sqlite3"
     create_app(str(path))
     before = inventory(tmp_path)
     app = create_app(str(path), daily_tasks_configuration=Configuration(None, ServicePolicy(max_workers=2)))
     with TestClient(app) as client:
         assert client.get("/api/v1/health").status_code == 200
-        assert app.state.daily_tasks.repo.policy.max_workers == 2
+        assert app.state.tasks.repo.policy.max_workers == 2
     assert inventory(tmp_path) == before
 
 

@@ -41,7 +41,8 @@ from ashare_quant.storage.errors import storage_error
 from ashare_quant.storage.store import Store
 
 
-def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None, factor_sources=None, trusted_browser_origins=()) -> FastAPI:
+def create_app(db_path: str | None = None, market_stores: dict[str, str] | None = None, daily_tasks_configuration=None, diagnostics_configuration=None, product_configuration=None, factor_sources=None, trusted_browser_origins=(), tasks_configuration=None) -> FastAPI:
+    tasks_configuration = tasks_configuration if tasks_configuration is not None else daily_tasks_configuration
     app = FastAPI(title="A宽 backend", version=__version__,
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None,
                   responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse},
@@ -71,14 +72,14 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
                     "Start the API and task worker with the same deployment state database", 409,
                 )
             require_initialized(product_configuration)
-            if daily_tasks_configuration is None:
+            if tasks_configuration is None:
                 from ashare_quant.tasks.policy import ServicePolicy
-                daily_tasks_configuration = Configuration(product_configuration.owner_store_root,
-                                                          ServicePolicy.environment())
+                tasks_configuration = Configuration(product_configuration.owner_store_root,
+                                                    ServicePolicy.environment())
         store = Store(db_path or os.getenv("ASHARE_QUANT_DB", ".state/control.sqlite3"))
         from ashare_quant.tasks.service import Jobs
 
-        jobs = Jobs(store, daily_tasks_configuration)
+        jobs = Jobs(store, tasks_configuration)
     except (DomainError, OSError, sqlite3.Error) as exc:
         error = exc if isinstance(exc, DomainError) else storage_error(exc)
         app.state.database_error = error.body()
@@ -98,9 +99,9 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     from ashare_quant.product.api import mount as mount_product
     mount_product(app, store, product_configuration)
     from ashare_quant.tasks.minute.api import mount as mount_python
-    mount_python(app, store, daily_tasks_configuration)
+    mount_python(app, store, tasks_configuration)
     from ashare_quant.tasks.factors.api import mount as mount_factors
-    mount_factors(app, store, daily_tasks_configuration, factor_sources)
+    mount_factors(app, store, tasks_configuration, factor_sources)
     from ashare_quant.diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
     roots = dict(market_stores) if market_stores is not None else json.loads(os.getenv("ASHARE_QUANT_MARKET_STORES", "{}"))

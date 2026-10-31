@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from ashare_quant.contracts import Account, CorporateActionFact, DataQuery, EngineStep, Position
-from tests.support.synthetic.replay import fixture_bytes, specifications
 
 
 @pytest.mark.parametrize("cash", [100, 100.0, "NaN", "Infinity", "-1", "1e3", "01.00"])
@@ -51,9 +50,20 @@ def test_data_clock_pool_and_extra_fields_fail_closed(override):
 
 
 def test_trade_day_uses_shanghai_not_utc():
-    import json
-    event = json.loads(fixture_bytes("buy_hold"))[0]
-    event.update(logical_at="2026-09-27T17:00:00Z", trading_day="2026-09-28")
+    event = {
+        "logical_at": "2026-09-27T17:00:00Z",
+        "trading_day": "2026-09-28",
+        "kind": "open",
+        "account": {
+            "cash": "10000.00",
+            "frozen_cash": "0.00",
+            "equity": "10000.00",
+            "positions": [],
+        },
+        "message": "Synthetic session starts",
+        "checkpoint": {},
+        "sequence": 1,
+    }
     assert EngineStep(**event).trading_day == date(2026, 9, 28)
     event["trading_day"] = "2026-09-27"
     with pytest.raises(ValidationError):
@@ -61,5 +71,15 @@ def test_trade_day_uses_shanghai_not_utc():
 
 
 def test_company_action_fact_has_separate_record_ex_pay_dates():
-    fact = CorporateActionFact(**specifications()["corporate_action"]["company_action_fact"])
+    fact = CorporateActionFact(
+        action_id="dividend-1",
+        dataset_id="synthetic:corporate_action:v1",
+        security="600000.XSHG",
+        available_at="2026-09-28T08:00:00+08:00",
+        record_date="2026-09-28",
+        ex_date="2026-09-29",
+        pay_date="2026-09-30",
+        cash_per_share="1.00",
+        source_reference="synthetic manual declaration; production facts must come from A数达",
+    )
     assert fact.record_date < fact.ex_date < fact.pay_date

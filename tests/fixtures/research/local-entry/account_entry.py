@@ -132,7 +132,7 @@ def run_api(root):
     from ashare_quant.api import create_app
     from ashare_quant.deployment import resolve
     from ashare_quant.deployment.runtime import deployment_lock, require_initialized
-    from tests.support.daily.executor import Configuration
+    from ashare_quant.tasks.executor import Configuration
 
     config = resolve(Path(root) / "deployment.json", "product")
     require_initialized(config)

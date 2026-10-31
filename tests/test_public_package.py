@@ -5,7 +5,7 @@ from importlib.metadata import version
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
-from tests.support.legacy_provider.owner_wire import source_pin
+from ashare_quant.providers.runtime import pin as source_pin
 
 
 def test_owner_identity_is_public_source_not_private_receipt():

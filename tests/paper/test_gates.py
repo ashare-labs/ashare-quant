@@ -2,12 +2,13 @@ from copy import deepcopy
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.paper.api import create_app
 from ashare_quant.paper.contracts import SessionConfig
 from ashare_quant.paper.service import PaperService
 from tests.paper.fixtures import DATES, close, config, decision, queue
-from tests.support.paper_api import create_app
 
 
 @pytest.mark.parametrize(
@@ -103,21 +104,20 @@ def test_risk_failure_stops_native_before_order(tmp_path, limits, targets, code)
 
 def test_local_api_boundaries_pause_and_failed_report(tmp_path):
     with TestClient(create_app(tmp_path)) as api:
-        caps = api.get("/api/v1/paper/capabilities").json()
-        assert caps["observed_data_enabled"] is False
-        assert caps["continuous_paper_accepted"] is False
+        caps_res = api.get("/api/v1/paper/capabilities")
+        caps = caps_res.json()
+        assert caps["read_only"] is True
+        assert caps["execution_permission"] is False
+        assert caps_res.headers["cache-control"] == "no-store"
+        service = api.app.state.paper
         session = config(tmp_path.name)
-        created = api.post("/api/v1/paper/sessions", json=session.model_dump(mode="json"))
-        assert created.status_code == 201
-        sid = created.json()["session_id"]
-        action = {"reason": "controlled pause", "expected_parent": None}
-        assert api.post(f"/api/v1/paper/sessions/{sid}/pause", json=action).status_code == 200
-        response = api.post(
-            f"/api/v1/paper/sessions/{sid}/decisions", json=decision(session, 0, (0, 0))
-        )
-        assert response.status_code == 409 and response.json()["error"]["code"] == "PAPER_PAUSED"
-        assert api.post(f"/api/v1/paper/sessions/{sid}/resume", json=action).status_code == 200
-        assert response.headers["cache-control"] == "no-store"
+        sid = service.create(session)["id"]
+        service.control(sid, "pause", None, "controlled pause")
+        with pytest.raises(DomainError) as paused:
+            service.prepare(sid, decision(session, 0, (0, 0)))
+        assert paused.value.status == 409 and paused.value.code == "PAPER_PAUSED"
+        service.control(sid, "resume", None, "controlled pause")
         cfg = session.model_dump(mode="json")
         cfg["data_mode"] = "observed"
-        assert api.post("/api/v1/paper/sessions", json=cfg).status_code == 422
+        with pytest.raises(ValidationError):
+            SessionConfig.model_validate(cfg)

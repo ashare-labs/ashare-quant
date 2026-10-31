@@ -24,7 +24,7 @@ def source_basis(spec, payload):
 
 
 def market_labels(raw, spec, request):
-    from ashare_data.providers.cmes_factors import CMESFactorView
+    from ashare_data.providers.cmes import CMESFactorView
 
     binding = spec.get("cmes_factors")
     require(

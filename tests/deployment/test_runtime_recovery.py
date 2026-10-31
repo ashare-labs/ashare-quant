@@ -6,22 +6,34 @@ import sqlite3
 import subprocess
 import sys
 from contextlib import closing
+from importlib.resources import files
 
 import pytest
 
-from ashare_quant.contracts import DomainError, RunCreate, StrategyCreate
+from ashare_quant import __version__
+from ashare_quant.contracts import (
+    DataAdmission,
+    DomainError,
+    EngineIdentity,
+    EngineStep,
+    Manifest,
+    RunCreate,
+    StrategyCreate,
+    StrategyVersion,
+)
+from ashare_quant.data import ASHARE_COMMIT, ASHARE_TREE, ASHARE_VERSION, RQALPHA_COMMIT
 from ashare_quant.deployment import resolve
 from ashare_quant.deployment.backup import create_backup, restore_backup, verify_backup
 from ashare_quant.deployment.runtime import commands, deployment_lock, doctor, initialize
+from ashare_quant.identity import source_inventory, source_sha256
 from ashare_quant.paper.service import PaperService
+from ashare_quant.runtime import runtime_fingerprint
 from ashare_quant.storage.artifacts import lock
-from ashare_quant.storage.store import Store
+from ashare_quant.storage.store import Store, digest, now
 from ashare_quant.strategies.files import StrategyFiles
 from tests.paper.fixtures import config as paper_config
 from tests.paper.fixtures import queue
 from tests.paper.test_recovery import economics
-from tests.support.synthetic.service import Service
-from tests.support.synthetic.worker import work_one
 
 
 def manifest(tmp_path):
@@ -63,9 +75,94 @@ def deployment(tmp_path):
 
 def queued(config, key="restored-pending"):
     store = Store(config.control_db)
-    service = Service(store)
-    strategy = service.register_strategy(StrategyCreate(name="recovery", scenario="buy_hold"))
-    return service.submit(RunCreate(strategy_version_id=strategy.version_id, idempotency_key=key))
+    definition = StrategyCreate(name="recovery", scenario="buy_hold")
+    spec = {"parameters": {"initial_cash": "10000.00", "security": "600000.XSHG", "quantity": 100}}
+    strategy = store.put_strategy(
+        StrategyVersion(
+            version_id=digest({"definition": definition.model_dump(mode="json"), "specification": spec}),
+            definition=definition,
+            parameters=spec["parameters"],
+            source_sha256=digest(spec),
+            created_at=now(),
+            execution_status="specification_only",
+        )
+    )
+    request = RunCreate(strategy_version_id=strategy.version_id, idempotency_key=key)
+    manifest = Manifest(
+        backend_version=__version__,
+        backend_source_sha256=source_sha256(),
+        request=request,
+        strategy=strategy,
+        engine=EngineIdentity(engine_id="fixture-replay-v1", version="1", source_commit=None, is_test_double=True),
+        fixture_sha256=digest(spec),
+        fixture_spec_sha256=digest(spec),
+        dependency_lock_sha256=files("ashare_quant").joinpath("lock.sha256").read_text().strip(),
+        runtime_versions=runtime_fingerprint(),
+        implementation_files=source_inventory(),
+        native_runtime={},
+        candidate_data_version=ASHARE_VERSION,
+        candidate_data_commit=ASHARE_COMMIT,
+        candidate_data_tree=ASHARE_TREE,
+        candidate_engine_commit=RQALPHA_COMMIT,
+        data=DataAdmission(
+            dataset_id="synthetic:fixture-replay-v1:buy_hold:v1",
+            manifest_sha256=digest(spec),
+            evidence_kind="synthetic",
+            quality="unknown",
+            quality_reference="manual synthetic specification; not an A数达 data attestation",
+            point_in_time_verified=False,
+            requirements_met=False,
+            limitations=("Not real market data", "No A数达 admission", "No real paper admission"),
+        ),
+        created_at=now(),
+        risk_profile="fixture-only-no-real-orders",
+        execution_semantics="scripted_projection_replay",
+        real_strategy_executed=False,
+    )
+    return store.create_run(manifest)
+
+
+def work_one(store: Store, run_id: str):
+    claim = store.claim(run_id)
+    assert claim is not None
+    claimed_id, token, _ = claim
+    step = EngineStep.model_validate(
+        {
+            "logical_at": "2026-09-28T09:31:00+08:00",
+            "trading_day": "2026-09-28",
+            "kind": "fill",
+            "account": {
+                "cash": "9000.00",
+                "frozen_cash": "0.00",
+                "equity": "10000.00",
+                "positions": [{"security": "600000.XSHG", "quantity": 100, "sellable": 0}],
+            },
+            "message": "Scripted buy 100 at 10",
+            "checkpoint": {"next_index": 1},
+            "order": {
+                "order_id": "buy-1",
+                "security": "600000.XSHG",
+                "side": "buy",
+                "quantity": 100,
+                "filled": 100,
+                "status": "filled",
+                "limit_price": "10.00",
+                "reason": None,
+            },
+            "fill": {
+                "fill_id": "fill-1",
+                "order_id": "buy-1",
+                "security": "600000.XSHG",
+                "side": "buy",
+                "quantity": 100,
+                "price": "10.00",
+                "fee": "0.00",
+            },
+            "sequence": 1,
+        }
+    )
+    store.commit_step(claimed_id, token, step)
+    store.finish(claimed_id, token)
 
 
 def test_doctor_and_commands_are_read_only_and_share_profile(tmp_path, monkeypatch):

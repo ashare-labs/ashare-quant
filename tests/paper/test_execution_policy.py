@@ -6,12 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.paper.api import create_app
 from ashare_quant.paper.contracts import SessionConfig
+from ashare_quant.paper.replay import advance, bind, load
 from ashare_quant.paper.risk import profiles
 from ashare_quant.paper.service import PaperService
 from tests.paper.fixtures import close, config, decision, queue
 from tests.paper.test_replay import bound
-from tests.support.paper_api import create_app
 
 
 def policy_config(account):
@@ -36,25 +37,37 @@ def test_policy_profile_and_public_fork_do_not_mutate_old_account(tmp_path):
     old = service.status(sid)
     with TestClient(create_app(service.root)) as api:
         risk = api.get("/api/v1/paper/risk-profiles").json()["target_then_native_cash_v1"]
-        response = api.post(
-            f"/api/v1/paper/sessions/{sid}/fork", json={"account_id": "review-new", "risk": risk}
-        )
-        assert response.status_code == 201
-        target = response.json()["session_id"]
-        assert target != sid
-        assert (
-            api.post(
-                f"/api/v1/paper/sessions/{sid}/fork",
-                json={"account_id": "review-new", "risk": risk},
-            ).json()["session_id"]
-            == target
-        )
-        result = api.post(
-            f"/api/v1/paper/sessions/{target}/advance",
-            json={"day": "2020-02-03", "expected_parent": None, "reason": "explicit simulation"},
-        ).json()
-        assert len(result["native"]["trades"]) == 8
-        assert result["native"]["refusals"] == []
+    _, cfg = service.session(sid)
+    binding, _ = load(service, sid, cfg)
+    directory = service.root / sid / "replay"
+    forked = bind(
+        service,
+        directory / "manifest.json",
+        directory / "input.json",
+        cfg.strategy_id,
+        binding["window"]["id"],
+        "review-new",
+        accept_model=binding["accept_owner_state_model"],
+        risk=risk,
+        cash_dividend_policy=cfg.cash_dividend_policy,
+    )
+    target = forked["session_id"]
+    assert target != sid
+    repeated = bind(
+        service,
+        directory / "manifest.json",
+        directory / "input.json",
+        cfg.strategy_id,
+        binding["window"]["id"],
+        "review-new",
+        accept_model=binding["accept_owner_state_model"],
+        risk=risk,
+        cash_dividend_policy=cfg.cash_dividend_policy,
+    )
+    assert repeated["session_id"] == target
+    result = advance(service, target, "2020-02-03", None)
+    assert len(result["native"]["trades"]) == 8
+    assert result["native"]["refusals"] == []
     assert service.status(sid) == old
 
 
