@@ -1,64 +1,19 @@
-# Source use in bounded minute research
+# 受控分钟研究中的来源使用规则
 
-`accept_research=True` permits the explicitly declared retrospective profile;
-it never overrides a source-bound row denial. It does not certify real fills,
-historical availability, all securities or arbitrary held-position lifecycles.
-The reader's legacy constant permission booleans mean no reader-issued grant.
+`accept_research=True` 仅允许显式声明的回溯研究模式，绝不会覆盖来源绑定的行级拒绝裁定，也不背书真实成交、历史可得性、全市场证券覆盖或任意持仓生命周期。读取器保留的旧版常量权限布尔值仅代表读取器自身不签发成交许可。
 
-AD exports `minute-row-use.v1` with separate `execution` and `fresh_valuation`
-decisions: `deny` or `not_granted`. AQ recomputes the decision from the immutable
-AD row and checks its source contract/row hashes and native identity/values.
-Legacy exports containing a nested native observation are checked too. A
-top-level policy cannot weaken a nested invalid/conflict decision.
+AD 导出的 `minute-row-use.v1` 对 `execution`（撮合成交）与 `fresh_valuation`（最新估值）分别给出独立裁定：`deny` 或 `not_granted`。AQ 会根据不可变的 AD 行数据重新计算裁定，并校验来源契约哈希、行哈希以及原生标识与数值；包含嵌套原生观测记录的旧版导出同样接受校验。顶层策略不得弱化嵌套层级的 `invalid` 或 `conflict` 拒绝裁定。
 
-Explicit invalid/conflict prices deny matching and fresh marking at that exact
-label. Hard activity defects deny execution. Conditional amount/VWAP/extrema
-diagnostics do not deny prices or create a whole-library lock. They depend on
-same-interval/trade-set, exact units and quantity/amount assumptions that a
-reference provider can also violate. Mathematical compatibility is not a grant.
+显式标记为无效（`price_invalid`）或冲突（`price_conflict`）的价格会在对应时间标签处拒绝撮合与最新估值；硬性成交活动缺陷会拒绝撮合执行。条件性的成交额/VWAP/极值诊断不会直接封禁价格或锁定整库——此类诊断依赖于同区间成交集合、精确单位及量价假设（参考数据源同样可能违反这些假设），数学相容性本身也不构成许可。
 
-The normal default requires a complete declared grid. An exporter may explicitly
-select `gap_policy="explicit_unavailable"` for a partial snapshot. It emits no
-fabricated OHLC: each unavailable slot has the snapshot coverage report and its
-hash. AQ requires the exact union of observed bars and bound unavailable slots;
-dropping a bar without its gap evidence still rejects the input. These slots
-describe missing quotes in the selected materialization, not proved lost trades,
-halts, listing status, or an authoritative historical universe. Unknown calendar
-and unresolved source selection cannot be hidden under this policy.
+常规默认模式要求完整声明的分钟网格。导出端可显式选择 `gap_policy="explicit_unavailable"` 以导出部分快照：该模式不伪造 OHLC，每个不可用时间槽均附带快照覆盖报告及其哈希。AQ 要求观测到的分钟柱与绑定不可用槽的精确并集；丢弃分钟柱而不提供对应缺失证据仍会被拒绝。这些不可用槽仅描述所选物化快照中的缺失报价，并不证明真实漏单、停牌、上市状态或权威历史股票池；未知交易日历与未解析的来源选择不得借此策略隐藏。
 
-Strategy minute history (`attribute_history`, `history`, `get_bars`, minute
-`get_price`) counts these declared missing slots in its requested window. It
-returns `NaN` at the original index instead of fetching an older quote to replace
-the missing position. A source-bound `price_invalid` denial similarly makes the
-whole quote unavailable to strategy history. A `price_conflict` denial alone
-retains its observed values and its existing execution/valuation restrictions.
-No interpolation, zero fill or forward fill is performed. DataFrame
-`attrs["unavailable_minutes"]` and the `history_read` event preserve security,
-source label and reason; array outputs retain the positions/NaNs and their
-history event. `include_now` and past end-time bounds still apply to labels.
+策略分钟历史接口（`attribute_history`、`history`、`get_bars`、分钟级 `get_price`）会在请求窗口内统计这些已声明的缺失槽，并在原时间索引处返回 `NaN`，而不会用更早的报价填充缺失位置。来源绑定的 `price_invalid` 拒绝同样会使整条报价在策略历史中不可用；单纯的 `price_conflict` 拒绝则保留观测值及其既有的成交/估值限制。系统不执行插值、零值填充或前向填充。DataFrame 的 `attrs["unavailable_minutes"]` 与 `history_read` 事件会保留证券代码、来源标签与不可用原因；数组输出同样保留对应位置、`NaN` 及历史读取事件。`include_now` 与历史截止时间边界仍按标签正常生效。
 
-These history placeholders are never added to the matcher's bar collection.
-The AD local product JSON and this source-bound research input remain separate
-contracts; this change does not introduce an automatic conversion between them.
+上述历史占位符绝不会加入撮合器的分钟柱集合。AD 本地产品 JSON 与该来源绑定的研究输入属于两套独立契约，二者之间不做自动转换。
 
-During a denied/missing minute, the matcher refuses the quote before determining
-a deal price or capacity. An outstanding order can match at a later usable bar
-under the existing order lifetime, price, cash, capacity and T+1 rules. The
-native account retains quantity; its previous usable price is a **stale account
-mark**, never a fresh quote or a fill price. Position `.valuation` and
-`get_current_data()[security].valuation` expose `status`, `source_label`,
-`last_unavailable_label`, `price` and `fresh_quote`. Account artifacts retain the
-same metadata. A normal subsequent quote restores research marking and matching.
+在被拒绝或缺失的分钟内，撮合器会在确定成交价或成交容量前直接拒绝该报价。未成交挂单可在后续可用分钟柱上按既有的订单有效期、价格、现金、容量与 T+1 规则继续撮合。原生账户保留持仓数量，其上一可用价格仅作为**陈旧账户估值标记（stale account mark）**，绝不当作最新报价或成交价格。持仓对象的 `.valuation` 与 `get_current_data()[security].valuation` 暴露 `status`、`source_label`、`last_unavailable_label`、`price` 与 `fresh_quote`；账户产物保留相同元数据。当后续出现正常报价时，研究估值与撮合自动恢复。
 
-This supports flat-start/flat-end bounded research with explicit no-known-action
-scope and ordinary daily states. It does not support arbitrary initial holdings,
-corporate-action crediting, delisting liquidation, unknown daily states, or an
-unbounded stale-price policy. Store's numeric/OHLC/precision contract is still
-strict: malformed numeric rows remain in the native reader and cannot be imported
-as valid Store bars. Do not round or replace them; publish only actual valid
-coverage and explicitly represent absent quotes when using a partial snapshot.
+该机制支持在明确声明无已知公司行动且日频状态正常的范围内开展空仓起止（flat-start/flat-end）的受控研究；不支持任意初始持仓、公司行动入账、退市清算、未知日频状态或无边界的陈旧价格策略。Store 的数值/OHLC/精度契约依然严格：格式异常的数值行仅保留在原生读取器中，不得导入为合法的 Store 分钟柱。请勿四舍五入或替换异常值；使用部分快照时只发布真实有效的覆盖并显式表达缺失报价。
 
-The 2026-06-02..04 real-source regression is a bounded engineering case. Deliberate
-conflict/invalid decisions and a missing quote are injected into separate small
-artifacts, never the raw file. They prove denial, stale marking, holding retention
-and later recovery; they do not assert those real source quotes were erroneous.
+2026-06-02..04 真实来源回归用例属于受控工程验证：用于测试的冲突/无效裁定与缺失报价均注入在独立的小型测试产物中，绝不修改原始行情文件，仅用于验证拒绝撮合、陈旧估值标记、持仓保留及后续恢复机制，并不断言原始来源报价本身有误。
