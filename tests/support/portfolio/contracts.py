@@ -14,8 +14,7 @@ from ashare_quant.market.contracts import (
     PortfolioSelection,
 )
 from ashare_quant.tasks.policy import ServiceStatus
-from tests.support.daily.contracts import JobID, JobView, ResultReference
-from tests.support.daily.result_contracts import JSONObject
+from tests.support.daily.contracts import JobID, JobView, JSONObject, ResultReference
 from tests.support.legacy_backtests.contracts import Sha
 
 Security = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]

@@ -2,8 +2,7 @@
 
 import json
 
-from tests.support.daily.contracts import AllowedWindow, PortableDataIdentity
-from tests.support.daily.result_contracts import M2Assumption
+from tests.support.daily.contracts import AllowedWindow, M2Assumption, PortableDataIdentity
 from tests.support.legacy_provider.owner_wire import source_pin
 
 OWNER_TEXT = {

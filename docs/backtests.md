@@ -89,3 +89,9 @@ upper_limit、lower_limit 仍为 null。源 OHLC 与模型的半分一致性容�
 不在每次账户观察时重扫全部历史。合成边界验证见 `tests/minute/test_corporate_research.py`。
 
 冻结午休成交容量案例的复验入口是 `python -m tests.fixtures.minute_reference.audit_capacity_regression --help`。它核对外部案例、策略、输入和原生结果哈希，在新目录重跑并审计分钟容量、现金差额及成交变化。该入口限定既有 `R09-lunch-participation` 案例；历史 ID、`aq-minute-r09-capacity-fix.v1` schema 和证据哈希保留，名称不表示支持任意案例。所需历史输入不随包发布；案例和基线只读，结果只写显式指定的新目录。
+
+## 受控分钟研究中的来源使用规则
+
+`accept_research=True` 仅允许显式声明的回溯研究模式，绝不会覆盖来源绑定的行级拒绝裁定，也不背书真实成交、历史可得性、全市场证券覆盖或任意持仓生命周期。AD 导出的 `minute-row-use.v1` 对 `execution`（撮合成交）与 `fresh_valuation`（最新估值）分别给出独立裁定（`deny` 或 `not_granted`），AQ 会根据不可变的 AD 行数据重新计算裁定并校验来源契约哈希、行哈希以及原生标识与数值。
+
+显式标记为无效（`price_invalid`）或冲突（`price_conflict`）的价格会在对应时间标签处拒绝撮合与最新估值；硬性成交活动缺陷会拒绝撮合执行。常规默认模式要求完整声明的分钟网格；导出端可显式选择 `gap_policy="explicit_unavailable"` 以导出部分快照，AQ 要求观测到的分钟柱与绑定不可用槽的精确并集。策略分钟历史接口（`attribute_history`、`history`、`get_bars`、分钟级 `get_price`）会在请求窗口内统计这些已声明的缺失槽并在原时间索引处返回 `NaN`（不执行插值、零值填充或前向填充）。在被拒绝或缺失的分钟内，撮合器直接拒绝该报价，原生账户保留持仓数量，上一可用价格仅作为陈旧账户估值标记（stale account mark）。

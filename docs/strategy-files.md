@@ -81,3 +81,7 @@ Unicode 名称解析到同一普通文件时返回同一身份；不统一转小
 不同文件。覆盖别名时保留实际文件名，目录响应的父路径也使用实际拼写。
 访问期间目录项身份变化会返回 `409 STRATEGY_PATH_CHANGED`，重新读取即可。
 客户端应使用读取/保存响应中的身份建立编辑、提交和列表导航，不能用 URL 原始别名覆盖它。
+
+## 策略存储工作空间（`X-Quant-Workspace`）
+
+`GET /api/v1/python/workspace-capabilities` 返回 `aq.strategy-workspaces.v1`。文件、目录、完整项目接口与 `POST /api/v1/python/jobs` 接受 `X-Quant-Workspace`（32 位小写十六进制不透明标识，由同机可信产品服务从已鉴权 owner 的持久映射选择，不是文件路径，也不是 Python 沙箱凭据）。无 Header 保持既有 `state/strategies`；有 Header 使用 `state/workspaces/<handle>/strategies`，仅写入时创建目录。回测准入在相同空间检查已保存文件／项目并冻结 `session.strategy_workspace`，重试相同核心幂等键但更换空间会拒绝。

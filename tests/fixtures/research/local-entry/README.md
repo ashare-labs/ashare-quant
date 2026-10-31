@@ -34,8 +34,8 @@ assets or their evidence pins. `list`/`show` display the catalogue metadata;
 `minute-sources` resolves the authoritative query bindings from deployment.
 
 Use the [runtime guide](../../../../docs/data-runtime.md) for paired wheels, explicit
-initialization and service commands, and the [minute API guide](../../../../docs/product-minute.md)
-for request fields and configuration-change handling. The pre/post deployment
+initialization and service commands, and minute API
+request fields and configuration-change handling. The pre/post deployment
 checks are not an atomic filesystem snapshot: keep fixed source paths while a
 service runs, then restart after an authorized migration.
 

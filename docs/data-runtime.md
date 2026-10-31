@@ -27,7 +27,7 @@
 
 `owner_store_asset` 保留已有状态的 owner Store 定位；新研究使用明确发布来源。`required_assets` 列出本配置必需的库外输入、运行安装包等资产名称。不能把临时目录或受保护的旧环境列为必需输入。其他配置的资产和受保护外部资产仅登记，不随正式状态包复制。
 
-普通回测在资产中登记 `daily_research`、`daily_execution` 和 `corporate_history` 包，每项包含 `path`、相对包目录的 `binding`（通常为 `binding.json`）和该绑定文件的 `binding_sha256`。在 profile 中添加 `reference_sets`，例如 `{"daily":{"kind":"daily_execution","research_asset":"research","execution_asset":"execution","corporate_history_asset":"corporate"}}`，并设置 `default_reference_set="daily"`。另一种集合用 `kind="historical_market"`、`market_asset` 和 `corporate_history_asset`。配置只说明来源可选择；所选证券和日期是否就绪，由 coverage 逐项检查。接口、来源范围和研究假设见[历史组合与数据发布](portfolio.md)及 [Python 工作台](python-workbench.md)。
+普通回测在资产中登记 `daily_research`、`daily_execution` 和 `corporate_history` 包，每项包含 `path`、相对包目录的 `binding`（通常为 `binding.json`）和该绑定文件的 `binding_sha256`。在 profile 中添加 `reference_sets`，例如 `{"daily":{"kind":"daily_execution","research_asset":"research","execution_asset":"execution","corporate_history_asset":"corporate"}}`，并设置 `default_reference_set="daily"`。另一种集合用 `kind="historical_market"`、`market_asset` 和 `corporate_history_asset`。配置只说明来源可选择；所选证券和日期是否就绪，由 coverage 逐项检查。策略接口与运行假设见 [Python 工作台](python-workbench.md)。
 
 ## 检查和启动
 
@@ -141,23 +141,26 @@ catalog 中新增 `account_reader`，含相对 `python`、`entry` 路径，以�
 证券分块，保留旧文件；变更证据、批次与来源版本必须固定。完整源库与账户备份仍有各自
 独立边界，行情恢复不声称包含外部 raw 原件或既有模拟账户。
 
-### Coverage repair readers
+### 覆盖修正读取器
 
-The released research product accepts `BJ.832317` style Beijing identities alongside
-`600000.XSHG` and `000001.XSHE`; this does not broaden trading-engine admission.
-Canonical daily reads include evidenced historical observations and disjoint free-stockdb
-supplements. Canonical minute supplements use whole absent security days, never guessed
-intraday alignment. Explicit `free_stockdb` minute queries read the published supplement;
-explicit `neigezhu` queries retain frozen original observations and per-row restrictions.
-Explicit daily provider queries preserve the old provider-specific research scope.
+已发布的研究产品除 `600000.XSHG` 与 `000001.XSHE` 外，也支持 `BJ.832317` 等北交所证券标识读取，但这并不放宽撮合引擎准入范围。主发布日线读取包含具备证据的历史观测与互不重叠的 `free-stockdb` 补充记录；主发布分钟补充仅按整只证券整日缺失补齐，绝不做盘中猜测对齐。显式指定 `free_stockdb` 的分钟查询读取已发布的补充数据；显式指定 `neigezhu` 的查询保留冻结原始观测及行级限制；显式指定日频供应商的查询保留原有供应商研究范围。
 
-A retained runtime bundle fixes both owner and backend source hashes and dependency
-versions. Source pinning records the full commit and tree. Native audit manifests and
-reviews resolve inside the selected release after a restore; raw original source assets
-remain separate required dependencies for explicit original-observation queries.
+保留的运行时包同时锁定数据所有者与后端的源码哈希及依赖版本。源码固定记录完整 commit 与 tree。恢复后，原生审计清单与审查结果在所选发布内解析；显式查询原始观测时，外部 raw 原始资产仍作为独立必需依赖。
 
 正式发布参考组可直接声明 `"released-reference": {"kind": "market_release"}`，并将其设为
 `default_reference_set`。它使用同一 profile 的 `market_release` 资产、ID 和 manifest hash，
 覆盖逐日状态/来源限价与公司行动，不再绑定静态样本窗口。该组不得指定另一套行情版本。
 旧参考组保留为显式选项；已发布输入和已完成任务从冻结文件读取，不随默认组改变。
 更新代码、配对 AD 指纹和部署配置是独立的部署步骤，修改隔离候选不会更新正在运行的服务。
+
+## 数据、诊断与历史组合读取
+
+AQ 不抓取、修复或重新认定数据。所有功能使用同一 A数达候选：`Store`、portable 日频绑定、`DailyResearchView`、`DailyExecutionView`、分钟证据、公司行动导出和观察接口。通用只读入口为 `/api/v1/market`，CLI 为 `market-describe`、`market-read`、`market-coverage`；`ASHARE_QUANT_MARKET_STORES` 配置显式别名到 Store 路径的 JSON。金额、整股量、日期、quality 和 lineage 保留原语义；描述符不授予执行权限。`source-diagnostics-capabilities` 和 `source-diagnostics` 使用配置日历 capture 与 `Store.preflight_research_request`，分别呈现 readable、缺字段、未知和拒绝。当前 AD 分发版本以 [运行时 pin](../src/ashare_quant/providers/data-runtime.json) 为准，portable owner 文档版本保持 `0.10.0.dev1`。
+
+七算法注册、目录、预检和执行服务已从产品删除，`/api/v1/portfolio` 不再提供接口。历史组合任务通过 `/api/v1/history/jobs?family=portfolio` 读取，结果从已封存产物返回；已保存的用户策略在 `/api/v1/history/strategies` 可读。正式数据查询、参考资料覆盖、公司行动、财务查询和发布接口保持在 `/api/v1/product`，使用独立的 `market.datasets.Datasets` 保存数据描述与输入。`covered_research` 保留实际来源、逐日状态、价限和公司行动覆盖要求；`price_only_no_limits` 仍为显式的数据诊断模式，不会自动替代正式研究。
+
+## 发布绑定的财务质量查询与分钟查询
+
+产品 API 暴露 `POST /api/v1/product/financial/point` 与 `GET /api/v1/product/financial/coverage`。单点查询请求包含 `security`、`field`、`period`、`source`、带时区的 `as_of` 以及 `mode`（默认 `official_daily`，可显式切换为 `historical_pit` 或 `source_research`；查询原生报表字段时需同时提供 `statement` 与 `title`）。覆盖查询接受可选的 `security` 与 `day` 参数，冻结修正台账明确区分已退役交易代码、经审核的同证券跨源别名、显式停牌日、退市及未解决的缺失记录。[pyproject.toml](../pyproject.toml) 中的版本声明与 [AD 运行时 pin](../src/ashare_quant/providers/data-runtime.json) 共同提供上述读取能力。
+
+常规产品 API 将分钟读取委托给已安装且内容绑定的 AD `LocalMinuteProduct`。`GET /api/v1/product/minute/sources` 返回已配置的来源 ID、默认来源（未指定时为 `tdx`）、资产与证据绑定、已注册覆盖范围及使用限制。`POST /api/v1/product/minute/prices` 接受单只证券与带时区偏移、精确到整分钟的闭区间 `start`/`end` 及可选 `source`（省略或传 `auto` 选择当前配置的默认来源）。响应原样保留 AD 的 `source`、`binding`、`rows` 与 `report`，不过滤异常行、零成交量行、来源标签或行级拒绝裁定；受控分钟研究中的来源使用规则详见 [通用分钟回测](backtests.md)。配置身份包含分钟注册表与解析后的资产路径；运行期一旦发生语义级部署配置修改或资产路径变化，服务即锁定 `PRODUCT_CONFIGURATION_CHANGED`（HTTP 409）并要求重启 API。

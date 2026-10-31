@@ -42,12 +42,10 @@ python -m ashare_quant.deployment task-worker
 - [aquant 导入改写](docs/aquant-migration.md)：已保存策略从 `jqdata` 改为 `aquant` 的准备与应用；运行时写法见工作台。
 - [Python 策略工作台](docs/python-workbench.md)：自动准备正式数据、运行自定义日频/分钟 Python、查看与取消任务。
 - [研究任务](docs/tasks.md)：共享队列、取消、结果和重连找回。
-- [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份与空目录恢复。
-- [历史组合与数据发布](docs/portfolio.md)：历史读取及保留的数据能力。
-- [通用分钟回测](docs/backtests.md)：模块入口和边界。
+- [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份、空目录恢复、财务质量与分钟查询。
+- [通用分钟回测](docs/backtests.md)：模块入口、有界分钟研究与来源使用规则。
 - [账户历史](docs/paper.md)：只读历史与独立账户运行时边界。
-- [文档索引](docs/README.md)、[数据与诊断](docs/providers.md)、[开发与契约](docs/development.md)。历史目录说明见 [迁移说明](docs/migration.md)。
-- [结果分析](docs/result-analysis.md)、[财务质量查询](docs/financial-quality-api.md)、[分钟数据发布](docs/product-minute.md)。
+- [结果分析](docs/result-analysis.md)、[文档索引](docs/README.md)、[开发与契约](docs/development.md)、[迁移说明](docs/formal-backend-migration.md)。
 
 正式本机入口是 ashare-local，与 quant-web 配对：API `18839`、paper `18818`、Web `41839`。这是清单上的正式端口；候选或隔离验收若改用其他端口，那些端口不是 ashare-local 的正式入口。`python -m ashare_quant.deployment commands` 打印该清单的 `FRONTEND_PORT`、`ASHARE_API_URL` 和 `ASHARE_PAPER_URL`，在 quant-web 目录按其说明启动。Python 工作台前缀 `/api/v1/python`，正式数据前缀 `/api/v1/product`，共享任务状态 `/api/v1/tasks/service`，历史任务 `/api/v1/history`，已发布研究行情 `/api/v1/market`。paper 使用独立状态根。生成契约位于 [docs/contracts](docs/contracts)。
 

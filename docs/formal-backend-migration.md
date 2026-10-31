@@ -4,7 +4,11 @@
 
 当前研究入口使用可信自定义 Python，固定七策略、固定日频窗口和演练运行入口已退役。后端不登记预设算法，也不随 wheel 安装示例源文件、演练行情或演练执行器。开发回归所需旧算法与合成数据位于 `tests/support`、`tests/fixtures`；产品代码不导入它们。
 
-本页记录迁移当时的接口对照和已退役入口，不作为某台机器的部署状态记录。多文件策略与冻结身份见[策略项目](strategy-projects.md)，账号边缘选择的私人文件空间见[工作空间契约](strategy-workspaces.md)，收益版本与冻结基准派生见[结果分析](result-analysis.md)。安装版本和实际服务身份需在部署时核对。策略运行以 [Python 工作台](python-workbench.md) 为准。
+本页记录迁移当时的接口对照和已退役入口，不作为某台机器的部署状态记录。多文件策略与冻结身份见[策略项目](strategy-projects.md)，账号边缘选择的私人文件空间见[单文件与工作空间契约](strategy-files.md)，收益版本与冻结基准派生见[结果分析](result-analysis.md)。安装版本和实际服务身份需在部署时核对。策略运行以 [Python 工作台](python-workbench.md) 为准。
+
+## 历史目录演变
+
+AQ `2aa7829` 与 AD `2fe79d9` 的共同整理确立了功能目录、`snake_case` Python 命名、`kebab-case` 文档、五章 README、真实数据不入发布树，以及源码和依赖变更产生新身份的原则（详见[贡献指南](../CONTRIBUTING.md)）。早期 `m2`、`daily_portfolio`、`rqprobe` 的职责分别进入 `backtests`/`tasks`、`portfolio` 和 `execution`；`m2job-` 等序列化业务标识仍保留原含义，不机械改写旧回执、数据库记录或检查点。策略导入使用 `aquant`，旧 `jqdata` 等别名的离线转换见[导入迁移](aquant-migration.md)。当前 HTTP 契约为 api/tasks/paper 三份 [OpenAPI](contracts) 及研究 MCP 工具契约，生成流程见[开发指南](development.md)。
 
 ## 已移除的接口与入口
 

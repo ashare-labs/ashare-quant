@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-ENTRY = Path(__file__).resolve().parents[2] / "tests/support/replay_sealed_responses.py"
+ENTRY = Path(__file__).resolve().parents[2] / "tests/support/response_replay.py"
 
 
 def inputs():
