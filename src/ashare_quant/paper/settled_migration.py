@@ -23,7 +23,20 @@ from ashare_quant.storage.artifacts import atomic, digest, lock, regular, sha
 
 FIELD = "settled_runtime_authorization"
 # Other dependency transitions need their own native compatibility validation.
-DATA_TRANSITIONS = {("0.8.0.dev2", "0.10.0.dev5")}
+DATA_TRANSITIONS = {
+    ("0.8.0.dev2", "0.10.0.dev5"),
+    ("0.8.0.dev2", "0.10.0.dev18"),
+    ("0.8.0.dev2", "0.10.0.dev98"),
+    ("0.10.0.dev5", "0.10.0.dev18"),
+    ("0.10.0.dev5", "0.10.0.dev98"),
+    ("0.10.0.dev18", "0.10.0.dev98"),
+}
+ADDITIVE_RUNTIME_PACKAGES = {
+    "bottleneck": "1.6.0",
+    "empyrical-reloaded": "0.7.0",
+    "peewee": "3.17.3",
+    "psutil": "7.2.2",
+}
 
 
 def now():
@@ -54,8 +67,12 @@ def runtime_transition(before, after):
     require(
         set(before) == set(after) == {"sources", "runtime", "rq"}
         and before["rq"] == after["rq"]
-        and set(before["runtime"]) == set(after["runtime"])
+        and set(before["runtime"]) <= set(after["runtime"])
         and "ashare-data" in before["runtime"]
+        and all(
+            after["runtime"].get(k) == ADDITIVE_RUNTIME_PACKAGES.get(k)
+            for k in set(after["runtime"]) - set(before["runtime"])
+        )
         and all(
             before["runtime"][k] == after["runtime"][k]
             for k in before["runtime"]
@@ -124,15 +141,16 @@ def closed_state(service, state, config):
     return report
 
 
-def verify_state(root, state, config, current_pin):
+def verify_state(root, state, config, current_pin, *, check_installed_owner=True):
     from ashare_quant.paper.online import OnlineService
 
     a = authorization_gate(state[FIELD], state["identity"], state["engine_pin"], current_pin)
-    content, owner = installed_owner()
-    require(
-        (a.owner_content_sha256, a.owner_reader_sha256) == (content, owner),
-        "PAPER_SETTLED_OWNER_CHANGED",
-    )
+    if check_installed_owner:
+        content, owner = installed_owner()
+        require(
+            (a.owner_content_sha256, a.owner_reader_sha256) == (content, owner),
+            "PAPER_SETTLED_OWNER_CHANGED",
+        )
     raw = regular(root / "runtime-origins" / (a.from_state_sha256 + ".json"))
     require(sha(raw) == a.from_state_sha256, "PAPER_SETTLED_ORIGIN_CHANGED")
     before = json.loads(raw)
@@ -191,14 +209,32 @@ def migrate(
         raw = regular(service.path)
         state, config = service._load(verify=False)
         if FIELD in state:
-            a = verify_state(service.root, state, config, current)
-            require(
-                a.from_state_sha256 == state_sha
-                and digest(a.from_runtime_pin) == from_sha
-                and (not apply or (a.review_sha256 == review_sha and a.reason == reason)),
-                "PAPER_SETTLED_MIGRATION_CONFLICT",
+            existing_to = state[FIELD].get("to_runtime_pin") if isinstance(state[FIELD], dict) else None
+            if existing_to == current:
+                a = verify_state(service.root, state, config, current)
+                require(
+                    state_sha in {a.from_state_sha256, sha(raw)}
+                    and from_sha in {digest(a.from_runtime_pin), digest(existing_to)}
+                    and (not apply or (a.review_sha256 == review_sha and a.reason == reason)),
+                    "PAPER_SETTLED_MIGRATION_CONFLICT",
+                )
+                return dict(applied=True, unchanged=True, authorization_sha256=digest(a))
+            prior = verify_state(
+                service.root, state, config, existing_to, check_installed_owner=False
             )
-            return dict(applied=True, unchanged=True, authorization_sha256=digest(a))
+            require(
+                state_sha in {sha(raw), prior.from_state_sha256},
+                "PAPER_RUNTIME_STATE_CHANGED",
+            )
+            require(
+                from_sha in {digest(existing_to), digest(state["engine_pin"])},
+                "PAPER_RUNTIME_FROM_CHANGED",
+            )
+            runtime_transition(existing_to, current)
+            raw = regular(service.root / "runtime-origins" / (prior.from_state_sha256 + ".json"))
+            state = json.loads(raw)
+            state_sha = prior.from_state_sha256
+            from_sha = digest(state["engine_pin"])
         require(sha(raw) == state_sha, "PAPER_RUNTIME_STATE_CHANGED")
         require(digest(state["engine_pin"]) == from_sha, "PAPER_RUNTIME_FROM_CHANGED")
         runtime_transition(state["engine_pin"], current)

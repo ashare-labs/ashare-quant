@@ -1,23 +1,18 @@
-# Local unified entry template
+# 本机统一入口可移植模板
 
-This directory versions the local `data` launcher and its `entry.py`, plus portable
-configuration examples. It uses installed, paired AD/AQ packages; it does not
-load a Codex task folder or inject a source tree into `PYTHONPATH`.
+本目录提供本机统一入口启动器 `data`、入口脚本 `entry.py`、已结算模拟账户只读扩展 `account_entry.py` 以及配套配置模板（`deployment.example.json`、`catalog.example.json`）。所有入口直接调用虚拟环境中已安装的配对 `ashare-data` / `ashare-quant` 包。
 
-For a new empty entry directory, copy `data`, `entry.py` and `account_entry.py`, prepare the paired
-runtime as `.venv`, and adapt `deployment.example.json` / `catalog.example.json`
-to `deployment.json` / `catalog.json`. Replace every `REPLACE_WITH_REVIEWED_*`
-marker with an independently retained SHA256 before querying. Refer to existing
-raw data through `data_root` and relative asset paths; keep the audited manifest
-and quality overlay outside the repository. This example contains no market
-observations, audit artifacts, account state, or working credentials.
+## 初始化与配置
 
-For an existing entry, merge only the new minute registry/configuration fields
-and the matching HF catalogue item. Do not replace its whole catalogue or
-manifest: other dataset registrations, cleanup receipts, daily references,
-runtime/state paths and frozen environments must survive. Do not initialize,
-restart services or replace an active/frozen runtime as a side effect of copying
-these templates.
+初始化新的本机入口目录时：
+
+1. 将 `data`、`entry.py` 与 `account_entry.py` 复制到目标入口目录，并准备配对虚拟环境。
+2. 将 `deployment.example.json` 与 `catalog.example.json` 复制为 `deployment.json` 与 `catalog.json`。
+3. 将模板中的 `REPLACE_WITH_REVIEWED_*` 占位符替换为真实资产的 SHA256 摘要，并通过 `data_root` 与相对路径引用既有行情、财务、因子与参考数据。
+
+在已有入口目录中增量接入新分钟源或目录项时，仅合并新增的 `minute_sources` 与对应 `catalog.json` 数据集条目，保留既有资产登记与运行状态路径。
+
+常用查询示例：
 
 ```sh
 ./data minute-sources
@@ -26,41 +21,13 @@ these templates.
 ./data minute --security 600000.XSHG --day 2026-10-09
 ```
 
-Default minutes remain TDX. HF is explicit, native labels and quality decisions
-remain visible, and unavailable sources never fall back. The generic financial,
-factor, daily and service commands in `entry.py` require their own existing
-catalogue entries; the minimal examples intentionally do not invent those
-assets or their evidence pins. `list`/`show` display the catalogue metadata;
-`minute-sources` resolves the authoritative query bindings from deployment.
+`list` / `show` 用于展示 `catalog.json` 中的数据集元数据；`minute-sources` 从 `deployment.json` 解析分钟数据源绑定。配对 wheel 安装、初始化命令与 API 请求参数详见 [数据、启动与恢复](../../../../docs/data-runtime.md)。
 
-Use the [runtime guide](../../../../docs/data-runtime.md) for paired wheels, explicit
-initialization and service commands, and minute API
-request fields and configuration-change handling. The pre/post deployment
-checks are not an atomic filesystem snapshot: keep fixed source paths while a
-service runs, then restart after an authorized migration.
+## 已结算模拟账户只读登记
 
-## Registered settled accounts
+`account_entry.py` 是可选的本机部署扩展，用于从 `state/online/registry.json`（schema：`ashare-online-account-registry.v1`）只读加载已完成运行时授权的 `OnlineService` 结算账本。
 
-The optional `account_entry.py` adapter reads explicitly migrated OnlineService
-accounts from `state/online/registry.json`. It is a deployment adapter outside
-the execution package; adding it does not change the engine pin or the four
-frozen AQ HTTP contracts. It does not import directory ledgers into SQL paper
-sessions and exposes no account mutation or execution endpoint.
-
-The registry schema is `ashare-online-account-registry.v1`, with an `accounts`
-array. Each entry declares `account_id`, `label`, `path` (equal to account_id),
-`identity`, `head`, `runtime_pin_sha256`, `review_sha256`, and `files`. Each file
-entry maps its relative name to `bytes` and `sha256`. Register the complete
-post-migration account, including the original state archive, but exclude lock
-files. Preserve the original source and review material independently. This
-template never creates or migrates an account as a side effect.
-
-The reader checks the complete file inventory, rejects links or path escapes,
-checks the installed runtime pin, performs strict OnlineService loading, and
-validates the native closing report. Changed files or runtime require explicit
-review and re-registration. Add `account_registry` metadata to the local
-catalogue to include account validation in `data doctor`; installations without
-registered accounts keep their ordinary data readiness checks.
+每个登记项包含 `account_id`、`label`、`path`（与 `account_id` 同名）、`identity`、`head`、`runtime_pin_sha256`、`review_sha256` 以及 `files`（记录账户目录下除 `.lock` 外全部文件的 `bytes` 与 `sha256`）。在 `catalog.json` 中配置 `account_reader` 后，可通过以下入口查询：
 
 ```sh
 ./data accounts
@@ -69,15 +36,4 @@ registered accounts keep their ordinary data readiness checks.
 ./data web
 ```
 
-The local API command mounts read-only `GET /api/v1/online-accounts` and
-`GET /api/v1/online-accounts/{account_id}`, returning
-`local-online-accounts.v1`. The quant-web `#/accounts` page shows the ledger's
-cash, NAV, holdings, orders, trades and migration identity. The ordinary
-`ashare_quant.deployment api` command does not mount this local extension.
-Missing registrations produce an explicit unavailable response, never a sample
-or empty replacement account. Requests do not authorize the next trading day.
-
-Retain the entire `state/online` directory, registry and migration evidence when
-preparing recovery media. The existing SQL-only paper backup path does not
-automatically include these directory accounts. A runtime rebuild must use the
-registered paired wheel and dependency pins before strict account recovery.
+本机 `./data api` 会额外挂载只读路由 `GET /api/v1/online-accounts` 与 `GET /api/v1/online-accounts/{account_id}`（契约版本 `local-online-accounts.v1`），供 `quant-web` 的 `#/accounts` 页面展示现金、净值、持仓、委托、成交与迁移身份。备份恢复时需完整保留 `state/online` 目录、登记文件与对应的 `runtime-bundle`。

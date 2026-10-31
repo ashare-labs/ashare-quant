@@ -44,7 +44,10 @@ def context(tmp_path, monkeypatch):
     state, _ = service._load(verify=False)
     assert state["engine_pin"] == data["engine_pin"]
     assert state["engine_pin"]["runtime"]["ashare-data"] == "0.8.0.dev2"
-    assert runtime.engine_pin()["runtime"]["ashare-data"] == "0.10.0.dev5"
+    assert (
+        state["engine_pin"]["runtime"]["ashare-data"],
+        runtime.engine_pin()["runtime"]["ashare-data"],
+    ) in migration.DATA_TRANSITIONS
     clock = {"at": datetime.fromisoformat("2026-10-19T20:00:00+08:00")}
     for mod in (migration, successor, intraday, online):
         monkeypatch.setattr(mod, "now", lambda: clock["at"])
@@ -392,3 +395,27 @@ def test_v3_holding_successor_uses_actual_native_positions_without_genesis_or_or
     assert s.advance("2026-10-20", "closing") == closed
     assert files(s.root) == before
     assert s.report("2026-10-19", "closing") == c["data"]["closing"]
+
+
+def test_runtime_transition_accepts_current_tip_and_additive_packages():
+    after = runtime.engine_pin()
+    for old_ad in ("0.8.0.dev2", "0.10.0.dev5", "0.10.0.dev18"):
+        before = copy.deepcopy(after)
+        before["sources"] = "0" * 64
+        before["runtime"]["ashare-data"] = old_ad
+        for pkg in migration.ADDITIVE_RUNTIME_PACKAGES:
+            before["runtime"].pop(pkg, None)
+        migration.runtime_transition(before, after)
+
+    bad_unreviewed = copy.deepcopy(after)
+    bad_unreviewed["runtime"]["ashare-data"] = "0.7.0.dev1"
+    with pytest.raises(DomainError, match="PAPER_DATA_TRANSITION_UNREVIEWED"):
+        migration.runtime_transition(bad_unreviewed, after)
+
+    bad_extra = copy.deepcopy(after)
+    bad_extra["runtime"]["ashare-data"] = "0.8.0.dev2"
+    after_extra = copy.deepcopy(after)
+    after_extra["runtime"]["unexpected-pkg"] = "1.0.0"
+    with pytest.raises(DomainError, match="PAPER_RUNTIME_DEPENDENCIES_CHANGED"):
+        migration.runtime_transition(bad_extra, after_extra)
+
