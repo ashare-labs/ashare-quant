@@ -7,7 +7,7 @@ name = "ashare-quant"
 version = "0.12.0.dev32"
 description = "A宽 local bounded research backend with portable owner bindings"
 readme = "README.md"
-license-files = ["docs/licensing.md", "docs/rqalpha/RQAlpha-LICENSE.txt"]
+license-files = ["docs/development.md", "docs/rqalpha/RQAlpha-LICENSE.txt"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi==0.141.1", "pydantic==2.13.5", "uvicorn==0.52.4",
@@ -19,7 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 mcp = ["mcp==2.3.0", "httpx==0.28.1", "httpx2==2.15.1"]
 factor-evaluation = ["ashare-data[factor-evaluation]==0.10.0.dev98"]
-# Read docs/licensing.md before installing. Data must be supplied through A数达.
+# Read docs/development.md before installing. Data must be supplied through A数达.
 native = [
   "annotated-doc==0.0.5",
   "annotated-types==0.8.0",

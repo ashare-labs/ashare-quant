@@ -1,91 +1,108 @@
 # Python 策略工作台
 
-> 现行说明：策略怎么写、怎么提交以本页为准。单文件、项目、工作空间和回测归属是配套契约，地图见 [文档索引](README.md)。
+本篇汇总自定义 Python 策略运行接口（`aquant`）、单文件与多文件策略项目契约、策略工作空间（`X-Quant-Workspace`）、策略所属回测列表查询以及旧 `jqdata` 策略导入迁移工具。
 
-策略导入使用 `from aquant import *`、命名导入或 `import aquant as api`；模块由 A宽 worker 绑定。已保存文件的导入改写见 [aquant 迁移工具](aquant-migration.md)。
+## 策略编写与运行模型（`aquant`）
 
-提交当前 Python 源码、频率、日期、资金和参数即可创建研究任务。证券、字段和历史长度由策略在 API 调用中提出；新任务不要求另交证券池或预热天数。任务接受时固定发布身份和源码，运行时按实际需求读取同一发布，最后将查询回执与结果绑定。源码和 `initialize` 只执行一次，不做静态依赖猜测或预执行收集。
+策略运行模块名为 `aquant`（由 A宽 worker 在回测进程内绑定，请勿安装 PyPI 上同名的第三方包），支持日频（`1d`）与分钟（`1m`）两种运行频率：
 
-已有本机策略文件接口仍按 [文件保存契约](strategy-files.md) 工作。保存文件和创建回测分别保留自己的结果；运行冻结提交的源码，历史结果不随文件编辑而改变。
+```python
+from aquant import g, run_daily, attribute_history, order_target_value, set_benchmark, record
 
-策略可保持单文件，也可使用 [多文件项目](strategy-projects.md)：默认 `main.py` 入口、辅助 `.py`
-和子目录。项目内用 `from .signals import choose` 等包内相对导入；每个文件均可显式
-`from aquant import ...`，获得同一次回测的 API 和 `g`。第三方依赖仍来自现有运行环境。
-编辑器的 Python 高亮、文件切换与可折叠文件树位于原左侧代码区，右侧运行配置和结果导航不变。
+def initialize(context):
+    set_benchmark("000300.XSHG")
+    g.security = "000001.XSHE"
+    run_daily(rebalance, time="open")
 
-## 证券和数据需求
+def rebalance(context):
+    hist = attribute_history(g.security, 20, "1d", ["close"])
+    if len(hist) == 20:
+        order_target_value(g.security, context.portfolio.total_value * 0.5)
+    record(equity=context.portfolio.total_value)
+```
 
-- `get_all_securities(['stock'], date=context.previous_date)` 返回冻结发布中该日期有记录支持的证券目录，索引为代码。按已记录的上市、退市和代码自身有效区间筛选，未知区间单列在 `DataFrame.attrs['receipt']`。名称是当前发布记录，`name_is_historical=False`；不承诺完整历史集合、历史名称、历史指数成分或严格 PIT。
-- `set_universe(ids)` 更新交易订阅和 `context.securities`，可动态增加、替换或设为空。查询缓存、当前订阅、已有持仓和挂单是不同集合；移出订阅不抹去持仓或订单。
-- `history`、`attribute_history`、`get_price`、`get_bars` 从固定发布读取实际需要的历史，查询对象不需要先加入交易订阅。60 根历史自动向前读取；`skip_paused=True` 按已观测状态继续回溯。日期请求返回完整可见区间，缺口明确失败，不把缓存起点当作请求起点。
-- 只读 `close` 校验该字段；不要求无关的 OHLC、量额、ST、preclose 或公司行动。`get_current_data()[security]` 也可按键读取订阅外证券，状态字段仍须有真实观测。
-- 原价查询使用 `fq=None`。日线的 `pre/post` 复权依赖已固定的历史因子快照，仅改变信号价格；不替代公司行动到账证据。未配置因子时明确报错。运行频率与查询频率分开：两种运行模式的 `attribute_history/history/get_bars/get_price` 均可按明确的 1d/1m 参数查询已经可见的数据。
+### 核心数据与交易 API
 
-查询日期不得晚于模拟时钟。日线全量 OHLC/量额在 15:00 后可见，开盘前历史截止前一交易日。分钟保留源标签，并在已声明的收盘时钟模型下判断可见性。真正缺失不补数；AD 确认价格无效的分钟在原时刻保留 NaN 和来源原因。
+- **证券目录与订阅**：
+  - `get_all_securities(['stock'], date=context.previous_date)`：返回冻结发布中在该日期有记录支持的证券表（索引为代码，未知生命周期区间记录在 `DataFrame.attrs['receipt']`）。
+  - `set_universe(ids)`：动态更新交易订阅与 `context.securities`；移出订阅不影响已有持仓或挂单。
+- **按需历史与当前行情读取**：
+  - `history`、`attribute_history`、`get_price`、`get_bars` 直接从固定发布按需读取，无需预先将标的加入交易订阅，也无需在提交任务时声明外部证券池或固定预热天数。
+  - 原价查询使用 `fq=None`；日线 `pre`/`post` 复权依赖 `ASHARE_QUANT_PYTHON_HISTORY_FACTORS` 配置的冻结因子快照，仅用于计算信号价格，公司行动分红到账仍按原生账户事件结算。
+  - 日频与分钟模式均可跨频率查询已可见的 `1d` / `1m` 历史（当日完整日线 OHLCV 在 `15:00` 后可见；`get_current_data()[security].day_open` 在 `09:30` 开盘后可读）。
+- **调度、持仓与基准**：
+  - 支持 `before_open`（09:00）、`open`（09:30）、`after_close`（15:30）、`every_bar` 及分钟级日内定时调度。`run_daily` 的 `reference_security` 支持 `.XSHG` / `.XSHE` 沪深现货代码以绑定 A 股交易时钟。
+  - `context.portfolio.positions[security]` 对已知但未持有的证券返回只读零值视图，不产生空仓记录或隐式订阅。
+  - 新任务默认以沪深 300（`000300.XSHG`）为比较基准；可在 `initialize` 中调用 `set_benchmark(code)` 切换或 `set_benchmark(None)` 关闭。
+- **执行模型与资金范围**：
+  - 复用 RQAlpha 原生撮合、T+1、整手（100 股）、手续费与现金分红记账规则；日频订单在开盘提交撮合，分钟订单按 `next_open` 与每分钟成交量容量限制撮合。
+  - 初始资金支持有限正数，上限为 100 亿元（`10,000,000,000` 元）。
 
-## 执行和预算
+---
 
-复用原有 RQAlpha Source、Matcher、原生账户、公司行动和回调流程，没有第二套撮合引擎。`initialize(context)` 可由同步可调用对象提供；语法和运行时入口仍校验，不限制必须使用某种 AST 写法。历史价格接口仍在运行回调中调用，初始化可查询目录、配置订阅和调度。
+## 本机策略存储：单文件、多文件项目与工作空间
 
-日频开盘执行一次 `handle_data`，支持 before_open/09:00、open/09:30、after_close/15:30、every_bar 调度；订单在开盘提交并使用原有日频模型撮合。完整 bar 截止已可见历史，当日开盘价在开盘后可读。分钟使用已有下一分钟开盘、T+1 和每分钟容量模型。已有公司行动模型支持跨日持仓，结束时按最后可见价估值；不要求策略为适应样本导出而强制平仓。
+策略文件默认存储在当前部署 `control_db` 同级目录的 `strategies/` 下（当请求携带合法的 32 位十六进制 `X-Quant-Workspace` 头时，存储在 `state/workspaces/<handle>/strategies` 下；可通过 `GET /api/v1/python/workspace-capabilities` 查看工作空间支持状态）。所有路径接口均以 `/api/v1/python` 为前缀，禁止符号链接与路径越界。
 
-新分钟任务使用已有 `jq_minute` 回调时钟，支持 open=09:30、午间明确调度和 after_close；
-09:30 回调只看到已完成的历史，订单仍按 next_open/strict_minute 撮合，不改为立即成交。
-`run_daily(..., time='open')` 的日调度与 `attribute_history(..., '1d')` 的日线取样
-可以用于分钟回测。界面选择决定引擎驱动和撮合粒度，不限制策略必须读取同频数据。
-两种模式的成交时刻和价格可不同，不要求收益相等。公司行动登记、除权和现金到账使用
-相同原生账户规则；断点故障探针只由支持恢复的组合执行器注入，普通 Python 回测
-不需要事件源提供断点游标，也不因此获得中途恢复能力。
-同一任务复用已校验发布及实际查询过的参考事实；缓存计入统一预算，公司行动的日期覆盖逐次检查，
-不再逐日重建读取器、全量重复校验冻结对象。
+### 单文件策略接口
 
-`run_daily` 的 `reference_security` 只选择交易时钟。当前支持六位代码加
-`.XSHG` / `.XSHE` 的沪深现金市场参考，使用上述 A 股交易时段；无需订阅参考标的，
-也不要求发布含有该参考指数或 ETF 的价格。其他市场（包括期货夜盘）明确拒绝，
-不会套用 A 股时钟。这个参数不授权查询或交易缺失证券，也不设置收益基准。
-`get_current_data()[security].day_open` 在两种模式下均读取发布中的当日开盘价，
-09:30 前不可见；查询它不要求当日尚不可见的完整 OHLC。
+单文件策略以完整相对路径作为 `strategy_id`（`identity_model="saved_relative_path"`）：
 
-`context.portfolio.positions[security]` 对发布中已知但未持有的证券返回独立零值视图，
-不创建账户持仓、订阅或价格查询。`in`、迭代、长度和 `dict.get` 仍反映实际持仓集合；
-修改返回视图不会修改真实账户，未知证券仍明确失败。
+| 方法与路径 | 请求参数 | 响应与说明 |
+| --- | --- | --- |
+| `GET /directories?path=研究` | 可选相对路径 `path`（空表示根目录） | 返回 `{root, path, entries}`，列出子目录、`.py` 单文件与 `kind="project"` 项目 |
+| `POST /directories` | `{"path": "研究/日频"}` | 递归创建分类目录（权限 `0700`） |
+| `GET /files?path=研究/日频/动量.py` | 必填 `.py` 相对路径 | 返回 `{path, strategy_id, source}` |
+| `PUT /files` | `{"path": "...", "source": "...", "overwrite": false}` | 原子写入 UTF-8 源码（权限 `0600`）；已有文件需显式传 `overwrite=true`，否则返回 `409 STRATEGY_FILE_EXISTS` |
 
-新回测默认使用沪深 300（`000300.XSHG`）。`set_benchmark(code)` 在 initialize 中显式
-覆盖单一收益比较对象，`set_benchmark(None)` 明确关闭；三者都不订阅也不下单。
-完成后 `native.benchmark` 返回与每日账户严格对齐的真实日收盘、首交易日前一交易日的
-基期收盘、发布身份和查询回执，供收益分析计算价格收益。指数单位是点位；股票价格
-收益不等于含分红再投资总回报。显式关闭时为 `not_selected`；`selection_source` 为
-`default` 或 `strategy`，用于区分默认和策略选择。旧冻结结果不回填默认基准、不重跑。
-缺证券、缺基期或中间缺日时为 `unavailable` 并给出具体 reason/missing_dates，交易结果
-仍保留；基准不能补零、填前值或截掉策略日期。发布完整性和资源预算继续严格校验。
+### 多文件策略项目接口
 
-交易发布内没有该证券时，可通过同一 deployment 的 `benchmark_release` 指定一个额外
-只读市场发布：`{"asset":"index-prices","release_id":1,"manifest_sha256":"完整 SHA256"}`。
-对应 asset 的 kind 仍为 `market_release`。该配置随环境身份和任务 session 冻结；读取
-使用原有 `ReleasedDailyProduct.prices`，不读浮动 latest、不重新执行策略、不改变交易数据。
-已存在于交易发布的基准不会因缺日而偷偷换源。指数不会加入 stock 目录或获得股票撮合权限。
+多文件项目是包含系统生成的 `aquant.toml`（含 `format_version = 1`、稳定身份 `project_id = "aqproj-…"` 与默认入口 `entrypoint = "main.py"`）的目录。项目改名或移动后保持同一 `project_id`（`identity_model="stable_project_id"`）。
 
-执行模型仍要求普通主板、上市至少 30 个自然日、实际交易/持仓时段所需的日状态、原价前收和公司行动证据。5%/10% 前收涨跌幅和日状态 09:00 回放是明确的回溯研究模型，非交易所认证限价或历史 PIT。纯价格查询不需要这些执行资料。
+项目内部模块通过包内相对导入（如 `from .signals import choose`）组织，每個模块均可直接 `from aquant import ...` 共享当前回测上下文：
 
-8 股、23/126 交易日、31/186 自然日、20,000 股票分钟线和固定预热等门槛已连同底层输入类残留移除。固定查询/缓存/累计读取量、单文件和输出量、CPU/RSS/执行准备时间门槛已删除，不靠提高阈值替代。保留独立取消、真实资源失败报告以及此前用户确定的512 MiB单任务产物、512 GB总留存、1 GiB磁盘储备。数据仍按冻结发布与实际时点供给，缺失和未来请求明确报错。日组件缓存释放与历史窗口淘汰不会截断调用结果。
+| 方法与路径 | 请求参数 | 响应与说明 |
+| --- | --- | --- |
+| `GET /projects` | `?path=分类/项目` 或 `?strategy_id=aqproj-…` | 返回 `{path, strategy_id, entrypoint, files, revision}` |
+| `POST /projects` | `{path, entrypoint?}` | 创建项目目录、`aquant.toml` 与初始入口文件 |
+| `PUT /projects` | `{path, strategy_id, entrypoint, files, expected_revision}` | 校验 `expected_revision` 后通过操作系统目录原子交换（`renameatx_np` / `renameat2`）整包保存 |
+| `POST /projects/move` | `{path, destination, strategy_id, expected_revision}` | 原子改名或跨分类移动项目目录，保持 `strategy_id` 与 `revision` 不变 |
 
-## 冻结、重试和旧任务
+---
 
-`POST /api/v1/python/jobs` 的 `securities` 为可选兼容字段，旧客户端提供时仅作为初始订阅；`warmup_sessions` 继续接受以保留旧请求身份，新任务历史不受其值限制。单文件新任务清单为 `python-demand-job.v2`，项目为 `python-project-job.v3`，旧 `python-minute-job.v1` 及已发布结果仍可只读校验。中断的任意 Python 不自动重跑或断点恢复。
+## 回测提交与策略所属回测列表
 
-`product/config` 仍保留旧 portfolio 的 `warmup_sessions=120`、`preflight_required` 和证券范围说明。当前 Python 工作台不以这些元数据限制历史长度或要求额外预检提交；可执行能力以 `/api/v1/python/catalogue` 和上述任务契约为准。实际查询仍校验所选冻结发布的真实覆盖和业务语义。
+### 提交回测（`POST /api/v1/python/jobs`）
 
-`/python/catalogue` 返回环境身份、`external_securities_required=False` 和统一预算。客户端须在提交前保存完整原请求，网络重试复用同一幂等键和环境身份；返回/刷新只读任务，不能自动产生新任务。可信本机代码和回溯模型两项确认仍进入请求；这不是恶意代码沙箱。
+1. 先调用 `GET /api/v1/python/catalogue` 获取当前 `environment_id`、支持频率（`1m`、`1d`）、`data_availability` 与资源预算。
+2. 向 `POST /api/v1/python/jobs` 提交请求：
+   - 单文件策略传入 `source` 与可选 `strategy_id`（相对路径）；
+   - 多文件项目传入 `project={project_id, entrypoint, files}` 与相等的 `strategy_id`；
+   - 必填 `environment_id`、`idempotency_key`、`name`、`frequency`、`start_date`、`end_date`、`initial_cash` 以及两项显式确认 `trusted_local_code: true`、`accept_research_model: true`。
+   - 任务接受时立即将提交的源码快照冻结至任务目录，后续编辑磁盘文件不影响已提交任务。
 
-`data_availability` 返回冻结发布身份、日历首尾和具备前后交易日的执行日期边界。
-这是日历范围，不能代表每个证券、字段或频率都有完整价格；实际需求缺口仍明确报告。
-CPU 等资源终止错误包含资源名、配置上限及可取得的实际值，不返回部分成功结果。
-已保存策略可附带可选 `strategy_id`，按 [策略所属回测](strategy-backtests.md) 查询跨运行时记录。
+### 查询策略所属回测列表（`GET /api/v1/python/backtests`）
 
-历史因子配置沿用 `ASHARE_QUANT_PYTHON_HISTORY_FACTORS`，绑定内容为 `{"root":"/path/to/factor-store","dataset_id":"完整 SHA256"}`。不允许 latest，日频和分钟任务接受时均固定并验证同一配置的快照；调度频率不会决定是否可读复权日线。未配置时仍明确拒绝复权查询。数据包精确版本、源码提交和 wheel 摘要以 `providers/data-runtime.json`、`uv.lock` 为准。
+```http
+GET /api/v1/python/backtests?strategy_id=研究%2F动量.py&limit=25&offset=0&analysis_version=returns-v2
+```
 
-证券目录分页在同一个固定发布读取器内复用最近一个日期及搜索条件的历史成员计算，避免每页重复扫描；改变日期或搜索条件会重新计算。返回值不共享可变对象，发布元数据完整性继续校验，不扩大历史目录的证据边界。
+- 按 `created_at DESC, job_id DESC` 返回该 `strategy_id` 关联的全部历史与当前回测（省略 `strategy_id` 时仅列出未归属的纯草稿回测，并在 `unassigned_count` 中统计总数）。
+- 每条记录包含任务状态（`status`、`display_status`、`execution_state`）、结果摘要投影 `summary` 以及单调时钟执行耗时快照 `progress.elapsed_seconds`。
 
-任务产物保留接受清单、源码、发布身份、实际读取的输入/回执、预算、原生事件、结果和完成证明。结果发布同时验证输入摘要与原生结果绑定。真实市场发布覆盖、目录的历史语义和原有回溯模型限制均随结果保留。
+---
 
-初始资金接受有限正数，统一上限为10,000,000,000元（100亿元）；该范围保留分币数值精度，资金不足、整手、成交容量与T+1等交易规则不变。
+## 已保存策略 `jqdata` → `aquant` 导入迁移
+
+历史策略若包含 `import jqdata` 或 `from jqdata import ...`，直接提交会返回 `422 AQUANT_LEGACY_IMPORT`。可使用随包安装的 `ashare-quant-migrate-imports` 工具对 `state/strategies/` 下的已保存文件做字节级保留的 AST 导入改写（不会触碰已冻结的历史任务目录）：
+
+```sh
+# 1. 只读扫描并生成包含原文、候选文件、diff 与 SHA-256 的审核包
+ashare-quant-migrate-imports prepare --state-root /path/to/state --output /path/to/review-bundle
+ashare-quant-migrate-imports verify --bundle /path/to/review-bundle
+
+# 2. 停止该部署的 API/worker 写入后，原子应用改写（或使用 rollback 回滚）
+ashare-quant-migrate-imports apply --bundle /path/to/review-bundle --control-db /path/to/state/control.sqlite3 --maintenance
+```
+
+- `from jqdata import ...` 改写为 `from aquant import ...`；无别名 `import jqdata` 改写为 `import aquant as jqdata` 以保持文件内局部变量引用不变；动态导入或子模块引用标记为 `review_required` 供人工核对。

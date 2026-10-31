@@ -1,23 +1,92 @@
-# 开发、构建与契约
+# 开发、依赖与许可
 
-先读 [贡献规范](../CONTRIBUTING.md)。功能目录为 backtests、strategies、portfolio、execution、paper、tasks、market、storage、providers；core 仅承载稳定共用类型和纯校验。tests 保留最小 fixtures，历史批次材料不发布。
+本篇整合 `ashare-quant` 的依赖锁定与运行时快照流程、契约生成与 wheel 隔离验证、软件与数据许可说明，以及正式后端的历史退役接口对照表。
+
+## 依赖声明、锁定与运行时快照
+
+项目依赖由 `pyproject.toml` 与唯一锁文件 `uv.lock` 管理。所有安装与导出操作均加 `--locked`，确保环境与锁文件严格一致：
+
+| 文件 | 职责与更新方式 |
+| --- | --- |
+| `pyproject.toml` / `uv.lock` | 声明 `core`、`native`、`factor-evaluation`、`mcp`、`dev` 依赖及完整制品哈希；有意变更依赖时运行 `uv lock` |
+| `.python-version` | 锁定 Python 3.12 补丁版本，与运行时快照中的 `python` 字段一致 |
+| `src/ashare_quant/providers/data-runtime.json` | 绑定配对 `ashare-data` 的 commit、文件清单与 wheel SHA-256；由 `scripts/stage_owner.py` 与 `scripts/pin_data_runtime.py` 生成 |
+| `src/ashare_quant/runtime-lock.json` | 核心运行时已安装版本快照；由 `python scripts/freeze_runtime.py` 生成 |
+| `src/ashare_quant/native-runtime-lock.json` | 含 RQAlpha 的原生运行时版本快照；由 `python scripts/freeze_runtime.py --native` 生成 |
+| `src/ashare_quant/lock.sha256` | `uv.lock` 的 SHA-256 摘要，随 `freeze_runtime.py` 自动更新 |
+
+### 配对更新 `ashare-data` 与冻结快照
+
+当上游 `ashare-data` 代码或版本更新时，在仓库根目录依次执行：
 
 ```sh
+# 1. 从 ashare-data 源码构建候选 wheel，更新锁并安装到当前环境
+python scripts/stage_owner.py --source /path/to/ashare-data
+uv lock
+uv sync --locked --extra native --extra factor-evaluation --extra mcp
+
+# 2. 写入 data-runtime.json 并刷新运行时快照
+python scripts/pin_data_runtime.py \
+  --wheel local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl \
+  --commit <AD_COMMIT> --tree <AD_TREE>
+python scripts/freeze_runtime.py
+python scripts/freeze_runtime.py --native
+```
+
+### 离线安装与按需导出 `requirements.txt`
+
+需要在新虚拟环境中离线安装时，可从 `uv.lock` 临时导出带哈希校验的依赖清单：
+
+```sh
+mkdir -p .verification
+uv export --locked --offline --no-dev --extra native --no-emit-project --output-file .verification/runtime-native.txt
+uv venv /path/to/new-venv --offline
+uv pip install --python /path/to/new-venv/bin/python --require-hashes -r .verification/runtime-native.txt --offline
+uv pip install --python /path/to/new-venv/bin/python --no-deps "$AQ_WHEEL" --offline
+```
+
+---
+
+## 日常校验、契约生成与 Wheel 验证
+
+代码或接口变更后，依次执行以下检查：
+
+```sh
+python scripts/generate_contracts.py --output docs/contracts
+python scripts/export_mcp.py
 python scripts/check_structure.py
 python scripts/freeze_runtime.py --check
 python scripts/freeze_runtime.py --native --check
 ruff check src scripts tests
 python scripts/run_tests.py -q
-python scripts/generate_contracts.py --output docs/contracts
-uv build
 ```
 
-外部真实证据测试由环境变量提供隔离输入；缺输入明确 skip，不表示通过。原生测试使用临时目录和新虚拟账户。资源、动态导入、策略摘要或恢复绑定变化时，把 wheel 装入独立环境重跑对应测试和 CLI；检查 wheel、sdist 清单与文档链接。
+构建 wheel 并在隔离环境中验证安装身份、原生执行与契约一致性：
 
-`scripts/verify_wheel.py WHEEL --output NEW_DIRECTORY` 会创建新环境、按锁定摘要安装依赖和 wheel，核对源码/安装身份，再运行不含源码目录的原生执行、恢复和契约用例。可加 `--offline --cache CACHE_DIRECTORY` 使用明确缓存；`--daily-components COMPONENT_DIRECTORY` 加入调用者提供的真实日频输入。选定的集成测试可启动本次临时 localhost HTTP/MCP 服务，结束后关闭；运行中的业务服务不参与验证。
+```sh
+uv build
+python scripts/verify_wheel.py dist/ashare_quant-0.12.0.dev32-py3-none-any.whl \
+  --extra factor-evaluation --extra mcp --output .verification/wheel-check
+```
 
-契约生成不启动服务，只使用临时库和空 paper 根。api/tasks/paper 三份 OpenAPI 与 identity.json 是前端对接来源；MCP 工具契约由 `scripts/export_mcp.py` 生成。最终提交前重生成并核对源码身份和 schema，不手工修改 JSON。脚本职责与执行顺序见[脚本指南](../scripts/README.md)。
+---
 
-依赖的声明、唯一锁文件、运行时快照和按需导出各有独立职责，见 [依赖指南](dependencies.md)。更新依赖时先改 pyproject 的约束。若更新 AD，由 AD 流水线用 scripts/stage_owner.py 从明确源码构建 wheel，并用 scripts/pin_data_runtime.py 写入真实身份；wheel pin 与 `unpublished_candidate` 以该流水线产出为准，文档不另定版本。运行 `uv lock`、`uv sync --locked --extra native` 后，分别运行 `python scripts/freeze_runtime.py` 和 `python scripts/freeze_runtime.py --native` 生成快照，再用上面的 `--check` 命令核对。没有依赖变化时不重建锁或快照。
+## 软件许可与第三方材料说明
 
-依赖锁及运行时快照参与源码和恢复身份；它们改变时重生成契约并交接新的 identity，不覆盖旧账户。仓内没有 CI 配置；以上检查是本地验收入口，`verify_wheel.py` 也在干净安装中执行两种快照检查。不得同时装旧 AD 核心和另一套读端。回放、审计统一 scripts，输出写明确新目录。
+- **项目自有代码**：权利人尚未为 `ashare-quant` 与配对的 `ashare-data` 自有源码指定开源许可证（未附 MIT/Apache-2.0 等自有代码开源授权）；未经权利人明确授权，不得进行商业分发或再授权。
+- **RQAlpha 原生依赖（`native` extra）**：锁定使用 `rqalpha==6.4.1`，其完整许可条款保存在 [`docs/rqalpha/RQAlpha-LICENSE.txt`](rqalpha/RQAlpha-LICENSE.txt)。该许可对非商业个人/教育研究与商业/组织用途作出区分，使用者应按完整条款确认自身使用资格。
+- **其他运行依赖**：`empyrical-reloaded==0.7.0`（Apache-2.0）、`alphalens-reloaded==0.5.0`、`fastapi`、`pydantic`、`duckdb` 等依赖由 `uv.lock` 从官方 PyPI 安装，分别适用各自随包许可证。
+
+---
+
+## 附录：历史退役接口与新入口对照表
+
+早期预设七算法组合平台、固定日频窗口（`two_day/w1/w2`）及合成演练写接口已从产品路由表与 OpenAPI 契约中移除（请求返回 `404` 或 `405`），统一收敛至自定义 Python 工作台与只读历史接口：
+
+| 已退役接口 / 命令 | 现行替代入口 |
+| --- | --- |
+| `/api/v1/portfolio/**`（预设算法目录、注册、预检、任务创建与控制） | 新策略提交使用 `/api/v1/python/jobs`；历史组合结果通过 `GET /api/v1/history/jobs?family=portfolio` 只读查询 |
+| `/api/v1/tasks/daily/**`（固定窗口目录、规则策略注册、数据绑定与任务创建） | 日频策略统一通过 `POST /api/v1/python/jobs`（`frequency="1d"`）提交；历史记录通过 `GET /api/v1/history/jobs?family=daily` 查询 |
+| `GET /api/v1/scenarios`、`/rqalpha/scenarios`、`POST /api/v1/strategies`、`/runs`、`/data/admission` | 演练场景与合成数据注入已移除；使用 `/api/v1/product` 正式数据发布与覆盖查询，旧 `runs` 保持只读 |
+| `POST /api/v1/paper/sessions` 及 `fork`、`ingest`、`advance`、`work`、`decisions`、`closes`、`pause`、`resume` | `/api/v1/paper` 仅提供已有会话、视图与报告的只读查询 |
+| 旧 CLI `demo`、`scenarios`、`strategy-create`、`run-create`、`task-create`、`portfolio` | 使用 `python-create`、`task-worker`、`task-service`、`history`、`history-strategies` |

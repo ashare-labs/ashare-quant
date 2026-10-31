@@ -9,7 +9,7 @@ CURRENT = "aquant"
 MIGRATION_MESSAGE = (
     "AQUANT_LEGACY_IMPORT: jqdata was renamed to aquant. "
     "Prepare a reviewed migration with ashare-quant-migrate-imports; "
-    "see docs/aquant-migration.md. Frozen historical source must remain unchanged."
+    "see docs/python-workbench.md. Frozen historical source must remain unchanged."
 )
 
 

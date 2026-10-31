@@ -1,22 +1,16 @@
-# 开发脚本
+# 开发脚本说明
 
-从仓库根用当前锁定环境运行 `python scripts/<name>.py`；脚本不是产品 CLI 的替代入口。
-输出使用显式新目录。运行时和真实数据不放进发布树，不把脚本中的合成输入当成真实市场验收。
+所有维护脚本从仓库根目录在锁定环境中通过 `python scripts/<name>.py` 调用：
 
-| 任务 | 入口与用途 |
+| 脚本 | 用途 |
 | --- | --- |
-| 日常回归 | `run_tests.py` 管理整个 pytest 及其子进程的临时目录；tests/conftest.py 隔离单个用例的部署选择，两者作用域不同 |
-| 结构与链接 | `check_structure.py` 检查产品导入、共享层依赖、文件命名、版本、生成契约摘要和 Markdown 本地链接 |
-| 生成契约 | `generate_contracts.py` 使用空临时数据库导出 api/tasks/paper OpenAPI；`export_mcp.py` 导出 SDK tools/list |
-| 安装验证 | `verify_wheel.py` 在新环境按锁安装依赖、安装非 editable wheel，再运行无 src 目录的测试 |
-| MCP 集成 | `validate_research_mcp.py` 使用显式计划与已有发布，启动本次临时传输并关闭 |
+| `run_tests.py` | 运行 `pytest` 并统一管理测试及子进程的隔离临时目录，测试结束后自动清理 |
+| `check_structure.py` | 检查模块分层导入、文件命名、版本一致性、`uv.lock` / AD 运行时 pin 摘要、生成契约哈希与 Markdown 链接 |
+| `stage_owner.py` / `pin_data_runtime.py` | 从指定的 `ashare-data` 源码构建候选 wheel，并更新 `src/ashare_quant/providers/data-runtime.json` |
+| `freeze_runtime.py` | 生成或校验（`--check`）core 与 `--native` 运行时依赖快照及 `src/ashare_quant/lock.sha256` |
+| `generate_contracts.py` / `export_mcp.py` | 基于临时空库导出 `api`、`tasks`、`paper` OpenAPI 契约、`identity.json` 与 `research-mcp.tools.json` |
+| `verify_wheel.py` | 在无 `src/` 源码树的新虚拟环境中按锁定哈希安装依赖与 wheel，验证运行身份与核心回归测试 |
+| `package_runtime.py` / `rebuild_runtime.py` | 打包配对的 AD/AQ wheel 与锁定依赖清单 / 在新空目录离线重建运行环境 |
+| `validate_research_mcp.py` | 使用显式计划对 `stdio` 与 `streamable-http` MCP 传输执行端到端集成校验 |
 
-## 依赖与运行时顺序
-
-1. 更新 AD 时，`stage_owner.py` 从指定源码构建候选 wheel，`pin_data_runtime.py` 固定提交、文件清单和 wheel 身份。
-2. 按[依赖指南](../docs/dependencies.md)更新 `uv.lock` 并同步环境。仅有源码/文档重构时不重建依赖。
-3. `freeze_runtime.py` 和 `freeze_runtime.py --native` 分别生成 core/native 依赖快照；日常验证使用 `--check`。
-4. 构建 AQ wheel，运行 `verify_wheel.py`，再由 `package_runtime.py` 保存配对 wheel、锁定依赖与恢复脚本。
-5. `rebuild_runtime.py` 只安装到不存在的新目录，核验恢复身份，不替换现有解释器。
-
-完整参数以各脚本 `--help` 和[开发指南](../docs/development.md)为准。脚本路径、产品 CLI、`python -m ashare_quant.paper` 及现有 `paper.*_cli` 模块保持独立入口；共用实现不改变调用格式。
+完整更新顺序与参数说明见 [开发、依赖与许可](../docs/development.md)。

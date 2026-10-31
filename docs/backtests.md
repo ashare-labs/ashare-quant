@@ -1,97 +1,51 @@
-# 通用分钟回测
+# 回测引擎与异步任务
 
-分钟入口 `python -m ashare_quant.backtests.minute --help`。输入保留原始来源、时间语义、零量记录、预热及执行域；研究导出不能变成实时观察证据。
+本篇说明通用分钟回测契约、来源行级使用规则，以及自定义 Python 与因子任务共用的异步队列、流式输入与存储预算机制。
 
-可复验的输入与策略仅在 tests/fixtures，验证器仅在 tests/support 或 scripts；产品包不含样本数据、预设算法运行器或演练命令。
+## 通用分钟回测（`ashare_quant.backtests.minute`）
 
-分钟运行保留原生撮合、T+1、费用、共享现金与预算预留。预算在 execution.reservation，根据未成交量及已发生费用冻结资金，不重复实现成交账本。检查点、隔离和 RQAlpha 内容验证在 execution.rqalpha。
+分钟回测入口为 `python -m ashare_quant.backtests.minute --help`，底层复用 RQAlpha 原生撮合、T+1、费用计算与 `execution.reservation` 挂单资金冻结。所有分钟回调均在独立的 50 位 `Decimal` 精度上下文中执行；每个交易日首根可用分钟柱出现前，账户使用当日已声明的前收盘观察值进行开盘前估值。
 
-所有分钟策略回调在独立的 50 位 Decimal 精度上下文内执行，避免上游首次导入降低
-全局精度后使相等均线产生假信号；读取原生运行身份也不改变调用方的小数上下文。
-新交易日的首根可用分钟柱出现前，账户使用该日已声明的前收盘观察估值，不沿用前一日
-截断分钟窗口的末柱。该前收盘仍是估值参考，不是新鲜报价或成交价格。
+### 有界分钟研究输入契约（`ad-minute-research.v1`）
 
-## 通用有界分钟研究
+消费 A数达 `export_minute_research` 导出的分钟研究包时，`MinuteInputs` 与 `run_backtest` 通过三个显式开关校验准入：`accept_assumed=True`（接受模拟收盘可见时钟）、`accept_state_replay=True`（接受事后逐日状态重放）、`accept_research=True`（接受研究模型假设）。
 
-AD 的 `export_minute_research` 输出 `ad-minute-research.v1`；AQ 使用
-`MinuteInputs(path, accept_assumed=True, accept_state_replay=True, accept_research=True)`
-预检，再把同样三个显式开关传给 `run_backtest`。三个开关分别接受模拟收盘可见时间、
-事后逐日状态重放和研究条件。预检通过不代表严格执行、历史 PIT 或聚宽对齐。
-旧 `aq-tdx-minute-research.v1/v2` 保留原有固定案例规则。
+| Profile 名称 | 窗口与标的能力 | 价格限制与公司行动模型 |
+| --- | --- | --- |
+| `source-labelled-closed-bars.v1`（默认） | 至多 20 只上市满 30 自然日的沪深主板非 ST、非停牌股票，至多 60 个连续交易日（首尾空仓） | 采用 `raw-previous-close-4pct-inward-cent.v1`（前收盘 ±4% 内向包络）；窗口内要求无已知公司行动重叠（`bounded_sources_no_known_overlap`） |
+| `source-labelled-corporate-date-model.v1` | 可扩展至 512 个连续交易日（含前后继自然日日历 ≤740 日） | 采用 `daily-preclose-mainboard-5pct-10pct.v1`（基于源 `preclose` 的 5%/10% 研究限价模型）与 `aq.corporate-date-model.v1` 现金分红记账模型（登记日收盘确权、除息日调减成本并记应收、派息日开盘前到账） |
 
-新 schema 按能力校验，不含日期、个股或供应商名单。默认能力支持 20 只以内沪深主板股票、
-最多 60 个连续交易日，显式前一日及后一交易日。逐日 listed=true、suspended=false、
-is_st=false 与首次上市日期必须有来源观察；首次上市不足 30 个自然日不支持。停牌和未知
-状态明确拒绝，不能当作缺分钟补齐。全部分钟必须覆盖所声明的现金交易时段。
+### 分钟行级来源准入规则（`minute-row-use.v1`）
 
-`research.profile` 为 `source-labelled-closed-bars.v1`，`purpose=retrospective_research`；
-`strict_execution_admitted/interval_verified/price_limit_verified/historical_pit` 均为 false。
-`research.assumptions` 必须逐项采用
-`ashare_quant.backtests.minute.research.ASSUMPTIONS`，`envelope` 为
-`raw-previous-close-4pct-inward-cent.v1`。该 4% 内向包络是执行限制，不能作为交易所涨跌停价。
-所有真实限制字段保持 null，源价格或订单触碰包络即拒绝。
+当输入携带 A数达行级质量诊断（如 `neigezhu` 高频分钟归档）时，A宽逐行核对来源契约哈希并执行独立裁定：
+- **无效或冲突价格（`price_invalid` / `price_conflict`）**：在该分钟槽拒绝撮合成交与最新估值；
+- **显式不可用分钟槽（`gap_policy="explicit_unavailable"`）**：策略调用 `attribute_history`、`history`、`get_bars` 或分钟级 `get_price` 时，在已声明的缺失时间索引处返回 `NaN`（不做插值或前向填充）；撮合器在该分钟拒绝成交，账户保留持仓并将上一可用价格标记为陈旧估值（`stale`）。
 
-| 输入 | 必需证据与约束 |
-|---|---|
-| `source_refs.evidence` | 名称 → `{source, sha256, ...}` 来源注册表；各 source_refs 必须引用存在的 SHA256 身份。摘要不认证上游真实性或独立性 |
-| `research.calendars` | 按实际涉及市场的 `{days: {日期: bool}, source_refs}`；覆盖前后继之间每个自然日，开市日恰好等于 calendar |
-| `states` | 每个证券日一行；source_observation 提供 listed/suspended/is_st/previous_close/first_listing_date 的 value、source_observed 状态及来源引用；历史可见时间 null，replay_effective_at 为当日 09:00 |
-| `previous_close_observation` | 同证券、真实前一交易日、raw close 与状态前收一致，有来源引用；不是凭空假设的除权参考价 |
-| `minute` | AD 原行、来源合同和行摘要绑定；六字段、标签、quality 不变；历史区间与可见时间 null，模型区间单独记录 |
-| 零成交分钟 | volume/amount 同为零，仅限 14:58–15:00 显式 closing_auction；phase_evidence 使用 source-labelled-closing-stage.v1、同标签/源行摘要、historical_phase_verified=false 和来源引用；保留零行且原生容量不允许成交 |
-| `action_coverage` | bounded_sources_no_known_overlap，complete/absence_proved/historical_pit=false；每证券有完整返回查询、全部事件及来源，窗口覆盖前一日至末日；每事件显式列 record/ex/payment/share_credit/new_share_trading 五日期，未知为 null，任一已知重叠拒绝 |
+---
 
-公司行动中查询返回完整并不等于所有公司行动已知；遗漏、未知日期和历史可见性继续保留为
-风险与研究假设。事件查询使用 `queries` 列表，每项包含 security、query_complete=true、
-start/end、source_rows、events、source_refs、milestones_checked（按上述顺序）以及
-unknown_dates_are_not_no_event=true。`source_rows` 必须等于 events 长度。缺失事件键不能
-解释为无事件。状态观测还需声明 dependency_conflicts=[]、intraday_halts_verified=false。
-`source_quality.execution_permission=false` 与非空 limitations 保留查询完整性、传输完整性
-等来源限制；source_observed 仅表示观察到来源字段，不是认证其真实性或严格执行可用性。
+## 共享异步任务队列（`tasks`）
 
-`research.capabilities` 必须明确 matching=next_open、lifecycle=closed_bars、
-capacity_policy=strict_minute、initial_positions=flat、terminal_positions=flat。
-运行配置偏离这些能力会在创建运行目录前拒绝。匹配、账户、T+1、手续费和现金预留由原生
-引擎执行；无另一套替代账本。该 schema 不提供开盘独立观察、JQ 日量容量或任意 Python
-断点恢复。完成目录按内容身份与产物哈希重入不重复交易；未完成目录保留并要求新目录重跑。
+自定义 Python（`/api/v1/python/jobs`）与因子计算评价（`/api/v1/factors/jobs`）共用同一控制数据库任务表、worker 租约、取消协议与存储预算。可通过 `GET /api/v1/tasks/service` 查看队列状态，契约定义见 [`contracts/tasks.openapi.json`](contracts/tasks.openapi.json)。
 
-可复验的完整合成构造和故障注入见 `tests/minute/test_research_contract.py`；真实源资料
-作为外部证据交付，不进入产品 wheel。接入新来源应在任务目录完成来源验收、量价/精度核对、
-状态与事件审查，再由 AD 公开导出；修改摘要或勾选开关不能替代这些审查。
+### 任务生命周期与恢复语义
 
-### 连续窗口与现金分红研究模型
+- **幂等提交与找回**：重复提交相同 `idempotency_key` 与相同请求体直接返回原任务；网络中断或客户端刷新后可通过原幂等键或 `job_id` 查询状态与已发布结果。
+- **取消与重跑**：`POST .../cancel` 将活动任务置为 `cancelling`，待 worker 停止子进程组并确认后转为最终态 `cancelled`。由于自定义 Python 内存状态不支持断点序列化，`can_resume` 固定为 `false`，调用 `POST .../resume` 返回 `PYTHON_RESTART_REQUIRED`。
+- **历史兼容与升级隔离**：worker 仅执行与当前后端源码身份匹配的待处理任务；旧源码或已退役家族（`daily`、`portfolio`）的遗留未完成记录在 `display_status` 中显示为 `runtime_unavailable` 或 `retired`（计入 `historical_counts`），不会阻塞新任务队列，其已封存结果仍可通过 `/api/v1/history/jobs` 只读访问。
 
-显式选择 `source-labelled-corporate-date-model.v1` 才可扩展到 512 个连续交易日
-（含前后继的自然日日历不超过 740 日）；原有 profile 的 60 日、4% 包络和无行动限制保持不变。
-仍要求已上市至少 30 日、非 ST、无日级停牌的主板股票，首尾空仓、next_open、
-closed_bars、strict_minute，以及全部三个研究开关。不能借此接受未知停牌状态或盘中权限。
-该 profile 使用 `CORPORATE_ASSUMPTIONS`，`envelope=daily-preclose-mainboard-5pct-10pct.v1`，
-capabilities 另声明 `corporate_actions=source_scoped_cash_dates`。
+### 存储与产物预算
 
-每个 state 必须携带 `daily_limit_model`：schema 为上述限价模型名，source_row 保留
-同证券日原始日线 preclose、tradestatus、is_st、source、observed_at，绑定 source_row_sha256
-和 source_refs，并明确 exchange_limits_verified=false。模型按 preclose 的 5%/10%、
-分四舍五入构造研究阈值；目前准入仍仅非 ST，实际使用 10%。真实 reference_price、
-upper_limit、lower_limit 仍为 null。源 OHLC 与模型的半分一致性容差只处理存储精度，
-不会修改源价格或放宽订单阈值。新日 09:00 使用原始前收维持权益转移基础；09:30 起若无
-当日分钟观察，使用显式源 preclose 模型，估值状态为 daily_reference_model。
+实例级存储保护通过三项指标控制（可通过 `ASHARE_QUANT_JOB_POLICY` 配置）：
 
-`corporate_schedule` 保留 AD 的完整来源范围响应，`corporate_account_model` 为现有
-`aq.corporate-date-model.v1`。action_coverage 声明 source_scoped_corporate_date_model，
-绑定 binding_sha256、response_sha256 和 evidence，complete/absence_proved/historical_pit
-均为 false。复用日线原生 CorporateStockPosition：登记日收盘数量确定权益，除息日调整
-成本与应收，支付日开盘前到账；清仓后仍保留未到账权益。仅支持现金分红，送转股明确拒绝；
-窗口前登记且初始空仓的行动不产生本账户权益。结果保留权益基数、金额和各记账阶段日期。
+| 预算项 | 默认值 | 超限错误码与说明 |
+| --- | --- | --- |
+| `artifact_bytes` | `512 MiB`（536,870,912 字节） | `M2_JOB_ARTIFACT_LIMIT`；限制**单个任务**保留产物的最大字节数（`artifact_budget_scope=per_task`） |
+| `retained_artifact_bytes` | `512 GB`（512,000,000,000 字节） | `M2_JOB_RETENTION_LIMIT`；所有任务保留产物与待执行预留额度的总上限 |
+| `disk_free_bytes` | `1 GiB`（1,073,741,824 字节） | `M2_JOB_STORAGE_RESERVE`；所在文件系统的最小空闲空间储备 |
 
-来源绑定的 volume=amount=0 分钟可保留在任意声明时段，原生成交容量为零，市价尝试取消；
-零量本身不证明停牌、交易阶段或报价新鲜度。保留的价格只作非认证研究估值。
-负量、量额冲突、未知状态及来源明确禁用仍受原规则限制。长窗口估值按当日索引查询，
-不在每次账户观察时重扫全部历史。合成边界验证见 `tests/minute/test_corporate_research.py`。
+worker 在任务启动前、运行中（每 2 秒采样）、退出后及结果发布前检查当前任务产物大小与磁盘余量；已发布结果的读取采用 64 KiB 分块流式校验输出，不受写入预算限制。
 
-冻结午休成交容量案例的复验入口是 `python -m tests.fixtures.minute_reference.audit_capacity_regression --help`。它核对外部案例、策略、输入和原生结果哈希，在新目录重跑并审计分钟容量、现金差额及成交变化。该入口限定既有 `R09-lunch-participation` 案例；历史 ID、`aq-minute-r09-capacity-fix.v1` schema 和证据哈希保留，名称不表示支持任意案例。所需历史输入不随包发布；案例和基线只读，结果只写显式指定的新目录。
+### 流式输入与实时进度采样
 
-## 受控分钟研究中的来源使用规则
-
-`accept_research=True` 仅允许显式声明的回溯研究模式，绝不会覆盖来源绑定的行级拒绝裁定，也不背书真实成交、历史可得性、全市场证券覆盖或任意持仓生命周期。AD 导出的 `minute-row-use.v1` 对 `execution`（撮合成交）与 `fresh_valuation`（最新估值）分别给出独立裁定（`deny` 或 `not_granted`），AQ 会根据不可变的 AD 行数据重新计算裁定并校验来源契约哈希、行哈希以及原生标识与数值。
-
-显式标记为无效（`price_invalid`）或冲突（`price_conflict`）的价格会在对应时间标签处拒绝撮合与最新估值；硬性成交活动缺陷会拒绝撮合执行。常规默认模式要求完整声明的分钟网格；导出端可显式选择 `gap_policy="explicit_unavailable"` 以导出部分快照，AQ 要求观测到的分钟柱与绑定不可用槽的精确并集。策略分钟历史接口（`attribute_history`、`history`、`get_bars`、分钟级 `get_price`）会在请求窗口内统计这些已声明的缺失槽并在原时间索引处返回 `NaN`（不执行插值、零值填充或前向填充）。在被拒绝或缺失的分钟内，撮合器直接拒绝该报价，原生账户保留持仓数量，上一可用价格仅作为陈旧账户估值标记（stale account mark）。
+- **流式压缩输入（`python-demand-job.v2` / `python-project-job.v3`）**：按证券与交易日流式读取并写入 gzip JSONL（`input.json` 记录各证据文件 SHA-256 与行数），撮合缓存仅保留当前交易日，历史缓存按滑动请求窗口淘汰，事件日志保留末 500 条展示记录。
+- **实时进度（`progress`）**：任务详情实时返回 worker 每 2 秒采样的单调时钟执行用时（`elapsed_seconds`）、当前阶段、已完成交易日数 / 总交易日数、模拟日期以及回测子进程的当前与峰值内存（`RSS`）。

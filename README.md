@@ -2,57 +2,55 @@
 
 ## 项目简介
 
-A宽是本地 A 股策略、回测与模拟后端。A数达负责数据，RQAlpha 负责原生撮合和账户。支持可信自定义 Python 日频/分钟策略、因子计算评价、持久异步任务与历史结果读取；数据覆盖与可用运行模式以本次目录、预检和冻结回执为准。
+A宽（`ashare-quant`）是本地 A 股策略研究、回测与模拟账本后端。系统与 A数达（`ashare-data`）及前端 `quant-web` 配对运行：A数达负责不可变行情、参考与财务数据供给，RQAlpha 提供底层撮合与原生账户账本，A宽提供自定义 Python 策略工作台（`aquant`）、因子计算与评价、共享异步任务队列、收益归因分析、历史模拟账本读取以及 Agent Research MCP 接口。
 
-包版本以 [pyproject.toml](pyproject.toml) 为准，A数达依赖以[运行时 pin](src/ashare_quant/providers/data-runtime.json)为准。源码身份随实际文件内容计算，新源码不继承历史独立验收结论。
+当前包版本以 [`pyproject.toml`](pyproject.toml) 为准，配对的 A数达 wheel 与源码指纹记录在 [`src/ashare_quant/providers/data-runtime.json`](src/ashare_quant/providers/data-runtime.json)。
 
 ## 安装指南
 
-需要 Python 3.12。原生引擎安装前阅读 [许可证](docs/licensing.md)。从 AD 流水线给出的 A数达候选构建并核对本地依赖 wheel：
+运行环境要求 Python 3.12 与 `uv`。安装前先从配对的 `ashare-data` 源码构建本地依赖 wheel，再按 `uv.lock` 同步锁定环境：
 
 ```sh
 python scripts/stage_owner.py --source /path/to/ashare-data
-uv sync --locked --extra native
+uv sync --locked --extra native --extra factor-evaluation --extra mcp
 ```
 
-`uv.lock` 是安装版本和包哈希的唯一锁定来源；`--locked` 会拒绝与项目声明不一致的锁。核心、原生、离线安装及按需 pip 导出见 [依赖指南](docs/dependencies.md)，更新流程见 [开发指南](docs/development.md)。行情、凭据、账户和历史运行产物不随发行包发布。
-
-A数达 wheel pin 与未发布候选状态 `unpublished_candidate` 由 AD 流水线写入 [运行时 pin](src/ashare_quant/providers/data-runtime.json)。本文档不另定 pin 版本，也不把该状态改写成已发布版本。
+依赖锁定、运行时快照（`runtime-lock.json` / `native-runtime-lock.json`）、离线导出与软件许可说明见 [开发、依赖与许可](docs/development.md)。
 
 ## 快速开始
 
-使用已有正式日线库时，先按 [数据选择、运行与恢复](docs/data-runtime.md) 准备资产清单。清单引用现有数据，运行状态另存；无需复制整库。所有命令使用同一清单，与当前工作目录无关：
+所有服务共享同一份 `ashare-deployment.v1` 部署清单（配置格式见 [数据运行与恢复](docs/data-runtime.md)）：
 
 ```sh
 export ASHARE_DEPLOYMENT=/path/to/data/deployment.json
 python -m ashare_quant.deployment doctor
 python -m ashare_quant.deployment init
+
+# 启动研究 API、异步任务 worker 与只读模拟账户服务
 python -m ashare_quant.deployment api
-# 另一个终端，使用同一 ASHARE_DEPLOYMENT
 python -m ashare_quant.deployment task-worker
+python -m ashare_quant.deployment paper
 ```
 
-通过通用数据接口查询已发布行情及覆盖，Python 任务按提交范围准备并冻结输入、日历和来源回执；缺少执行证据会明确拒绝。与 quant-web 按同一份部署清单配对启动。
-
-使用 `/api/v1/python/catalogue` 获取环境身份，再提交用户自己的 Python 源码、频率、证券、日期、参数和确认项。接口不返回默认策略或填充策略参数。策略提交见 [Python 工作台](docs/python-workbench.md)。已退役路由的删除记录见 [前端迁移](docs/formal-backend-migration.md)。文档地图见 [docs/README.md](docs/README.md)。
+正式本机部署（`ashare-local`）默认端口为：API `18839`、Paper `18818`、Web `41839`。运行 `python -m ashare_quant.deployment commands` 可打印供 `quant-web` 启动使用的环境变量。
 
 ## 使用指南
 
-- [因子看板与评价](docs/factors.md)：已有两来源库、冻结输入、真实数值与同页统计诊断。
-- [aquant 导入改写](docs/aquant-migration.md)：已保存策略从 `jqdata` 改为 `aquant` 的准备与应用；运行时写法见工作台。
-- [Python 策略工作台](docs/python-workbench.md)：自动准备正式数据、运行自定义日频/分钟 Python、查看与取消任务。
-- [研究任务](docs/tasks.md)：共享队列、取消、结果和重连找回。
-- [数据选择、运行与恢复](docs/data-runtime.md)：资产清单、统一端口、完整备份、空目录恢复、财务质量与分钟查询。
-- [通用分钟回测](docs/backtests.md)：模块入口、有界分钟研究与来源使用规则。
-- [账户历史](docs/paper.md)：只读历史与独立账户运行时边界。
-- [结果分析](docs/result-analysis.md)、[文档索引](docs/README.md)、[开发与契约](docs/development.md)、[迁移说明](docs/formal-backend-migration.md)。
+文档索引见 [docs/README.md](docs/README.md)，按功能域划分为 8 篇指南：
 
-正式本机入口是 ashare-local，与 quant-web 配对：API `18839`、paper `18818`、Web `41839`。这是清单上的正式端口；候选或隔离验收若改用其他端口，那些端口不是 ashare-local 的正式入口。`python -m ashare_quant.deployment commands` 打印该清单的 `FRONTEND_PORT`、`ASHARE_API_URL` 和 `ASHARE_PAPER_URL`，在 quant-web 目录按其说明启动。Python 工作台前缀 `/api/v1/python`，正式数据前缀 `/api/v1/product`，共享任务状态 `/api/v1/tasks/service`，历史任务 `/api/v1/history`，已发布研究行情 `/api/v1/market`。paper 使用独立状态根。生成契约位于 [docs/contracts](docs/contracts)。
+- [数据、启动与恢复](docs/data-runtime.md)：`deployment.json` 资产配置、服务启动、状态与源资产备份恢复、`/api/v1/product` 行情/财务/分钟查询。
+- [Python 策略工作台](docs/python-workbench.md)：`aquant` 策略 API、单文件与多文件策略项目、`X-Quant-Workspace` 工作空间、回测归属列表及旧 `jqdata` 导入迁移。
+- [回测引擎与异步任务](docs/backtests.md)：分钟与日频回测模型、来源行级准入、共享异步任务队列、流式输入与存储预算。
+- [因子看板与离线评价](docs/factors.md)：368 项统一因子目录（聚宽 19 + Alpha191 + Qlib Alpha158）、数据源登记与 Alphalens 评价。
+- [结果分析与收益归因](docs/result-analysis.md)：`returns-v1` / `returns-v2` 相对净值超额口径、20 项核心指标定义、比较基准切换与交易盈亏归因。
+- [账户历史与运行时迁移](docs/paper.md)：`/api/v1/paper` 只读历史查询、已结算 v3 账本运行时升级授权与持仓续接。
+- [Agent 研究 MCP](docs/research-mcp.md)：面向 AI Agent 的 13 个研究与因子工具（`stdio` / `streamable-http`）、分页与幂等提交协议。
+- [开发、依赖与许可](docs/development.md)：依赖锁定、运行时快照、OpenAPI/MCP 契约生成、wheel 隔离验证、软件许可与历史接口退役对照表。
 
 ## 限制与说明
 
-这是本地可信策略环境，不是任意代码沙箱或实盘券商。历史来源、PIT、分钟完整性、价限与公司行动的未知项必须保留；合成数据不能代表真实市场验收。金额保持十进制字符串，股数和成交由原生账本决定。
+以下全局边界适用于本仓库所有模块，各分册不再重复赘述：
 
-已有 v4 控制库中的受支持冻结任务可校验读取；执行仍逐任务绑定源码与环境。旧表结构不自动迁移。旧回执、策略源码、账户和原始行情不删除、不改写。Web 使用上一节的 ashare-local 端口与 quant-web 配对；已退役的旧页面不再作为本 API 的界面。
-
-Agent 研究入口见 [Research MCP](docs/research-mcp.md)，复用同一研究 API 和队列。
+1. **受信任本地执行环境**：自定义 Python 策略在本地 worker 子进程中以当前用户权限执行，并非面向不受信任多租户的恶意代码隔离沙箱；提交任务需显式确认 `trusted_local_code=True` 与 `accept_research_model=True`。
+2. **数据与证据继承**：A宽不自行抓取、修补或伪造行情数据；知识时点（PIT）、停牌、涨跌停限价（如 5%/10% 前收研究模型）与公司行动的覆盖范围均继承自所绑定 A数达发布的回执声明。
+3. **代码包与运行产物分离**：源码树与发行 wheel 不包含真实行情库、个人凭据、模拟账户账本或历史回测产物；冻结任务输入与已发布结果保持只读，不随源码升级而静默重写。

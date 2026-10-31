@@ -1,15 +1,26 @@
-# Contributing
+# 贡献指南
 
-按业务功能组织代码，不用开发轮次、验收题号或临时版本作为产品目录。产品不得导入 tests、examples、scripts 或历史报告。稳定共用类型与纯校验放 core，持久化、执行和队列能力分别放 storage、execution 或 tasks；core 不依赖业务功能包。验证器放 tests 或根目录 scripts，跨测试模块共用的构造器放 tests/support。删除失去用途的材料，不建立 archives 替代设计判断。
+## 目录与命名约定
 
-Python 包、模块和 Python 脚本使用 snake_case；文档及普通非 Python 目录使用 kebab-case。公开协议、策略 ID 与数据标签变更须显式说明，不机械改写回执内容。README 保留面向人的五章结构。
+源码位于 `src/ashare_quant`，按业务职责划分为功能子包：`backtests`、`strategies`、`portfolio`、`execution`、`paper`、`tasks`、`market`、`storage`、`providers`、`analysis`、`deployment`、`mcp`，以及放置基础类型与纯校验的 `core`。
 
-开发脚本统一 scripts 入口；tests 只保留必要 fixtures 和退役引擎验证支撑；不得新建产品 examples 目录；docs 只保留当前指南、参考和必要迁移说明。禁止提交个人绝对路径、凭据、真实账户、缓存和构建产物。
+- **依赖方向**：`core` 仅依赖基础契约，不反向导入业务功能包；产品代码不得导入 `tests/`、`scripts/` 或历史验证材料。
+- **命名规范**：Python 包、模块和脚本使用 `snake_case`；文档及普通非 Python 目录使用 `kebab-case`。不使用阶段或轮次代号（如 `m2`、`d1`、`br1`、`round_one`）命名产品模块。
+- **整洁度原则**：仓库根目录不新建 `examples/`、`archives/` 或 `tools/` 目录；跨测试共用的轻量构造器集中在 `tests/support/`。不在仓库中提交个人绝对路径、凭据、真实账户或构建产物。
 
-运行 `python scripts/check_structure.py`、`ruff check src scripts tests` 和受影响测试。契约变更运行 `python scripts/generate_contracts.py` 并审阅 diff。涉及资源、动态导入和恢复身份时，用实际 wheel 验证对应入口；不要为等价移动或文档修改增加无必要门槛。
+## 文档与契约维护
 
+- `README.md` 保持「项目简介、安装指南、快速开始、使用指南、限制与说明」五章结构。
+- HTTP 与 MCP 接口变更后，运行 `python scripts/generate_contracts.py` 与 `python scripts/export_mcp.py` 更新 `docs/contracts/` 下的生成契约，勿手工编辑 JSON 契约文件。
 
-日常回归使用 python scripts/run_tests.py -q（可追加测试文件/筛选参数）。
-它为 pytest 和子进程分配自有临时目录、隔离用户部署配置，并在成功或失败后清理本次临时目录。
-pytest 自身默认也不保留 tmp_path。确需调查失败时显式使用 --keep-temp，输出会标明保留位置；
-不把运行环境、数据库或整份 evidence 目录复制为交付。SIGKILL/断电等无法执行 finally 的中断需单独核查残留。
+## 本地验证流程
+
+日常测试统一通过 `scripts/run_tests.py` 运行（自动分配并清理隔离临时目录，如需排查失败现场可传 `--keep-temp`）：
+
+```sh
+python scripts/check_structure.py
+python scripts/freeze_runtime.py --check
+python scripts/freeze_runtime.py --native --check
+ruff check src scripts tests
+python scripts/run_tests.py -q
+```

@@ -1,10 +1,16 @@
 # 数据、启动与恢复
 
-所有正式入口选择同一份 `ashare-deployment.v1` 清单。优先级是 `--deployment`、`ASHARE_DEPLOYMENT`、`ASHARE_DATA_ROOT/deployment.json`、用户配置 `$XDG_CONFIG_HOME/ashare/deployment.json`（默认 `~/.config/ashare/deployment.json`）。清单里的相对路径以 `data_root` 为准，`data_root` 又相对清单所在目录。正式行情、财务/因子、AQ 任务账户、临时文件和受保护的外部环境分别登记为资产；登记不代表可以删除。
+本篇说明 `ashare-deployment.v1` 部署清单的配置方式、服务启动、运行状态与源资产备份恢复，以及 `/api/v1/product` 与 `/api/v1/market` 的数据查询接口。
 
-## 使用已有正式数据
+## 部署清单配置（`deployment.json`）
 
-行情查询的最小清单如下。`main` 指向已有 `ashare-data-local`，发布 Store 和运行状态放在另一目录，不复制主库。普通回测还需配置下述参考集合。
+所有服务入口按以下优先级解析部署清单：
+1. 命令行 `--deployment`；
+2. 环境变量 `ASHARE_DEPLOYMENT`；
+3. `ASHARE_DATA_ROOT/deployment.json`；
+4. 用户默认配置 `$XDG_CONFIG_HOME/ashare/deployment.json`（默认 `~/.config/ashare/deployment.json`）。
+
+清单中的相对路径以 `data_root` 为基准（`data_root` 相对清单文件所在目录解析）：
 
 ```json
 {
@@ -12,34 +18,49 @@
   "data_root": ".",
   "assets": {
     "main": {"kind": "local_daily", "path": "/data/ashare-data-local", "role": "market", "retention": "preserve"},
-    "releases": {"kind": "store", "path": "ad/releases", "role": "publication", "retention": "preserve"}
+    "releases": {"kind": "store", "path": "ad/releases", "role": "publication", "retention": "preserve"},
+    "released-market": {"kind": "market_release", "path": "ad/market-releases", "role": "market", "retention": "preserve"}
   },
   "profiles": {
     "product": {
-      "kind": "product", "daily_asset": "main", "release_store_asset": "releases",
-      "control_db": "aq/product/control.sqlite3", "paper_root": "aq/product/paper",
-      "api_port": 18839, "paper_port": 18818, "web_port": 41839,
-      "default_dataset_id": null
+      "kind": "product",
+      "daily_asset": "main",
+      "release_store_asset": "releases",
+      "market_release": {"asset": "released-market", "release_id": 1, "manifest_sha256": "<64位SHA256>"},
+      "control_db": "aq/product/control.sqlite3",
+      "paper_root": "aq/product/paper",
+      "api_port": 18839,
+      "paper_port": 18818,
+      "web_port": 41839,
+      "default_dataset_id": null,
+      "default_reference_set": "released-reference",
+      "reference_sets": {
+        "released-reference": {"kind": "market_release"}
+      }
     }
   }
 }
 ```
 
-`owner_store_asset` 保留已有状态的 owner Store 定位；新研究使用明确发布来源。`required_assets` 列出本配置必需的库外输入、运行安装包等资产名称。不能把临时目录或受保护的旧环境列为必需输入。其他配置的资产和受保护外部资产仅登记，不随正式状态包复制。
+- **参考数据组（`reference_sets`）**：推荐使用 `"kind": "market_release"` 直接复用 `market_release` 中的逐日状态、涨跌停限价与公司行动；也支持登记独立的 `daily_execution` 或 `historical_market` 绑定资产。
+- **可选比较基准发布（`benchmark_release`）**：若主交易发布不含指数行情，可在 profile 中附加 `benchmark_release: {"asset": "...", "release_id": 1, "manifest_sha256": "..."}` 供回测收益比较只读查询。
 
-普通回测在资产中登记 `daily_research`、`daily_execution` 和 `corporate_history` 包，每项包含 `path`、相对包目录的 `binding`（通常为 `binding.json`）和该绑定文件的 `binding_sha256`。在 profile 中添加 `reference_sets`，例如 `{"daily":{"kind":"daily_execution","research_asset":"research","execution_asset":"execution","corporate_history_asset":"corporate"}}`，并设置 `default_reference_set="daily"`。另一种集合用 `kind="historical_market"`、`market_asset` 和 `corporate_history_asset`。配置只说明来源可选择；所选证券和日期是否就绪，由 coverage 逐项检查。策略接口与运行假设见 [Python 工作台](python-workbench.md)。
+---
 
-## 检查和启动
+## 检查与启动服务
 
 ```sh
+# 1. 只读诊断数据库结构、AD 身份、原生依赖与资产完备性
 python -m ashare_quant.deployment --deployment /data/product/deployment.json doctor
+
+# 2. 初始化控制数据库与候选状态目录
 python -m ashare_quant.deployment --deployment /data/product/deployment.json init
+
+# 3. 输出配对前端环境变量（FRONTEND_PORT、ASHARE_API_URL、ASHARE_PAPER_URL）
 python -m ashare_quant.deployment --deployment /data/product/deployment.json commands
 ```
 
-`doctor` 不建目录、不建库，分别报告数据库结构、AD 身份、原生依赖和缺失资产。为避免在源目录创建 WAL 辅助文件，结构检查只读数据库主文件；尚未 checkpoint 的新建表会明确显示未就绪。`init` 是显式创建候选运行状态的入口，源目录缺少有效 `daily.sqlite3` 时先拒绝，不产生 AQ 状态。
-
-在各终端以前台方式运行：
+在各自终端前台启动三个服务进程：
 
 ```sh
 python -m ashare_quant.deployment --deployment /data/product/deployment.json api
@@ -47,120 +68,56 @@ python -m ashare_quant.deployment --deployment /data/product/deployment.json tas
 python -m ashare_quant.deployment --deployment /data/product/deployment.json paper
 ```
 
-API 和任务 worker 共用同一 `control_db`，paper 使用同一清单的 `paper_root`。正式本机入口 ashare-local 与 quant-web 配对，默认端口是 API `18839`、paper `18818`、Web `41839`。候选或隔离验收清单里的其他端口不是这个正式入口。`commands` 输出该清单上的 `FRONTEND_PORT`、`ASHARE_API_URL` 和 `ASHARE_PAPER_URL`，在 quant-web 目录按其说明启动。命令不安装自启，不连接券商，也不采集数据。
+- 统一行情入口也可通过 `python -I -B -m ashare_quant.deployment.market_entry --root <entry-root>` 启动；若目录 `catalog.json` 配置了 `account_reader`，可经只读子进程查询已迁移的独立账户。
+- 当发布存储遇到短暂 `SQLITE_BUSY` 锁竞争时，发布接口返回 `503 PRODUCT_DATA_UNAVAILABLE`（附 `Retry-After: 2`）；客户端等待至少 2 秒后以相同参数重试即可，相同源字节与参考绑定会幂等复用同一数据集身份。
 
-旧 `ashare-quant` / `python -m ashare_quant.cli` 命令选择清单后也使用同一状态、端口和完整备份入口。显式 `--db` 与清单冲突时拒绝；未选清单时，涉及状态的旧命令必须明确提供 `--db` 或 `ASHARE_QUANT_DB`，不会在当前目录另建默认库。
+---
 
-通用 product API 支持真实证券目录、日期及参考集合选择，先检查覆盖再发布。正式界面是同一清单上的 quant-web。已退役的组合页面不再接到本 API；旧结果走 `/history`。发布保留真实来源、交易状态、派生价限与独立公司行动计划，需确认页面展示的回溯研究模型。缺证会明确拒绝；用户可另外选择 `price_only_no_limits` 价格诊断，但它不承担经济回测语义，已有公司行动计划也不能在任务中被剥离。缺行情或预热数据始终拒绝执行。
+## 备份与空目录恢复
 
-## 发布繁忙时重试
+### 备份运行状态与可选源资产
 
-常规启动使用单个本机 API。多个 API 进程共享同一发布 Store 时，发布写入会串行，但结果读取仍可能与另一请求的 SQLite 提交重叠。Store 的 SQLite 连接不等待锁；短暂的 `SQLITE_BUSY` 会使发布接口返回 `503 PRODUCT_DATA_UNAVAILABLE`，响应带 `Retry-After: 2` 和 `Cache-Control: no-store`。这不表示主行情缺失，也不保证每个并发请求第一次都成功；跨机器或网络文件系统共享 Store 未获支持。
-
-收到该响应后等待至少 2 秒，在来源未改变的情况下重试完全相同的证券、日期、来源、模式和参考集合。页面保留选择，但清除覆盖结果和诊断确认；普通模式须重新检查覆盖，诊断模式须重新读取行情并确认，然后再发布。页面不会自动重试或创建回测任务。客户端应限制重试次数；持续失败时检查服务异常链和所选目录，不能把所有 `PRODUCT_DATA_UNAVAILABLE` 都当作锁忙，因为权限、磁盘等错误也使用此码。
-
-失败可能发生在目录提交前，也可能发生在 AD 已提交、AQ 尚未读回时。因此不能仅凭 503 判定“什么也没写”，也不要删除输出或改名重新发布。相同源字节、参考绑定与请求会重用同一内容身份，重复请求不会增加相同数据集或自动提交账户任务；若来源更新，需重新核对返回的来源和内容身份。本行为不承诺多进程部署的吞吐或延迟。
-
-## 保存运行状态
-
-停止本配置的 API、worker、paper，再执行：
+停止当前配置的 `api`、`task-worker` 与 `paper` 后执行备份：
 
 ```sh
+# 备份 AQ 运行状态（控制库快照、任务产物、检查点、paper 账本、已发布 Store 与必需小型资产）
 python -m ashare_quant.deployment --deployment /data/product/deployment.json backup /backup/product-state
-python -m ashare_quant.deployment verify /backup/product-state --expected-sha256 RETAINED_MANIFEST_SHA256
+python -m ashare_quant.deployment verify /backup/product-state --expected-sha256 <MANIFEST_SHA256>
+
+# 显式包含未受保护的大容量源资产（如 LocalDaily 主库）
+python -m ashare_quant.deployment --deployment /data/product/deployment.json backup /backup/product-full --include-source-assets
 ```
 
-返回值给出 `manifest_sha256`，应与备份分开保存。备份目录包含 AQ 数据库一致性快照、`.tasks`、`engines`、`inputs`、检查点/回执、完整 paper 目录、已发布 Store、选用 owner Store、选中参考集合的小型来源包、`required_assets`、原始清单和运行源码/依赖身份。显式必需的 `financial`、`factor` 或其他库外输入都会保存；若把整个 `local_daily` 主库列为必需，则必须显式选择下述整库备份，否则提前拒绝。输入和回执保留原字节，包括原始来源路径字符串。
+### 在空目录恢复
 
-备份持有配置锁、既有文件写锁和状态数据库写保留锁；有运行进程、活动/未核对的任务、缺失或变化的检查点、变化的库外文件时拒绝。待执行任务可以保存。源文件在复制前后做清单和 hash 检查；不能以单个 SQLite 成功快照代替整个目录的一致性。未选择清单、仅显式选择 `--db` 的旧 `ashare-quant backup` 仍只是 SQLite 文件快照，不能用于完整恢复。
-
-状态包不包含完整正式行情大库。它能恢复已有冻结任务、账户和成交；仅原运行时允许继续的任务才可执行，任意 Python 内存不支持断点续跑。在新机器搜索或发布新行情，还需可用主库或下述源资产包。
-
-## 备份正式源资产
-
-```sh
-python -m ashare_quant.deployment --deployment /data/product/deployment.json backup /backup/product-with-sources --include-source-assets
-```
-
-这是显式的大容量操作。它增加清单中未受保护的源资产，要求 LocalDaily 持久 `writer.lock` 可锁定，使用 SQLite backup 合并私有副本里的已提交 WAL，并完整保存 raw/evidence 等库外文件。前后清单和全量文件 hash 必须稳定，否则拒绝。输出的 `omitted_assets` 精确列出未包含的受保护外部环境、临时资产和原因；不把这些目录称为已备份。此实现验收只用隔离的小型测试源，不复制现有大库。
-
-## 在空目录恢复
-
-先用备份配套的原版本运行环境。正式交付的 runtime 资产含 AD/AQ wheel、hash 锁定依赖清单和 `rebuild_runtime.py`：
+先使用交付包中的 `rebuild_runtime.py` 重建匹配的虚拟环境，再校验并恢复状态：
 
 ```sh
 python /delivery/runtime/rebuild_runtime.py /restore/venv --bundle /delivery/runtime --offline
-/restore/venv/bin/python -m ashare_quant.deployment restore /backup/product-state /restore/product --expected-sha256 RETAINED_MANIFEST_SHA256
+/restore/venv/bin/python -m ashare_quant.deployment restore /backup/product-state /restore/product --expected-sha256 <MANIFEST_SHA256>
 /restore/venv/bin/python -m ashare_quant.deployment --deployment /restore/product/deployment.json doctor
-/restore/venv/bin/python -m ashare_quant.deployment --deployment /restore/product/deployment.json task-worker --once
 ```
 
-离线重建需事先保留匹配平台的 Python 和完整依赖缓存；交付的 wheel/锁文件不等于第三方依赖 wheelhouse。需要联网获取依赖时使用相同 hash 锁定清单去掉 `--offline`。恢复包也保存 `runtime/python` 下的确切 AQ/AD 源码与包元数据、`runtime/requirements.lock` 和恢复说明，可用来核对运行身份。恢复拒绝不同 Python、平台、依赖或源码，不悄悄迁移旧任务。
+---
 
-目标须为空目录。恢复先核对完整清单、文件 hash 和运行身份，再复制，并生成新的 `deployment.json` 与 `restore-receipt.json`。只改运行清单里的存储位置，原始清单保存在 `original-deployment.json`；任务输入、原始出处、native checkpoint 和回执不重写。状态包的正式主库路径仍是外部引用，缺失时 `doctor` 明确报告；已冻结结果仍可读取；续跑受原运行时和任务能力限制。含源资产的包则把主库定位到恢复目录。
+## 产品数据、财务与分钟查询接口
 
-用恢复后的配置启动 API/worker，核对原任务结果、资金、持仓和成交，再处理待执行任务。`verify` 和 `restore` 拒绝多余文件、缺失文件、路径越界、内容改变和非空目标；manifest 摘要须来自可信保存的回执。备份工具不会清理原目录，也不会修改旧服务。
+### 正式数据与历史任务查询
 
-## 统一入口发布边界
+| 路径前缀 | 功能说明 |
+| --- | --- |
+| `GET /api/v1/product/config`、`catalogue`、`prices`、`coverage` | 查询当前配置身份（`configuration_id`）、证券目录、日线行情与参考覆盖 |
+| `POST /api/v1/product/releases` | 将通过覆盖检查（`covered_research` 或 `price_only_no_limits` 诊断模式）的证券与日期范围发布为冻结研究数据集 |
+| `GET /api/v1/market/stores`、`/market/{alias}/{dataset}/...` | 通用只读 Store 行情与覆盖查询（对应 CLI `market-describe`、`market-read`、`market-coverage`） |
+| `GET /api/v1/history/jobs`、`/history/strategies` | 只读查询 `daily`、`portfolio`、`python`、`factors` 历史任务详情、manifest、日志、结果与历史注册策略 |
 
-正式入口由安装的 `ashare_quant.deployment` 和 `market_entry` 提供。开发验证区的启动脚本和配置夹具不作为产品模板发布，不从测试目录加载正式策略。部署目录里的真实数据、审计清单、覆盖文件、账户与已冻结旧运行时保持独立。代码候选验收不自动替换清单、入口或运行环境。
+### 财务质量查询（`/api/v1/product/financial/*`）
 
-### 用户默认清单
+- **`POST /api/v1/product/financial/point`**：按 `security`、`field`、`period`、`source`、带时区的 `as_of` 及 `mode`（默认 `official_daily`，可选 `historical_pit` 或 `source_research`；查询原生表行时附 `statement` 与 `title`）查询单点财务数据。
+- **`GET /api/v1/product/financial/coverage`**：接受可选 `security` 与 `day` 参数，返回分类覆盖状态（区分正常覆盖、已退役交易代码、跨源别名、停牌日、退市与未解决缺口）。
 
-AD/AQ 依次选择显式 --deployment、ASHARE_DEPLOYMENT、
-ASHARE_DATA_ROOT/deployment.json、$XDG_CONFIG_HOME/ashare/deployment.json。
-未设置 XDG_CONFIG_HOME 时使用 ~/.config/ashare/deployment.json；相对 XDG 路径不生效。
-用户配置可以是指向仓库外唯一部署清单的符号链接，不需要复制清单或原始数据。
-已有清单缺失、断链或无效时直接报错，不尝试其他库。发现配置不会初始化状态、启动服务或迁移账户。
-API、旧 CLI 和 AD 产品读取共用此选择；维护日线的显式 --root 仍优先。
-部署实例里的数据、证据和账户不提交 Git。
+### 分钟数据查询（`/api/v1/product/minute/*`）
 
-## 固定行情发布与保留账户运行时
-
-profile 可选择 `market_release: {asset, release_id, manifest_sha256}`，对应资产
-`kind: market_release`、`role: market`。AD 的 Parquet 文件清单、证券身份、日历和规则
-一起固定。产品日线、分钟和研究发布通过相同 owner 工厂读取；API 的 configuration_id
-同时绑定行情版本与默认分钟来源。运行中清单发生变更会拒绝继续使用旧配置，须重新打开。
-`default_minute_source: canonical` 使分钟 `auto` 使用主发布系列；没有记录时返回空结果，
-不会回退 TDX 或原始下载源。研究输入保存行情 release 回执，回测不依赖长期数据库事务。
-
-升级行情读者时，不要就地替换已结算账户的固定运行时。可在部署目录的
-`market-runtime/.venv` 安装新配对 wheel，并将统一启动器指向
-`python -I -B -m ashare_quant.deployment.market_entry --root <entry-root>`。
-旧 `.venv`、`entry.py`、`account_entry.py`、账户登记及账本完整保留。
-catalog 中新增 `account_reader`，含相对 `python`、`entry` 路径，以及
-`files: [{path, sha256}]` 固定旧入口与旧账户适配器。新 API 仅经子进程调用旧入口的
-`accounts` 和 `account <id>` 两个只读命令；不导入新引擎重放既有订单，不增加下一日授权。
-
-通用行情入口由已安装的 `ashare_quant.deployment.market_entry` 提供。旧账户入口与旧运行环境
-保留其原有语义。上线前先验证新 wheel、固定 release、实际 CLI/API/UI、代表性回测，
-再合入清单和启动器变更。撤回时恢复原启动器与部署清单即可；不删除新旧行情对象。
-
-行情恢复使用 AD 的 `ashare_data.product.release_cli backup/restore`，只复制清单引用的
-正式对象、全部已提交祖先版本及元数据，支持失败续传。`apply --plan` 只替换受影响的完整
-证券分块，保留旧文件；变更证据、批次与来源版本必须固定。完整源库与账户备份仍有各自
-独立边界，行情恢复不声称包含外部 raw 原件或既有模拟账户。
-
-### 覆盖修正读取器
-
-已发布的研究产品除 `600000.XSHG` 与 `000001.XSHE` 外，也支持 `BJ.832317` 等北交所证券标识读取，但这并不放宽撮合引擎准入范围。主发布日线读取包含具备证据的历史观测与互不重叠的 `free-stockdb` 补充记录；主发布分钟补充仅按整只证券整日缺失补齐，绝不做盘中猜测对齐。显式指定 `free_stockdb` 的分钟查询读取已发布的补充数据；显式指定 `neigezhu` 的查询保留冻结原始观测及行级限制；显式指定日频供应商的查询保留原有供应商研究范围。
-
-保留的运行时包同时锁定数据所有者与后端的源码哈希及依赖版本。源码固定记录完整 commit 与 tree。恢复后，原生审计清单与审查结果在所选发布内解析；显式查询原始观测时，外部 raw 原始资产仍作为独立必需依赖。
-
-正式发布参考组可直接声明 `"released-reference": {"kind": "market_release"}`，并将其设为
-`default_reference_set`。它使用同一 profile 的 `market_release` 资产、ID 和 manifest hash，
-覆盖逐日状态/来源限价与公司行动，不再绑定静态样本窗口。该组不得指定另一套行情版本。
-旧参考组保留为显式选项；已发布输入和已完成任务从冻结文件读取，不随默认组改变。
-更新代码、配对 AD 指纹和部署配置是独立的部署步骤，修改隔离候选不会更新正在运行的服务。
-
-## 数据、诊断与历史组合读取
-
-AQ 不抓取、修复或重新认定数据。所有功能使用同一 A数达候选：`Store`、portable 日频绑定、`DailyResearchView`、`DailyExecutionView`、分钟证据、公司行动导出和观察接口。通用只读入口为 `/api/v1/market`，CLI 为 `market-describe`、`market-read`、`market-coverage`；`ASHARE_QUANT_MARKET_STORES` 配置显式别名到 Store 路径的 JSON。金额、整股量、日期、quality 和 lineage 保留原语义；描述符不授予执行权限。`source-diagnostics-capabilities` 和 `source-diagnostics` 使用配置日历 capture 与 `Store.preflight_research_request`，分别呈现 readable、缺字段、未知和拒绝。当前 AD 分发版本以 [运行时 pin](../src/ashare_quant/providers/data-runtime.json) 为准，portable owner 文档版本保持 `0.10.0.dev1`。
-
-七算法注册、目录、预检和执行服务已从产品删除，`/api/v1/portfolio` 不再提供接口。历史组合任务通过 `/api/v1/history/jobs?family=portfolio` 读取，结果从已封存产物返回；已保存的用户策略在 `/api/v1/history/strategies` 可读。正式数据查询、参考资料覆盖、公司行动、财务查询和发布接口保持在 `/api/v1/product`，使用独立的 `market.datasets.Datasets` 保存数据描述与输入。`covered_research` 保留实际来源、逐日状态、价限和公司行动覆盖要求；`price_only_no_limits` 仍为显式的数据诊断模式，不会自动替代正式研究。
-
-## 发布绑定的财务质量查询与分钟查询
-
-产品 API 暴露 `POST /api/v1/product/financial/point` 与 `GET /api/v1/product/financial/coverage`。单点查询请求包含 `security`、`field`、`period`、`source`、带时区的 `as_of` 以及 `mode`（默认 `official_daily`，可显式切换为 `historical_pit` 或 `source_research`；查询原生报表字段时需同时提供 `statement` 与 `title`）。覆盖查询接受可选的 `security` 与 `day` 参数，冻结修正台账明确区分已退役交易代码、经审核的同证券跨源别名、显式停牌日、退市及未解决的缺失记录。[pyproject.toml](../pyproject.toml) 中的版本声明与 [AD 运行时 pin](../src/ashare_quant/providers/data-runtime.json) 共同提供上述读取能力。
-
-常规产品 API 将分钟读取委托给已安装且内容绑定的 AD `LocalMinuteProduct`。`GET /api/v1/product/minute/sources` 返回已配置的来源 ID、默认来源（未指定时为 `tdx`）、资产与证据绑定、已注册覆盖范围及使用限制。`POST /api/v1/product/minute/prices` 接受单只证券与带时区偏移、精确到整分钟的闭区间 `start`/`end` 及可选 `source`（省略或传 `auto` 选择当前配置的默认来源）。响应原样保留 AD 的 `source`、`binding`、`rows` 与 `report`，不过滤异常行、零成交量行、来源标签或行级拒绝裁定；受控分钟研究中的来源使用规则详见 [通用分钟回测](backtests.md)。配置身份包含分钟注册表与解析后的资产路径；运行期一旦发生语义级部署配置修改或资产路径变化，服务即锁定 `PRODUCT_CONFIGURATION_CHANGED`（HTTP 409）并要求重启 API。
+委托给 A数达 `LocalMinuteProduct` 执行：
+- **`GET /api/v1/product/minute/sources`**：返回已配置的分钟来源 ID（默认 `tdx`，支持 `canonical`、`free_stockdb`、`neigezhu`）、资产与证据绑定及覆盖范围。
+- **`POST /api/v1/product/minute/prices`**：接受单只证券、带时区且精确到整分钟的闭区间 `start`/`end` 与可选 `source`（`auto` 选择默认来源），原样返回 `source`、`binding`、`rows` 与质量诊断 `report`。运行期若部署配置或资产路径发生变更，接口返回 `409 PRODUCT_CONFIGURATION_CHANGED` 并要求重启服务。
