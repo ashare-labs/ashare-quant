@@ -33,6 +33,8 @@ python scripts/freeze_runtime.py
 python scripts/freeze_runtime.py --native
 ```
 
+> **关于 `data-runtime.json` 固定字段的说明**：`pin_data_runtime.py` 生成的 `portable_owner_version: "0.10.0.dev1"` 为上游 Portable 研究包协议世代号（非包版本）；`distribution_status: "unpublished_candidate"`、`contract_review.status: "not_reviewed"` 与 `execution_permission: false`（以及 `docs/contracts/identity.json` 的 `independent_review_status: "not_reviewed"`）是工具脚本的出厂静态标记，表示代码包配对绑定本身不自动继承历史独审结论或授予实盘/新交易日执行权限。
+
 ### 离线安装与按需导出 `requirements.txt`
 
 需要在新虚拟环境中离线安装时，可从 `uv.lock` 临时导出带哈希校验的依赖清单：
