@@ -25,11 +25,11 @@ def main():
         help="Explicit external replay recipe; historical evidence is not packaged",
     )
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     sys.path[:0] = (
-        [] if args.installed_aq else [str(Path(__file__).resolve().parents[1] / "src")]
+        [] if args.installed_aq else [str(Path(__file__).resolve().parents[2] / "src")]
     ) + [str(args.ad_source.resolve())]
-    from scripts.response_replay import run
+    from tests.support.response_replay import run
 
     return run(args)
 

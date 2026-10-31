@@ -3,7 +3,6 @@
 import copy
 import json
 import os
-import runpy
 import subprocess
 import sys
 from decimal import Decimal
@@ -15,6 +14,7 @@ import ashare_quant
 from ashare_quant.portfolio.corporate import MODEL, STAGES
 from ashare_quant.portfolio.corporate_export import attach
 from ashare_quant.portfolio.inputs import Inputs
+from tests.support.portfolio_reference import generate
 
 REPO = Path(__file__).resolve().parents[2]
 SID = "600000.XSHG"
@@ -28,9 +28,7 @@ def fixture():
     config = {"id": "daily-equal-weight", "purpose": "Synthetic fixed-target date-stage rule"}
     manifest["strategies"] = [config]
     manifest["execution"]["initial_cash"] = "100000"
-    document = runpy.run_path(str(REPO / "scripts/verify_portfolio.py"))["generate"](
-        manifest, True
-    )
+    document = generate(manifest, True)
     for row in document["daily"]:
         price = "10" if row["date"] < "2020-02-04" else "12" if row["date"] == "2020-02-04" else "8"
         row.update(

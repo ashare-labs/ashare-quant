@@ -1,7 +1,6 @@
 """Shared strategy receipts, single native book, and visible integration gates."""
 
 import json
-import runpy
 from decimal import Decimal
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from ashare_quant.paper.service import PaperService
 from ashare_quant.portfolio.signals import decide
 from ashare_quant.storage.artifacts import digest
 from tests.support.paper_api import create_app
+from tests.support.portfolio_reference import generate
 
 ROOT = Path(__file__).resolve().parents[2]
 RISK = {"max_gross": "1", "cash_buffer": "0"}
@@ -24,7 +24,6 @@ def source(tmp_path, change=None):
     root.mkdir(exist_ok=True)
     manifest = json.loads((ROOT / "tests/fixtures/research/portfolio/manifest.json").read_text())
     manifest["execution"]["initial_cash"] = "10000"
-    generate = runpy.run_path(str(ROOT / "scripts/verify_portfolio.py"))["generate"]
     doc = generate(manifest, constant=True)
     for row in doc["daily"]:
         row["suspended"] = False

@@ -2,7 +2,7 @@
 
 项目权利人尚未为 A宽自有源码指定开源许可证。本次整理保留原有源码预览状态，没有添加 MIT、Apache-2.0 等 LICENSE，也没有授予额外的开源、商业使用或再分发许可。需要这些权限时，应先取得权利人的明确授权；此说明不改变平台条款下已有权利，也不为第三方重新授权。
 
-`ashare-data` 的分发版本、源码提交和文件清单以[运行时 pin](../src/ashare_quant/providers/data-runtime.json)为准。当前固定源码 `38628fe9e17fb96a84fd720f7bc67157d936990d` 的说明位于[来源与许可](https://github.com/ashare-labs/ashare-data/blob/38628fe9e17fb96a84fd720f7bc67157d936990d/docs/sources-and-licensing.md)。源码可取得不替代许可。本仓库不捆绑 AD 二进制，其他依赖适用各自随包许可；软件权利与行情数据权利分别处理。
+`ashare-data` 的分发版本、源码提交和文件清单以[运行时 pin](../src/ashare_quant/providers/data-runtime.json)为准。当前固定源码 `2d7e81ca7deb3665a0c40f9724ea738e83f2e82f` 的说明位于[来源与许可](https://github.com/ashare-labs/ashare-data/blob/2d7e81ca7deb3665a0c40f9724ea738e83f2e82f/docs/sources-and-licensing.md)。源码可取得不替代许可。本仓库不捆绑 AD 二进制，其他依赖适用各自随包许可；软件权利与行情数据权利分别处理。
 
 ## 声明来源
 

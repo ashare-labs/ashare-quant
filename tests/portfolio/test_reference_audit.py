@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from scripts.portfolio_reference import primary_audit
+from tests.support.portfolio_reference import primary_audit
 
 DAY = "2020-02-03"
 OPEN = DAY + " 09:30:00"

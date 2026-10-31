@@ -56,15 +56,15 @@ wheels = [
 
 [[package]]
 name = "ashare-data"
-version = "0.10.0.dev25"
-source = { path = "local-dependencies/ashare_data-0.10.0.dev25-py3-none-any.whl" }
+version = "0.10.0.dev98"
+source = { path = "local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl" }
 dependencies = [
     { name = "duckdb" },
     { name = "numpy" },
     { name = "pandas" },
 ]
 wheels = [
-    { filename = "ashare_data-0.10.0.dev25-py3-none-any.whl", hash = "sha256:6f964b8d5192c71d30bbed669116310e5d9cb1b20e1fca99ed071c1e9d4f94c7" },
+    { filename = "ashare_data-0.10.0.dev98-py3-none-any.whl", hash = "sha256:918e544c1bc3c12b0306d7dd99b5a264d7450a1de010b6fe95624620bb00bde1" },
 ]
 
 [package.optional-dependencies]
@@ -74,6 +74,7 @@ factor-evaluation = [
 
 [package.metadata]
 requires-dist = [
+    { name = "akshare", marker = "extra == 'free-updates'", specifier = "==1.20.2" },
     { name = "alphalens-reloaded", marker = "extra == 'factor-evaluation'", specifier = "==0.5.0" },
     { name = "baostock", marker = "extra == 'local-data'", specifier = "==0.9.4" },
     { name = "duckdb", specifier = "==1.4.3" },
@@ -83,7 +84,7 @@ requires-dist = [
     { name = "pandas", specifier = "==2.3.3" },
     { name = "quickjs", marker = "extra == 'local-data'", specifier = "==1.19.4" },
 ]
-provides-extras = ["factor-evaluation", "local-data"]
+provides-extras = ["factor-evaluation", "free-updates", "local-data"]
 
 [[package]]
 name = "ashare-quant"
@@ -181,8 +182,8 @@ requires-dist = [
     { name = "annotated-doc", marker = "extra == 'native'", specifier = "==0.0.5" },
     { name = "annotated-types", marker = "extra == 'native'", specifier = "==0.8.0" },
     { name = "anyio", marker = "extra == 'native'", specifier = "==4.15.1" },
-    { name = "ashare-data", path = "local-dependencies/ashare_data-0.10.0.dev25-py3-none-any.whl" },
-    { name = "ashare-data", extras = ["factor-evaluation"], marker = "extra == 'factor-evaluation'", path = "local-dependencies/ashare_data-0.10.0.dev25-py3-none-any.whl" },
+    { name = "ashare-data", path = "local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl" },
+    { name = "ashare-data", extras = ["factor-evaluation"], marker = "extra == 'factor-evaluation'", path = "local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl" },
     { name = "certifi", marker = "extra == 'native'", specifier = "==2026.7.22" },
     { name = "charset-normalizer", marker = "extra == 'native'", specifier = "==3.5.2" },
     { name = "click", marker = "extra == 'native'", specifier = "==8.5.0" },

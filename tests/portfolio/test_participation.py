@@ -2,7 +2,6 @@
 
 import json
 import os
-import runpy
 import subprocess
 import sys
 from collections import defaultdict
@@ -15,6 +14,7 @@ from rqalpha.mod.rqalpha_mod_sys_simulation.matcher.base import OrderCancelled
 
 from ashare_quant.portfolio.native import Matcher, runtime
 from ashare_quant.portfolio.participation import strict_lot_capacity
+from tests.support.portfolio_reference import generate
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -75,7 +75,6 @@ def test_real_native_account_at_synthetic_rounding_boundary(tmp_path, volume, fi
     manifest = json.loads((source / "manifest.json").read_text())
     manifest["windows"][0]["end"] = "2020-02-03"
     (question / "manifest.json").write_text(json.dumps(manifest))
-    generate = runpy.run_path(str(REPO / "scripts/verify_portfolio.py"))["generate"]
     data = generate(manifest, constant=True)
     for row in data["daily"]:
         row.update(volume=str(volume), suspended=False)

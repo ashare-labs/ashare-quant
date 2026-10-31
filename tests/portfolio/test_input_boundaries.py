@@ -1,12 +1,12 @@
 """One malformed observation per rule; must fail before opening a native book."""
 
 import json
-import runpy
 from pathlib import Path
 
 import pytest
 
 from ashare_quant.portfolio.inputs import Inputs, digest
+from tests.support.portfolio_reference import generate
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -14,9 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 @pytest.fixture
 def source(tmp_path):
     manifest = json.loads((REPO / "tests/fixtures/research/portfolio/manifest.json").read_text())
-    document = runpy.run_path(str(REPO / "scripts/verify_portfolio.py"))["generate"](
-        manifest, True
-    )
+    document = generate(manifest, True)
     return tmp_path / "input.json", manifest, document
 
 

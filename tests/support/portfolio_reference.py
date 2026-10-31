@@ -4,6 +4,8 @@ Snapshots bound observation times, not exchange event times. Pair order IDs by
 actual submit/return sequence, never by numeric coincidence.
 """
 
+import datetime as dt
+import math
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation, localcontext
 
@@ -488,4 +490,50 @@ def primary_audit(events, aq, owner, spec):
         participation_checks=cap_checks,
         counts=dict(raw_rows=len(raw), orders=len(histories), trades=len(trades)),
         timing_scope="JQ observation upper bounds and same-label snapshots; no invented cancellation timestamp",
+    )
+
+
+def generate(manifest, constant=False):
+    cal = []
+    day = dt.date(2019, 7, 1)
+    while day <= dt.date(2020, 5, 6):
+        if day.weekday() < 5:
+            cal.append(str(day))
+        day += dt.timedelta(days=1)
+    rows = []
+    for j, sid in enumerate(manifest["securities"]):
+        for n, day in enumerate(cal):
+            close = (
+                10
+                if constant
+                else round((10 + 5 * j) * (1 + 0.0005 * n + 0.04 * math.sin((n + j * 7) / 12)), 2)
+            )
+            rows.append(
+                dict(
+                    security=sid,
+                    date=day,
+                    open=str(close),
+                    close=str(close),
+                    high=str(round(close * 1.01, 2)),
+                    low=str(round(close * 0.99, 2)),
+                    volume="1000000",
+                    suspended=sid == "000001.XSHE" and day == "2020-02-03",
+                    upper_limit=str(round(close * 1.1, 2)),
+                    lower_limit=str(round(close * 0.9, 2)),
+                )
+            )
+    return dict(
+        schema="ad-daily-portfolio.v1",
+        producer={"name": "synthetic-test", "version": "1"},
+        real_market_data=False,
+        source_refs=["synthetic weekdays and deterministic prices"],
+        limitations=["synthetic; not exchange observations or JQ comparison"],
+        price_basis="raw",
+        volume_unit="share",
+        securities=manifest["securities"],
+        calendar=cal,
+        daily=rows,
+        actions=[],
+        action_coverage={"status": "synthetic_known"},
+        listing_coverage="synthetic_known",
     )
