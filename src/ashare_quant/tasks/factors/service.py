@@ -159,7 +159,7 @@ class FactorJobs(TaskService):
             verify(path, expected, signature)
             require(input_signature(path) == signature, "FACTOR_INPUT_CHANGED",
                     "Frozen input changed during verification")
-        if execution:
+        if execution and row["status"] in {"queued", "running"} and not row["cancellation_requested_at"]:
             require(
                 row["attempt_count"] == 0,
                 "FACTOR_RESTART_REQUIRED",

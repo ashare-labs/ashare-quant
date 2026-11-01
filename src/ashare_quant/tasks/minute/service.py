@@ -229,8 +229,9 @@ class PythonJobs(TaskService):
 
             verify_project(root, manifest.model_dump(mode="json"))
         # Arbitrary Python has no checkpoint/resume contract. A lost worker must
-        # never silently replay an already started strategy.
-        if execution and row["status"] in {"queued", "running", "cancelling"}:
+        # never silently replay an already started strategy. Cancellation convergence
+        # only inspects the stopped directory and does not replay strategy code.
+        if execution and row["status"] in {"queued", "running"} and not row["cancellation_requested_at"]:
             require(
                 row["attempt_count"] == 0,
                 "PYTHON_RESTART_REQUIRED",

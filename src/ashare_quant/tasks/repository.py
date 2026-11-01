@@ -199,11 +199,13 @@ class Repository:
 
     def candidates(self):
         scope, parameters = self.queue_scope()
+        now_ts = time.time()
         with self.store.connection() as db:
             return [r[0] for r in db.execute(
                 "SELECT job_id FROM tasks WHERE " + scope + " AND (status='queued' OR "
-                "(status IN ('running','cancelling') AND lease_until<=? AND error IS NULL)) ORDER BY created_at,rowid",
-                (*parameters, time.time()))]
+                "(status='running' AND lease_until<=? AND error IS NULL) OR "
+                "(status='cancelling' AND lease_until<=?)) ORDER BY created_at,rowid",
+                (*parameters, now_ts, now_ts))]
 
     def cancel(self, job_id):
         with self.store.connection(transaction=True) as db:
@@ -277,7 +279,7 @@ class Repository:
             )
             if not eligible:
                 return None
-            if row["attempt_count"] >= self.attempt_limit(db, row):
+            if not row["cancellation_requested_at"] and row["attempt_count"] >= self.attempt_limit(db, row):
                 error = {"code": "M2_JOB_ATTEMPT_LIMIT", "message": "Automatic attempt budget exhausted; explicitly resume after addressing the failure"}
                 db.execute("UPDATE tasks SET status='failed',lease_token=NULL,lease_until=NULL,error=?,updated_at=? WHERE job_id=?",
                            (canonical(error).decode(), now(), job_id))
@@ -316,8 +318,7 @@ class Repository:
             row = self._get(db, job_id)
             require(
                 row["lease_token"] == token
-                and row["status"] in {"running", "cancelling"}
-                and row["lease_until"] > time.time(),
+                and row["status"] in {"running", "cancelling"},
                 "M2_JOB_STALE_WORKER",
                 "Worker no longer owns a valid lease",
             )
@@ -352,8 +353,7 @@ class Repository:
             row = self._get(db, job_id)
             require(
                 row["lease_token"] == token
-                and row["status"] in {"running", "cancelling"}
-                and row["lease_until"] > time.time(),
+                and row["status"] in {"running", "cancelling"},
                 "M2_JOB_STALE_WORKER",
                 "Stale worker cannot publish",
             )
@@ -362,12 +362,6 @@ class Repository:
                 if row["cancellation_requested_at"]
                 else ("succeeded" if result else "failed")
             )
-            if row["cancellation_requested_at"] and proof is None:
-                status = "cancelling"
-                error = error or {
-                    "code": "M2_JOB_RECONCILIATION_REQUIRED",
-                    "message": "Stopped writer has no verified checkpoint proof yet",
-                }
             if status != "succeeded":
                 result = None
             db.execute(

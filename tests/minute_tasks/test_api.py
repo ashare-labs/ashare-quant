@@ -203,3 +203,63 @@ def test_historical_queue_does_not_block_new_python_or_factor_admission(setup):
     factors.repo.capacity()
     assert app.state.tasks.service_status().available_pending == 1
     assert [jobs.repo.row(row["job_id"]) for row in historical] == historical
+
+
+def test_cancelled_inspection_failure_converges_and_slow_publish_retains_lease(setup, monkeypatch):
+    import errno
+    import json
+    import time
+    from types import SimpleNamespace
+
+    from ashare_quant.storage.artifacts import atomic
+    from ashare_quant.tasks import worker
+
+    _, jobs, body = setup
+    cancelled_job = jobs.create(PythonCreate.model_validate(body | {"idempotency_key": "cancel-inspect-enospc"}))
+    claimed = jobs.repo.claim(cancelled_job.job_id)
+    manifest = jobs.check(claimed)
+    monkeypatch.setattr(
+        jobs.executor,
+        "immediate",
+        lambda *a, **k: (_ for _ in ()).throw(OSError(errno.ENOSPC, "temporary proof-write failure")),
+    )
+    worker._work(
+        jobs,
+        claimed,
+        manifest,
+        (),
+        "none",
+        lambda name, *a: jobs.cancel(cancelled_job.job_id) if name == "claimed" else None,
+    )
+    row = jobs.repo.row(cancelled_job.job_id)
+    assert row["status"] == "cancelled"
+    assert row["lease_token"] is None and row["lease_until"] is None
+    assert jobs.repo.candidates() == []
+    assert jobs.service_status().available_pending == 32
+
+    published_job = jobs.create(PythonCreate.model_validate(body | {"idempotency_key": "slow-publish-lease"}))
+    claimed_pub = jobs.repo.claim(published_job.job_id)
+    manifest_pub = jobs.check(claimed_pub)
+    root = jobs.directory(published_job.job_id)
+    atomic(root / "attempt-1.proof.json", {"complete": True, "cursor": 1, "checkpoint_sha256": None})
+    monkeypatch.setattr(worker, "stop", lambda p: None)
+    monkeypatch.setattr(
+        worker.subprocess,
+        "Popen",
+        lambda *a, **k: SimpleNamespace(returncode=0, pid=99999999, stdout=SimpleNamespace(close=lambda: None), poll=lambda: 0),
+    )
+    monkeypatch.setattr(worker, "ProcessOutput", lambda *a, **k: SimpleNamespace(finish=lambda: None))
+    monkeypatch.setattr(jobs.executor, "command", lambda *a, **k: ["not-executed"])
+
+    def slow_publish(*args):
+        with jobs.repo.store.connection(transaction=True) as db:
+            db.execute("UPDATE tasks SET lease_until=? WHERE job_id=?", (time.time() - 1, published_job.job_id))
+        return {"result_id": published_job.job_id}
+
+    monkeypatch.setattr(jobs, "publish", slow_publish)
+    worker._work(jobs, claimed_pub, manifest_pub, (), "none", None)
+    after = jobs.repo.row(published_job.job_id)
+    assert after["status"] == "succeeded"
+    assert json.loads(after["result"]) == {"result_id": published_job.job_id}
+    assert after["error"] is None
+

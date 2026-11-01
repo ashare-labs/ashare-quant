@@ -17,20 +17,26 @@
 
 ### 配对更新 `ashare-data` 与冻结快照
 
-当上游 `ashare-data` 代码或版本更新时，在仓库根目录依次执行：
+当上游 `ashare-data` 提交新变更后，按以下顺序更新配对 wheel、锁文件与运行时快照：
 
 ```sh
-# 1. 从 ashare-data 源码构建候选 wheel，更新锁并安装到当前环境
-python scripts/stage_owner.py --source /path/to/ashare-data
-uv lock
-uv sync --locked --extra native --extra factor-evaluation --extra mcp
+# 1. 在 ashare-data 仓库构建新 wheel 并复制到 local-dependencies/
+uv --project /path/to/ashare-data build --wheel --no-sources --clear
+cp /path/to/ashare-data/dist/ashare_data-0.10.0.dev98-py3-none-any.whl local-dependencies/
 
-# 2. 写入 data-runtime.json 并刷新运行时快照
+# 2. 若版本号变更需同步修改 pyproject.toml，然后刷新 uv.lock 并将新 wheel 安装到当前环境
+uv lock --refresh-package ashare-data
+uv sync --locked --extra native --extra factor-evaluation --extra mcp --reinstall-package ashare-data
+
+# 3. 校验源码树与 wheel 一致性，写入 data-runtime.json 并刷新运行时快照
 python scripts/pin_data_runtime.py \
   --wheel local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl \
-  --commit <AD_COMMIT> --tree <AD_TREE>
+  --source /path/to/ashare-data
 python scripts/freeze_runtime.py
 python scripts/freeze_runtime.py --native
+
+# 4. 在新克隆或清空 local-dependencies/ 后，可通过 stage_owner.py 从已固定的 commit 重建并核验 wheel
+python scripts/stage_owner.py --source /path/to/ashare-data
 ```
 
 > **关于 `data-runtime.json` 固定字段的说明**：`pin_data_runtime.py` 生成的 `portable_owner_version: "0.10.0.dev1"` 为上游 Portable 研究包协议世代号（非包版本）；`distribution_status: "unpublished_candidate"`、`contract_review.status: "not_reviewed"` 与 `execution_permission: false`（以及 `docs/contracts/identity.json` 的 `independent_review_status: "not_reviewed"`）是工具脚本的出厂静态标记，表示代码包配对绑定本身不自动继承历史独审结论或授予实盘/新交易日执行权限。

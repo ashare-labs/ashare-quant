@@ -2,7 +2,9 @@
 
 import json
 import subprocess
+import threading
 import time
+from contextlib import contextmanager
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import lock, regular, worker_slot
@@ -10,6 +12,26 @@ from ashare_quant.strategies.python.supervision import ProcessOutput
 from ashare_quant.tasks.process import stop
 from ashare_quant.tasks.progress import RuntimeProgress
 from ashare_quant.tasks.storage_budget import check_task_storage
+
+
+@contextmanager
+def _lease_heartbeat(repo, job_id, token, interval=2.0):
+    stopped = threading.Event()
+
+    def beat():
+        while not stopped.wait(interval):
+            try:
+                repo.heartbeat(job_id, token)
+            except Exception:
+                return
+
+    thread = threading.Thread(target=beat, name=f"aq-lease-{job_id}", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stopped.set()
+        thread.join(timeout=interval)
 
 
 def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
@@ -161,33 +183,35 @@ def _work(jobs, row, manifest, lock_fds, fault, stage):
                     }:
                         error = {**reported, "returncode": process.returncode}
                         break
-        jobs.repo.heartbeat(job_id, token)
-        if proof is None:
-            proof = jobs.executor.immediate(
-                "inspect",
-                root,
-                *jobs.executor_args(manifest),
-                invocation + "-inspect",
-                manifest.session_file_sha256,
-                lock_fds=lock_fds,
-            )
-        notify("inspected")
-        jobs.guard()
-        cancelled = jobs.repo.heartbeat(job_id, token)
-        if not cancelled and error is None and proof["complete"]:
-            notify("before_publish")
-            progress.phase("publishing")
-            reference = jobs.publish(
-                root, manifest, invocation, row["attempt_count"], jobs.repo.logs(job_id)
-            )
-            notify("after_publish")
-            storage()
+        with _lease_heartbeat(jobs.repo, job_id, token):
+            jobs.repo.heartbeat(job_id, token)
+            if proof is None:
+                proof = jobs.executor.immediate(
+                    "inspect",
+                    root,
+                    *jobs.executor_args(manifest),
+                    invocation + "-inspect",
+                    manifest.session_file_sha256,
+                    lock_fds=lock_fds,
+                )
+            notify("inspected")
             jobs.guard()
-        elif not cancelled and error is None:
-            error = {
-                "code": "M2_JOB_INCOMPLETE",
-                "message": "Native execution did not commit a complete receipt",
-            }
+            cancelled = jobs.repo.heartbeat(job_id, token)
+            if not cancelled and error is None and proof["complete"]:
+                notify("before_publish")
+                progress.phase("publishing")
+                reference = jobs.publish(
+                    root, manifest, invocation, row["attempt_count"], jobs.repo.logs(job_id)
+                )
+                notify("after_publish")
+                storage()
+                jobs.guard()
+                jobs.repo.heartbeat(job_id, token)
+            elif not cancelled and error is None:
+                error = {
+                    "code": "M2_JOB_INCOMPLETE",
+                    "message": "Native execution did not commit a complete receipt",
+                }
     except (Exception, KeyboardInterrupt) as exc:
         interrupted = isinstance(exc, KeyboardInterrupt)
         stop(process)
