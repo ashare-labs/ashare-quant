@@ -29,3 +29,7 @@ def test_generated_documents_equal_runtime_endpoints(tmp_path):
         response = client.get("/api/v1/paper/schema")
         assert response.status_code == 200
         assert response.json() == json.loads((output / "paper.openapi.json").read_text())
+    committed = Path(__file__).resolve().parents[1] / "docs/contracts"
+    if committed.is_dir():
+        for name in ("api.openapi.json", "tasks.openapi.json", "paper.openapi.json", "identity.json"):
+            assert (committed / name).read_text() == (output / name).read_text()

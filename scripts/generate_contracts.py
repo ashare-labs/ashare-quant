@@ -4,15 +4,10 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-
-from ashare_quant import __version__
-from ashare_quant.api import create_app
-from ashare_quant.identity import source_sha256
-from ashare_quant.paper.api import create_app as create_paper_app
-from ashare_quant.tasks.openapi import document
 
 
 @contextmanager
@@ -35,6 +30,15 @@ def isolated_configuration(config_home):
 
 
 def main():
+    src = Path(__file__).resolve().parents[1] / "src"
+    if (src / "ashare_quant").is_dir():
+        sys.path.insert(0, str(src))
+    from ashare_quant import __version__
+    from ashare_quant.api import create_app
+    from ashare_quant.identity import source_sha256
+    from ashare_quant.paper.api import create_app as create_paper_app
+    from ashare_quant.tasks.openapi import document
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("docs/contracts"))
     parser.add_argument(
