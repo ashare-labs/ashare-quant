@@ -1,5 +1,5 @@
 {
-  "commit": "820558bc84e39e470f8c79a786c9c63835289c58",
+  "commit": "e6b2f92cfd8c86bf3efeb44f8a4b6e37ca6e899d",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -262,7 +262,7 @@
   "runtime_code_sha256": "0debfbc2f5a37b7b7a17d443857d55593b051eb7eb5ba8f2353f9ede643606ae",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "10b68c8d7246f864bfbaed410be1bc21adc11576",
+  "tree": "27dc7d0d9235279e25854874002f9c9eaed62e36",
   "version": "0.10.0.dev98",
   "wheel_sha256": "3d310e43ae83b31b9755e0677e42137249379342f2384749d74369f424d14f15"
 }

@@ -41,3 +41,20 @@ def test_stale_snapshot_check_fails_without_rewriting(tmp_path, filename, native
     result = check(tmp_path, native)
     assert result.returncode != 0 and filename in result.stderr
     assert {name: (tmp_path / name).read_bytes() for name in names} == before
+
+
+def test_pin_data_runtime_rejects_commit_without_source(tmp_path):
+    script = tmp_path / "scripts/pin_data_runtime.py"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "scripts/pin_data_runtime.py", script)
+    pin = tmp_path / "src/ashare_quant/providers/data-runtime.json"
+    pin.parent.mkdir(parents=True, exist_ok=True)
+    pin.write_text('{"sentinel": true}\n')
+    wheel = next((ROOT / "local-dependencies").glob("ashare_data-*.whl"))
+    result = subprocess.run(
+        [sys.executable, str(script), "--wheel", str(wheel), "--commit", "deadbeef"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "--source is required" in result.stderr
+    assert pin.read_text() == '{"sentinel": true}\n'
