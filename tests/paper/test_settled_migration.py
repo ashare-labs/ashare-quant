@@ -397,8 +397,9 @@ def test_v3_holding_successor_uses_actual_native_positions_without_genesis_or_or
     assert s.report("2026-10-19", "closing") == c["data"]["closing"]
 
 
-def test_runtime_transition_accepts_current_tip_and_additive_packages():
+def test_runtime_transition_accepts_reviewed_dev98_and_additive_packages():
     after = runtime.engine_pin()
+    after["runtime"]["ashare-data"] = "0.10.0.dev98"
     for old_ad in ("0.8.0.dev2", "0.10.0.dev5", "0.10.0.dev18"):
         before = copy.deepcopy(after)
         before["sources"] = "0" * 64
@@ -419,3 +420,11 @@ def test_runtime_transition_accepts_current_tip_and_additive_packages():
     with pytest.raises(DomainError, match="PAPER_RUNTIME_DEPENDENCIES_CHANGED"):
         migration.runtime_transition(bad_extra, after_extra)
 
+
+
+def test_new_market_consumer_does_not_authorize_retained_account_migration():
+    after = runtime.engine_pin()
+    before = copy.deepcopy(after)
+    before["runtime"]["ashare-data"] = "0.10.0.dev98"
+    with pytest.raises(DomainError, match="PAPER_DATA_TRANSITION_UNREVIEWED"):
+        migration.runtime_transition(before, after)
