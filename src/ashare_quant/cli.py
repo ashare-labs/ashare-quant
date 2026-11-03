@@ -6,6 +6,7 @@ import sqlite3
 import time
 from pathlib import Path
 
+from ashare_data.core.model import DataError
 from pydantic import ValidationError
 
 from ashare_quant.api import create_app
@@ -86,9 +87,9 @@ def main(argv=None):
     try:
         from ashare_data.core.consumer_policy import committed_deployment
 
-        if committed_deployment() is not None and args.command.startswith(("market-", "source-diagnostics")):
-            raise DomainError("LEGACY_SOURCE_DISABLED", "Use the deployment product endpoints; archived stores and source diagnostics are disabled", 422)
         configuration = selected_runtime(args)
+        if args.command.startswith(("market-", "source-diagnostics")) and committed_deployment() is not None:
+            raise DomainError("LEGACY_SOURCE_DISABLED", "Use the deployment product endpoints; archived stores and source diagnostics are disabled", 422)
         if configuration is not None and args.command in {"init", "serve", "task-worker", "backup"}:
             from ashare_quant.deployment.backup import create_backup
             from ashare_quant.deployment.runtime import initialize, run
@@ -171,6 +172,9 @@ def main(argv=None):
         return 0
     except KeyboardInterrupt:
         return 0
+    except DataError as exc:
+        emit({"error": DomainError("DEPLOYMENT_INVALID", exc.message, 503).body()})
+        return 2
     except DomainError as exc:
         emit({"error": exc.body()})
         return 2

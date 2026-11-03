@@ -76,3 +76,12 @@ def test_diagnostic_registry_refused_before_validation(tmp_path, monkeypatch):
     with pytest.raises(DomainError) as exc:
         Diagnostics({'old': {'python': '/old/python', 'store': '/old/store'}})
     assert exc.value.code == 'LEGACY_SOURCE_DISABLED'
+
+
+def test_stateless_cli_reports_invalid_policy_configuration(tmp_path, monkeypatch, capsys):
+    from ashare_quant.cli import main
+    broken = tmp_path / 'deployment.json'
+    broken.symlink_to(tmp_path / 'missing.json')
+    monkeypatch.setenv('ASHARE_CONSUMER_DEPLOYMENT', str(broken))
+    assert main(['market-describe', '--store', '/must-not-open', '--dataset', 'old']) == 2
+    assert json.loads(capsys.readouterr().out)['error']['code'] == 'DEPLOYMENT_INVALID'
