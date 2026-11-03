@@ -16,11 +16,9 @@ def configured_release(config):
     selected = config.document["profiles"][config.profile].get("benchmark_release")
     if selected is None:
         return None
-    return {
-        "root": str(config.asset(selected["asset"]).path),
-        "release_id": selected["release_id"],
-        "manifest_sha256": selected["manifest_sha256"],
-    }
+    from ashare_data.product.configuration import resolve_market_release
+
+    return resolve_market_release(selected, config.asset(selected["asset"]).path)
 
 
 def empty_observations(security, selection_source):

@@ -135,7 +135,7 @@ def _asset(name, item, root):
     return Asset(name, kind, path, item["role"], item.get("retention", "preserve"), binding, pin)
 
 
-def _references(entry, by_name):
+def _references(entry, by_name, market_pins):
     declarations = entry.get("reference_sets", {})
     if not isinstance(declarations, dict):
         raise ValueError("reference_sets must be a named object")
@@ -157,10 +157,9 @@ def _references(entry, by_name):
             if set(item) != {"kind"} or not isinstance(market, dict):
                 raise ValueError("Released references use the profile price release")
             asset = by_name[market["asset"]]
-            if asset.kind != "market_release" or type(market["release_id"]) is not int or market["release_id"] < 1:
+            if asset.kind != "market_release":
                 raise ValueError("Released references require a committed market release")
-            result.append(ReferenceSet(name, kind, release=dict(root=str(asset.path),
-                          release_id=market["release_id"], manifest_sha256=_sha(market["manifest_sha256"]))))
+            result.append(ReferenceSet(name, kind, release=market_pins["market_release"]))
             continue
         corporate = binding(item["corporate_history_asset"], "corporate_history")
         if kind == "daily_execution":
@@ -258,27 +257,29 @@ def resolve(deployment=None, profile="product") -> Configuration:
         daily = by_name[entry["daily_asset"]]
         release = by_name[entry["release_store_asset"]]
         owner = by_name[entry.get("owner_store_asset", entry["release_store_asset"])]
-        references, default_reference = _references(entry, by_name)
+        market_assets, market_pins = [], {}
+        for key in ("market_release", "benchmark_release"):
+            market = entry.get(key)
+            if market is None:
+                continue
+            from ashare_data.core.model import DataError
+            from ashare_data.product.configuration import resolve_market_release
+
+            asset = by_name[market["asset"]]
+            if asset.kind != "market_release":
+                raise ValueError(key + " requires a released market asset")
+            try:
+                market_pins[key] = resolve_market_release(market, asset.path)
+            except DataError as exc:
+                raise ValueError(exc.message) from exc
+            market_assets.append(asset.name)
+        references, default_reference = _references(entry, by_name, market_pins)
         reference_assets = [
             getattr(ref, role).asset_name
             for ref in references
             for role in ("research", "execution", "market", "corporate")
             if getattr(ref, role) is not None
         ]
-        market_assets = []
-        for key in ("market_release", "benchmark_release"):
-            market = entry.get(key)
-            if market is None:
-                continue
-            asset = by_name[market["asset"]]
-            if (
-                asset.kind != "market_release"
-                or type(market["release_id"]) is not int
-                or market["release_id"] < 1
-            ):
-                raise ValueError(key + " requires a released market asset and positive ID")
-            _sha(market["manifest_sha256"])
-            market_assets.append(asset.name)
         selected = tuple(
             dict.fromkeys(
                 [

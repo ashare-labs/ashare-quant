@@ -293,21 +293,32 @@ class Product:
             minute=True,
         )
 
+    @staticmethod
+    def snapshot_references(owner, references):
+        """Bind released references to the operation's already frozen price reader."""
+        if references is None or references.get("kind") != "market_release":
+            return references
+        release = getattr(owner, "release", None)
+        if release is None or release.root != Path(references["release"]["root"]).resolve():
+            raise DomainError("PRODUCT_REFERENCE_RELEASE_CONFLICT",
+                              "Released references must share the selected price reader", 422)
+        return {**references, "release": {
+            key: release.receipt()[key] for key in ("root", "release_id", "manifest_sha256")
+        }}
+
     def coverage(self, selection):
         from ashare_quant.product.publication import check_coverage
 
         references = self.configured().references(selection.reference_set)
-        value = self.call(
-            lambda owner: wire(
-                self.operation(owner, "coverage")(
-                    list(selection.securities),
-                    str(selection.start),
-                    str(selection.end),
-                    source=selection.source,
-                    references=references,
-                )
-            )
-        )
+        def query(owner):
+            nonlocal references
+            references = self.snapshot_references(owner, references)
+            return wire(self.operation(owner, "coverage")(
+                list(selection.securities), str(selection.start), str(selection.end),
+                source=selection.source, references=references,
+            ))
+
+        value = self.call(query)
         check_coverage(value, selection, references)
         return value
 
@@ -343,19 +354,16 @@ class Product:
                 422,
                 details={"securities": unsupported},
             )
-        release = self.call(
-            lambda owner: wire(
-                self.operation(owner, "publish")(
-                    config.release_store_root,
-                    list(selection.securities),
-                    str(selection.start),
-                    str(selection.end),
-                    source=selection.source,
-                    mode=selection.mode,
-                    references=references,
-                )
-            )
-        )
+        def publish_snapshot(owner):
+            nonlocal references
+            references = self.snapshot_references(owner, references)
+            return wire(self.operation(owner, "publish")(
+                config.release_store_root, list(selection.securities),
+                str(selection.start), str(selection.end), source=selection.source,
+                mode=selection.mode, references=references,
+            ))
+
+        release = self.call(publish_snapshot)
         path = self.call(lambda owner: consume(release, selection, config, references))
         name = selection.name or f"Market {selection.start} to {selection.end}"
         dataset = self.datasets.import_file(path, name)

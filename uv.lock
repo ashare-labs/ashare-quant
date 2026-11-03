@@ -56,15 +56,15 @@ wheels = [
 
 [[package]]
 name = "ashare-data"
-version = "0.10.0.dev98"
-source = { path = "local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl" }
+version = "0.10.0.dev99"
+source = { path = "local-dependencies/ashare_data-0.10.0.dev99-py3-none-any.whl" }
 dependencies = [
     { name = "duckdb" },
     { name = "numpy" },
     { name = "pandas" },
 ]
 wheels = [
-    { filename = "ashare_data-0.10.0.dev98-py3-none-any.whl", hash = "sha256:3d310e43ae83b31b9755e0677e42137249379342f2384749d74369f424d14f15" },
+    { filename = "ashare_data-0.10.0.dev99-py3-none-any.whl", hash = "sha256:db1dc72b90c24fa6244fe7e9991d7ecdf05a425d0531b49afaeca0b791991fde" },
 ]
 
 [package.optional-dependencies]
@@ -88,7 +88,7 @@ provides-extras = ["factor-evaluation", "free-updates", "local-data"]
 
 [[package]]
 name = "ashare-quant"
-version = "0.12.0.dev32"
+version = "0.12.0.dev33"
 source = { editable = "." }
 dependencies = [
     { name = "ashare-data" },
@@ -182,8 +182,8 @@ requires-dist = [
     { name = "annotated-doc", marker = "extra == 'native'", specifier = "==0.0.5" },
     { name = "annotated-types", marker = "extra == 'native'", specifier = "==0.8.0" },
     { name = "anyio", marker = "extra == 'native'", specifier = "==4.15.1" },
-    { name = "ashare-data", path = "local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl" },
-    { name = "ashare-data", extras = ["factor-evaluation"], marker = "extra == 'factor-evaluation'", path = "local-dependencies/ashare_data-0.10.0.dev98-py3-none-any.whl" },
+    { name = "ashare-data", path = "local-dependencies/ashare_data-0.10.0.dev99-py3-none-any.whl" },
+    { name = "ashare-data", extras = ["factor-evaluation"], marker = "extra == 'factor-evaluation'", path = "local-dependencies/ashare_data-0.10.0.dev99-py3-none-any.whl" },
     { name = "certifi", marker = "extra == 'native'", specifier = "==2026.7.22" },
     { name = "charset-normalizer", marker = "extra == 'native'", specifier = "==3.5.2" },
     { name = "click", marker = "extra == 'native'", specifier = "==8.5.0" },

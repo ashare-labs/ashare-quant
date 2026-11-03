@@ -202,6 +202,13 @@ class DemandInputs:
             k: response[k]
             for k in ("receipt", "as_of", "limitations", "unknown_listing_securities")
         }
+        require(items or not receipt["unknown_listing_securities"],
+                "AQUANT_DIRECTORY_UNAVAILABLE",
+                "Published securities have unknown listing intervals; an empty investible universe is not established",
+                {"as_of": as_of, "unknown_listing_securities": receipt["unknown_listing_securities"],
+                 "release": receipt["receipt"]})
+        receipt["listing_coverage"] = ("partial" if receipt["unknown_listing_securities"]
+                                       else "recorded_intervals")
         self.queries.append(
             {
                 "api": "catalogue",
