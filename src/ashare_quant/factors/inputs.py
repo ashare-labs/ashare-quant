@@ -64,6 +64,11 @@ def source_json(path):
 
 class Sources:
     def __init__(self, specifications=None, product=None):
+        from ashare_data.core.consumer_policy import committed_deployment
+
+        if committed_deployment() is not None:
+            require(not specifications, "LEGACY_SOURCE_DISABLED",
+                    "Formal factor inputs must come from the deployment market release")
         if specifications is None:
             path = os.environ.get("ASHARE_QUANT_FACTOR_SOURCES")
             specifications = source_json(path)[1] if path else {}

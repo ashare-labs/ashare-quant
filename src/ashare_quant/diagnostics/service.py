@@ -46,6 +46,10 @@ def digest(value):
 
 class Diagnostics:
     def __init__(self, configuration=None):
+        from ashare_data.core.consumer_policy import committed_deployment
+
+        if committed_deployment() is not None and configuration:
+            raise DomainError("LEGACY_SOURCE_DISABLED", "Formal consumer does not register legacy diagnostic sources", 422)
         raw = configuration if configuration is not None else json.loads(os.getenv("ASHARE_QUANT_DIAGNOSTICS", "{}"))
         self.sources = TypeAdapter(dict[Alias, SourceConfiguration]).validate_python(raw)
 

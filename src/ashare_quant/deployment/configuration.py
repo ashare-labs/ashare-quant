@@ -77,7 +77,7 @@ class Configuration:
     data_root: Path
     control_db: Path
     paper_root: Path
-    daily_root: Path
+    daily_root: Path | None
     release_store_root: Path
     owner_store_root: Path
     api_port: int
@@ -254,7 +254,16 @@ def resolve(deployment=None, profile="product") -> Configuration:
         entry = document["profiles"][profile]
         if entry["kind"] not in {"product", "evaluation", "research"}:
             raise ValueError("Profile kind must be product, evaluation or research")
-        daily = by_name[entry["daily_asset"]]
+        from ashare_data.core.consumer_policy import POLICY, guard_selection
+        from ashare_data.core.model import DataError
+
+        try:
+            guard_selection(path, profile)
+        except DataError as exc:
+            raise ValueError(exc.message) from exc
+        if entry.get("consumer_policy") == POLICY and (not entry.get("market_release") or entry.get("daily_asset")):
+            raise ValueError("Committed-only profile requires a market release and no legacy daily asset")
+        daily = None if entry.get("market_release") else by_name[entry["daily_asset"]]
         release = by_name[entry["release_store_asset"]]
         owner = by_name[entry.get("owner_store_asset", entry["release_store_asset"])]
         market_assets, market_pins = [], {}
@@ -283,7 +292,7 @@ def resolve(deployment=None, profile="product") -> Configuration:
         selected = tuple(
             dict.fromkeys(
                 [
-                    daily.name,
+                    *([daily.name] if daily else []),
                     release.name,
                     owner.name,
                     *reference_assets,
@@ -294,14 +303,14 @@ def resolve(deployment=None, profile="product") -> Configuration:
         )
         for name in selected:
             by_name[name]
-        if daily.kind != "local_daily" or release.kind != "store" or owner.kind != "store":
+        if (daily is not None and daily.kind != "local_daily") or release.kind != "store" or owner.kind != "store":
             raise ValueError("daily_asset must be local_daily; release/owner assets must be Store")
         control = _path(entry["control_db"], root)
         paper = _path(entry["paper_root"], root)
         # Runtime writers must never be placed inside the original source asset.
         for state in (control, paper, release.path):
             for source in (
-                daily.path,
+                *([daily.path] if daily else []),
                 *(by_name[name].path for name in [*reference_assets, *market_assets]),
             ):
                 if state == source or state.is_relative_to(source):
@@ -327,7 +336,7 @@ def resolve(deployment=None, profile="product") -> Configuration:
             root,
             control,
             paper,
-            daily.path,
+            daily.path if daily else None,
             release.path,
             owner.path,
             *ports,

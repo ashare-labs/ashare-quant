@@ -561,7 +561,9 @@ def restore_backup(directory, destination, *, expected_sha256=None):
                "scope": manifest["scope"], "manifest_sha256": digest_file(source / "manifest.json"),
                "verified_files": len(manifest["files"]), "runtime_verified": True,
                "control_db": str(config.control_db), "paper_root": str(config.paper_root),
-               "source_data_available": config.daily_root.is_dir(),
+               "source_data_available": (config.daily_root.is_dir() if config.daily_root else
+                                         all(a.path.is_dir() for a in config.assets
+                                             if a.name in config.selected_assets and a.kind == "market_release")),
                "reference_assets": reference_checks,
                "provenance_bytes_rewritten": False}
     (destination / "restore-receipt.json").write_bytes(canonical(receipt))

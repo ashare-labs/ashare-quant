@@ -13,6 +13,9 @@ from ashare_quant.storage.artifacts import atomic, regular, require, sha
 
 
 def configured_factors():
+    from ashare_data.core.consumer_policy import committed_deployment
+
+    committed_deployment()  # Reject legacy factor overrides in a formal consumer.
     path = os.environ.get("ASHARE_QUANT_PYTHON_HISTORY_FACTORS")
     if not path:
         return None

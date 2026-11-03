@@ -104,6 +104,10 @@ def create_app(db_path: str | None = None, market_stores: dict[str, str] | None 
     mount_factors(app, store, tasks_configuration, factor_sources)
     from ashare_quant.diagnostics.api import mount as mount_diagnostics
     mount_diagnostics(app, diagnostics_configuration)
+    from ashare_data.core.consumer_policy import committed_deployment
+
+    if committed_deployment() is not None and market_stores:
+        raise DomainError("LEGACY_SOURCE_DISABLED", "Formal API does not register legacy research stores", 422)
     roots = dict(market_stores) if market_stores is not None else json.loads(os.getenv("ASHARE_QUANT_MARKET_STORES", "{}"))
     if not isinstance(roots, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in roots.items()):
         raise ValueError("ASHARE_QUANT_MARKET_STORES must map explicit aliases to store paths")

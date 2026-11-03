@@ -203,9 +203,16 @@ def initialize(config):
     from ashare_quant.tasks.executor import Configuration
     from ashare_quant.tasks.service import Jobs
 
-    source = _database_check(
-        config.daily_root / "daily.sqlite3", {"bars", "instruments", "calendar", "responses"}
-    )
+    if config.daily_root is None:
+        from ashare_data.product.configuration import resolve as owner_configuration
+        from ashare_data.product.market_release import open_release
+
+        open_release(owner_configuration(config.deployment, profile=config.profile))
+        source = {"readable": True}
+    else:
+        source = _database_check(
+            config.daily_root / "daily.sqlite3", {"bars", "instruments", "calendar", "responses"}
+        )
     if not source["readable"]:
         raise DomainError(
             "DEPLOYMENT_SOURCE_MISSING",

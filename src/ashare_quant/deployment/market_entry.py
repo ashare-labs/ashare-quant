@@ -52,7 +52,18 @@ def main(argv=None):
     deployment = root / "deployment.json"
     config = resolve(deployment, "product")
     reader = AccountReader(root, catalog["account_reader"])
+    from ashare_data.core.consumer_policy import (
+        committed_deployment,
+        guard_arguments,
+        reject_legacy,
+    )
+
+    if committed_deployment() is not None:
+        guard_arguments(remaining)
+        if args.command == "market":
+            guard_arguments(remaining, commands={"describe", "coverage", "query"})
     if args.command in {"financial", "financial-archive", "factor"}:
+        reject_legacy(args.command)
         return subprocess.run(
             [
                 str(root / catalog["account_reader"]["python"]),

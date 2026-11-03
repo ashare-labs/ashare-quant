@@ -1,5 +1,5 @@
 {
-  "commit": "9e404ebd327c8bdd5ced22fa1516bf404b54661c",
+  "commit": "425ea3f30b6a4c3f4c5e60acdac9680606f580f6",
   "contract_review": {
     "execution_permission": false,
     "receipt_sha256": null,
@@ -8,8 +8,8 @@
   },
   "distribution_status": "unpublished_candidate",
   "files": {
-    "__init__.py": "6bcfb4b8850c766667b2b32b224e60eb6aabab07dcb1230e433d78985460563b",
-    "cli/__init__.py": "3ec4c7cb4497f69b4fef36ec95dc7a049236632fec25d535325912f9b00d10d4",
+    "__init__.py": "3707b251684c8a399143d25b2306d4904dfd45bc1adce87d852fceba3d199eda",
+    "cli/__init__.py": "777171bfe49f48db24a975c993c863ea8f945ee20e3cec768aaebd5773e4eb25",
     "cli/__main__.py": "f3ba2f876a39b5362b38dfb40da8dd8f5d927930e0b0ab07a1feb130782d5821",
     "cli/cmes.py": "57e825138a429ed75d37f7bcc6257bd3f10aabe335d548c1aff1e679620de507",
     "cli/corporate_actions.py": "f3c7e7db677a12897594383897c19072a327cfb2874bcb2bc9669652ed655603",
@@ -20,6 +20,7 @@
     "cli/portable.py": "1ad5fe6a5b3af9dc5ac90fec17be6579f29d0fa137ff4a63bfff59b273368db9",
     "cli/zzshare.py": "adab7b9f34a4d274ce807e60cd54739913b37d76f1937f59e2a6c6b515649f16",
     "core/__init__.py": "ff4ac4de21013ba949bdda4ffef7770d60c802e7e08596639afbf6a9a090a4f9",
+    "core/consumer_policy.py": "7ffaa778b240ef77896980b8503208d1f4caf5f173cdc10866bca2a861eea0b4",
     "core/coverage.py": "23fbaadd6b97c98d764bcda4e494e97dd54a3f28d0ff3cb75b4ea3c7c165992b",
     "core/model.py": "8fdc65a29788dca593e19c136d7766bcb85e8c08e06870880660dcff044925f2",
     "core/paths.py": "7c48bca1f44705396051c3d20191057e5720ee6e429e863a1b78b9722a5b3d1b",
@@ -69,7 +70,7 @@
     "financials/unit_resolution.py": "467afce8a2ecc02b5b0cd9d0ed3dfd09a22cee995394ad14b4066dd274e053c4",
     "market/__init__.py": "537535f57ae5f30883ee8dc96126e48da273157dfe7921ee2097bab987931f98",
     "market/alias.py": "86875aff2e3516f8ac7f3a1e9a2c61916412c0096c82498dcfccbbdcf767563d",
-    "market/client.py": "789074d29701d34291af0456c5a418df548f8c90d7915bb0cd644ff276b54515",
+    "market/client.py": "cf55021459d1e24e459e405ada4de714b9d3b4b6623aefa776073f6b20dfc79e",
     "market/compatible.py": "fd30cbcd9d69e4c4fcee2f2b54fdf45c251fd194a9e8a02384b62ebe68ef0078",
     "market/daily_increment.py": "8aa2ecad16f6575741cde71c1937d96958911132a78e4f2e16621f54fe82a0bf",
     "market/early_history.py": "627e83aada8e143bfe7a210c14d0689463e599f8e4ea64275bc1487f4c885d26",
@@ -93,9 +94,9 @@
     "observations/phases.py": "b756757ade4bce0e84a908c38c60524a75ed721102f16f9d1823bee03d6358a8",
     "observations/response_replay.py": "426051222f234af62a2f4b3958b7a62759f8b9509ba7e952ae0cac9cbed094f1",
     "product/__init__.py": "dd8503a22cea3bb2a3ecf2ec60b2b40202a05b128c3f606add4ca5873af99350",
-    "product/__main__.py": "fbbdea96c092f994a0969df076858d9d25eab9b2b7be7efb43e98f89ef4f1ba1",
-    "product/configuration.py": "4c20975861367ff6d087e85c375f2983c32b17c6f9423ed32b50e39021817f83",
-    "product/daily.py": "722d00f8d0420c8b23edb337fafc5188b187a2df816fb71034fbc0d776f5feeb",
+    "product/__main__.py": "64989780ddf2f797864cfa26f09e53a937e2a1fa4075ef56547f567db5180bbd",
+    "product/configuration.py": "f08bc37210a8fbfe11eb8e03d62607e43839117d4ca687ed798acc2dd8650524",
+    "product/daily.py": "6525a3da108a556083d937aab4d85616f243877b0b794dac70a8ca2e3bc658f3",
     "product/financial_release.py": "d19796149c9e5a1d4c457ba66efd2b8222d54cc610b4d5e83994461176fbef46",
     "product/market_release.py": "f7ec5d55647fee91528b649d1283a0523b926d2e0d9c5884cfdb80c41c56e68a",
     "product/minute.py": "8401d87659fea04502bfb0abd01dabdab274632427eb47de17198fb67f8728ee",
@@ -260,10 +261,10 @@
   },
   "portable_owner_version": "0.10.0.dev1",
   "query_contract_sha256": "1815e49a4c3509317a9d4c353025884667eb3383f20c3ca4dcb9d61c0e91e16d",
-  "runtime_code_sha256": "8cd247d3d5796c34bdbbdbb8dec7e36540518be9e021502d10ff26548ba1c015",
+  "runtime_code_sha256": "35779664b57aa1900de8ab08aa41848312b98bc1813a62f4fc9e1f96219a90d1",
   "schema": "aq.data-runtime.v1",
   "source_verification": "committed_candidate_content",
-  "tree": "800660492e8b19974a05bd529f58643c9f5880bf",
-  "version": "0.10.0.dev99",
-  "wheel_sha256": "db1dc72b90c24fa6244fe7e9991d7ecdf05a425d0531b49afaeca0b791991fde"
+  "tree": "33da7967d09e8ee46e27282a8482a2b284829aea",
+  "version": "0.10.0.dev100",
+  "wheel_sha256": "62837cbd0e7b2224213f966c6ebedc7cc83c40c2c87af25d4dba1911d4ef59a9"
 }

@@ -24,6 +24,9 @@ class Configuration:
 
     @classmethod
     def environment(cls):
+        from ashare_data.core.consumer_policy import committed_deployment
+
+        committed_deployment()  # Reject an inherited old owner-store selection.
         value = os.environ.get("ASHARE_QUANT_DAILY_STORE")
         return cls(Path(value).expanduser().resolve() if value else None, ServicePolicy.environment())
 

@@ -60,7 +60,7 @@ class Product:
                 "start the API and task worker with the same deployment and profile",
                 409,
             )
-        if config.daily_root is None or config.release_store_root is None:
+        if (config.daily_root is None and not config.document["profiles"][config.profile].get("market_release")) or config.release_store_root is None:
             raise DomainError(
                 "PRODUCT_NOT_CONFIGURED", "Configure a daily asset and publication Store", 503
             )
@@ -175,7 +175,7 @@ class Product:
             paths = {
                 "data_root": str(config.data_root),
                 "control_db": str(config.control_db),
-                "daily_root": str(config.daily_root),
+                "daily_root": str(config.daily_root) if config.daily_root is not None else None,
                 "release_store_root": str(config.release_store_root),
             }
             configuration_id = digest(

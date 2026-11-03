@@ -98,3 +98,10 @@ python scripts/verify_wheel.py dist/ashare_quant-0.12.0.dev32-py3-none-any.whl \
 | `GET /api/v1/scenarios`、`/rqalpha/scenarios`、`POST /api/v1/strategies`、`/runs`、`/data/admission` | 演练场景与合成数据注入已移除；使用 `/api/v1/product` 正式数据发布与覆盖查询，旧 `runs` 保持只读 |
 | `POST /api/v1/paper/sessions` 及 `fork`、`ingest`、`advance`、`work`、`decisions`、`closes`、`pause`、`resume` | `/api/v1/paper` 仅提供已有会话、视图与报告的只读查询 |
 | 旧 CLI `demo`、`scenarios`、`strategy-create`、`run-create`、`task-create`、`portfolio` | 使用 `python-create`、`task-worker`、`task-service`、`history`、`history-strategies` |
+
+A product profile using `consumer_policy: committed_market_only` selects its
+committed market release without `daily_asset`. Initialization validates that
+release; doctor never opens an unselected legacy daily SQLite. Ordinary quote,
+archival Store, factor registry and diagnostics entry points are disabled by the
+formal consumer policy. Runtime identity still governs settled accounts separately;
+a new data-reader release does not authorize account migration or execution.

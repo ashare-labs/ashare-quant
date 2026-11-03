@@ -84,6 +84,10 @@ def main(argv=None):
     sub.add_parser("serve").add_argument("--port", type=int)
     args = parser.parse_args(argv)
     try:
+        from ashare_data.core.consumer_policy import committed_deployment
+
+        if committed_deployment() is not None and args.command.startswith(("market-", "source-diagnostics")):
+            raise DomainError("LEGACY_SOURCE_DISABLED", "Use the deployment product endpoints; archived stores and source diagnostics are disabled", 422)
         configuration = selected_runtime(args)
         if configuration is not None and args.command in {"init", "serve", "task-worker", "backup"}:
             from ashare_quant.deployment.backup import create_backup
