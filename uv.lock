@@ -64,7 +64,7 @@ dependencies = [
     { name = "pandas" },
 ]
 wheels = [
-    { filename = "ashare_data-0.10.0.dev100-py3-none-any.whl", hash = "sha256:62837cbd0e7b2224213f966c6ebedc7cc83c40c2c87af25d4dba1911d4ef59a9" },
+    { filename = "ashare_data-0.10.0.dev100-py3-none-any.whl", hash = "sha256:2918e79a0f94aa7654bc7217db31a213910aa51a74985d2eb4299a85ce129387" },
 ]
 
 [package.optional-dependencies]

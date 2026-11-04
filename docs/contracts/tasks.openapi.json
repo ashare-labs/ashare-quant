@@ -2080,6 +2080,11 @@
             "title": "Kind",
             "type": "string"
           },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2107,7 +2112,8 @@
         "required": [
           "path",
           "name",
-          "kind"
+          "kind",
+          "modified_at"
         ],
         "title": "StrategyEntry",
         "type": "object"

@@ -222,9 +222,7 @@ class Quote:
     def is_st(self):
         if getattr(self._host.data, "demand", False):
             require(self._host.at.strftime("%H:%M") >= "09:00", "PYTHON_DAILY_STATE_NOT_VISIBLE")
-            value = self._host.data._row(self._sid, self._host.day).get("is_st")
-            require(value in {"0", "1"}, "MINUTE_ST_STATUS_UNKNOWN")
-            return value == "1"
+            return self._host.data.is_st(self._sid, self._host.day)
         value = self._state().get("is_st")
         require(value is not None, "MINUTE_ST_STATUS_UNKNOWN")
         return value

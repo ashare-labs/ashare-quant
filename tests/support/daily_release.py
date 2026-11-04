@@ -54,10 +54,11 @@ def fixed_release(tmp_path, request):
             symbol = ("sh" if sid.endswith("XSHG") else "sz") + sid[:6]
             db.execute("INSERT INTO release_instruments VALUES(?,?,?)", [n, sid, "fixture"])
             db.execute("INSERT INTO release_identifiers VALUES(?,?)", [sid, n])
-            db.execute(
-                "INSERT INTO listing_facts VALUES(?,?,'2000-01-01',NULL,'{}','2025-01-01',NULL)",
-                [sid, symbol],
-            )
+            if sid not in omissions.get("missing_listings", ()):
+                db.execute(
+                    "INSERT INTO listing_facts VALUES(?,?,'2000-01-01',NULL,'{}','2025-01-01',NULL)",
+                    [sid, symbol],
+                )
         db.commit()
         store.close()
         c = connection(memory="128MB", threads=1)
@@ -253,7 +254,7 @@ def daily_jobs(tmp_path, fixed_release, monkeypatch, request):
     # Only the deployment selector is replaced. Preparation queries actual frozen AD objects.
     jobs.product = SimpleNamespace(call=lambda f: f(SimpleNamespace(release=release)),
         configured=lambda: SimpleNamespace(document={"profiles": {"product": {}}}, profile="product"))
-    monkeypatch.setattr(jobs, "environment", lambda: "a" * 64)
+    monkeypatch.setattr(jobs, "environment", lambda **_: "a" * 64)
     body = dict(
         environment_id="a" * 64,
         name="Imported daily MA",

@@ -4,7 +4,9 @@ Only actual API calls determine historical demand. No strategy discovery pass ru
 Execution retains the existing observed-state/corporate model, loaded per security/day.
 """
 
+from collections import OrderedDict
 from collections.abc import Mapping
+from copy import deepcopy
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -19,7 +21,16 @@ from ashare_quant.portfolio.corporate import MODEL, schedule_rows
 from ashare_quant.providers.daily.history import frozen_factors, history_prices
 from ashare_quant.storage.artifacts import atomic, digest
 from ashare_quant.storage.streams import Journal, compress, file_hash
-from ashare_quant.tasks.minute.prepare import prepare_market, require
+from ashare_quant.tasks.minute.prepare import (
+    _positive_trading_bar,
+    cmes_facts,
+    listing_facts,
+    prepare_market,
+    query_cmes_fact,
+    require,
+    require_dated_states,
+    require_listing_window,
+)
 from ashare_quant.tasks.policy import ServicePolicy
 
 
@@ -130,6 +141,8 @@ class DemandInputs:
         self.corporate_evidence = Journal(self.root / "corporate.jsonl.gz")
         self.read_count, self.daily_read_rows, self.component_day = 0, 0, None
         self.references, self.reference_rows, self.benchmark_rows = None, 0, 0
+        self._cmes_facts = None
+        self._source_fact_cache = OrderedDict()
         self.bars, self.gaps = {}, {}
         self.corporate_actions, self.actions = [], []
         self.factors = frozen_factors(self.root, factors)
@@ -156,6 +169,74 @@ class DemandInputs:
         }
         if benchmark is not None:
             self.document["benchmark_release"] = benchmark
+        if self.owner.release.manifest.get("cmes"):
+            self.document["limitations"].append(
+                "CMES source-reported listing dates and source-scoped ST facts do not establish "
+                "suspension, historical active eligibility or PIT availability"
+            )
+
+    def source_fact(self, method, *arguments):
+        """Journal partial facts separately from unchanged raw price reads."""
+        from ashare_data.core.model import DataError
+
+        require(self.owner.release.manifest.get("cmes")
+                and method in {"listing_date", "st_status", "trading_status"}
+                and len(arguments) == (1 if method == "listing_date" else 2),
+                "PYTHON_SOURCE_FACT_SCOPE", "Only pin-bound CMES partial facts are supported")
+        if self._cmes_facts is None:
+            self._cmes_facts = cmes_facts(self.owner.release)
+        key = method, tuple(arguments)
+        hit = key in self._source_fact_cache
+        if hit:
+            fact = self._source_fact_cache[key]
+            self._source_fact_cache.move_to_end(key)
+        else:
+            fact = query_cmes_fact(self._cmes_facts, method, *arguments)
+        # A retained fact never bypasses the reader's normal metadata identity
+        # check. This uses the true physical replica/source and its receipt;
+        # it neither re-scans tables nor changes the immutable release binding.
+        try:
+            self.owner.release.verify(self.owner.release.manifest["metadata"])
+        except DataError as exc:
+            raise DomainError(exc.code, exc.message, 422, details=exc.details,
+                              origin="ashare-data") from exc
+        expected_field = {
+            "listing_date": "source_reported_listing_date",
+            "st_status": "is_st",
+            "trading_status": "tradestatus",
+        }[method]
+        expected_rule = {
+            "st_status": "cmes-complete-history-membership.v1",
+            "trading_status": "cmes-observed-trading-activity.v1",
+        }.get(method)
+        require(isinstance(fact, dict) and fact.get("release") == self.owner.release.receipt()
+                and fact.get("security") == arguments[0] and fact.get("field") == expected_field
+                and (expected_rule is None or (fact.get("date") == arguments[1]
+                    and (fact.get("status") != "derived"
+                         or fact.get("rule") == expected_rule))),
+                "PYTHON_SOURCE_FACT_BINDING", "Partial fact differs from the fixed query identity")
+        if not hit:
+            self._source_fact_cache[key] = deepcopy(fact)
+            # Retention only; eviction never limits queries or source coverage.
+            while len(self._source_fact_cache) > 128:
+                self._source_fact_cache.popitem(last=False)
+        self.queries.append({"api": "cmes_partial_fact", "method": method,
+                             "arguments": list(arguments), "fact": deepcopy(fact),
+                             "fact_sha256": digest(fact), "cache_hit": hit})
+        return deepcopy(fact)
+
+    def is_st(self, sid, day):
+        self.securities([sid])
+        if self.owner.release.manifest.get("cmes"):
+            fact = self.source_fact("st_status", sid, day)
+            require(type(fact.get("value")) is bool and fact.get("status") == "derived",
+                    "MINUTE_ST_STATUS_UNKNOWN", "Source-scoped dated ST membership is unknown",
+                    {"security": sid, "date": day, "fact": fact})
+            return fact["value"]
+        value = self._row(sid, day).get("is_st")
+        require(value in {"0", "1"}, "MINUTE_ST_STATUS_UNKNOWN",
+                "Published daily ST status is unknown", {"security": sid, "date": day})
+        return value == "1"
 
     def _retain(self, response, count):
         self.read_count += count
@@ -350,7 +431,14 @@ class DemandInputs:
         return history_prices(rows, receipt, self.factors, adjustment, basis_date)
 
     def is_paused(self, sid, day, *, row=None):
-        value = (row if row is not None else self._row(sid, day)).get("tradestatus")
+        current = row if row is not None else self._row(sid, day)
+        value = current.get("tradestatus")
+        if (
+            value not in {"0", "1"}
+            and self.owner.release.manifest.get("cmes")
+            and _positive_trading_bar(current)
+        ):
+            value = "1"
         require(
             value in {"0", "1"},
             "PYTHON_DAILY_HISTORY_STATE_GAP",
@@ -518,6 +606,29 @@ class DemandInputs:
         key = sid, day
         if key not in self.components:
             self.register([sid])
+            # Check the same observed daily prerequisites before broad corporate
+            # reads. Raw price/history queries still do not require these facts.
+            prev = self.calendar[self.calendar.index(day) - 1]
+            rows = self._daily(sid, [prev, day])
+            require(
+                all(r is not None for r in rows),
+                "PYTHON_DAILY_GAP",
+                f"Execution needs daily bars for {sid} on {prev} and {day}; "
+                "at least one observation is missing",
+                {"security": sid, "date": day},
+            )
+            facts = None
+            listings = None
+            if self.owner.release.manifest.get("cmes"):
+                if self._cmes_facts is None:
+                    self._cmes_facts = cmes_facts(self.owner.release)
+                facts = self._cmes_facts
+                listings = listing_facts(self.owner.release, [sid], facts=facts,
+                                         fact_query=self.source_fact, on_date=day)
+            require_dated_states(rows, [day], facts=facts, fact_query=self.source_fact)
+            if facts is None:
+                listings = listing_facts(self.owner.release, [sid])
+            require_listing_window(self.owner.release, [sid], [day], listings=listings, rows=rows)
             req = self.request.model_copy(
                 update={
                     "securities": (sid,),
@@ -530,15 +641,6 @@ class DemandInputs:
             if self.frequency == "1d":
                 from ashare_quant.backtests.daily.python_inputs import DailyPythonInputs
 
-                prev = self.calendar[self.calendar.index(day) - 1]
-                rows = self._daily(sid, [prev, day])
-                require(
-                    all(r is not None for r in rows),
-                    "PYTHON_DAILY_GAP",
-                    f"Execution needs daily bars for {sid} on {prev} and {day}; "
-                    "at least one observation is missing",
-                    {"security": sid, "date": day},
-                )
                 daily = {
                     "rows": rows,
                     "receipt": {"release": self.pin, "rows_sha256": digest(rows)},
@@ -550,7 +652,7 @@ class DemandInputs:
                     **metadata,
                     "schema": "aq-python-daily-input.v1",
                     "producer": {"name": "ashare-data"},
-                    "daily": rows,
+                    "daily": daily["rows"],
                     "daily_receipt": daily["receipt"],
                     "warmup_sessions": 1,
                 }
