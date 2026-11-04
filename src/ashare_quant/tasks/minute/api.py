@@ -3,6 +3,7 @@
 from fastapi import Request
 
 from ashare_quant.contracts import DomainError
+from ashare_quant.product.discovery import DiscoveryRead, discovery_status
 from ashare_quant.strategies.backtests import mount as mount_backtests
 from ashare_quant.strategies.files_api import mount as mount_files
 from ashare_quant.strategies.files_api import workspace_handle
@@ -30,6 +31,7 @@ def mount(app, store, configuration=None):
     mount_files(app, app.state.product)
     mount_backtests(app)
     prefix = "/api/v1/python"
+    app.state.python_catalogue_read = DiscoveryRead()
 
     def closed(request):
         if request.query_params:
@@ -39,9 +41,8 @@ def mount(app, store, configuration=None):
     def catalogue(request: Request) -> dict:
         closed(request)
         factors = jobs.history_factors
-        environment = jobs.environment()
+        environment = jobs.environment(local=True)
         from ashare_quant.tasks.minute.benchmark import configured_release
-        benchmark = configured_release(jobs.product.configured())
 
         def availability(owner):
             release = getattr(owner, "release", None)
@@ -59,6 +60,17 @@ def mount(app, store, configuration=None):
                 "coverage_semantics": "calendar envelope only; security, field and history coverage checked on actual demand",
             }
 
+        def metadata():
+            benchmark = configured_release(jobs.product.configured())
+            return jobs.product.call(availability), benchmark
+
+        try:
+            data_availability, benchmark = app.state.python_catalogue_read.run(metadata)
+            data_status = discovery_status()
+        except DomainError as exc:
+            data_availability, benchmark = None, None
+            data_status = discovery_status(exc)
+
         return {
             "environment_id": environment,
             "strategy_api": {"module": "aquant", "distribution": "ashare-quant",
@@ -69,7 +81,8 @@ def mount(app, store, configuration=None):
                 "source_files": "relative_python_paths", "imports": "package_relative",
                 "submission": "complete_snapshot", "dependencies": "existing_runtime_environment",
             },
-            "data_availability": jobs.product.call(availability),
+            "data_availability": data_availability,
+            "data_status": data_status,
             "frequency": "1m",
             "frequencies": ["1m", "1d"],
             "benchmark": {

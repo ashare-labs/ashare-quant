@@ -81,26 +81,15 @@ class Sources:
         if self.product is not None:
             try:
 
-                def release(owner):
-                    item = getattr(owner, "release", None)
-                    return (
-                        dict(
-                            root=str(item.root),
-                            release_id=item.release_id,
-                            manifest_sha256=item.sha256,
-                        )
-                        if item
-                        else None
-                    )
-
-                selected = self.product.call(release)
+                selected = self.product.release_selection()
                 if selected:
                     result["market-release"] = dict(
                         label="当前正式日线快照", kind="market_release", market_release=selected
                     )
             except DomainError:
                 # Independent frozen samples still work without a product deployment.
-                pass
+                if self.product.configuration is not None and not self.specifications:
+                    raise
         return result
 
     def identity(self):

@@ -24,7 +24,7 @@ def mount(app, store, configuration=None, sources=None):
 
     @app.get(prefix + "/sources")
     def source_list() -> dict:
-        return {"items": jobs.sources.catalogue(), "environment_id": jobs.environment()}
+        return jobs.source_catalogue()
 
     @app.post(prefix + "/jobs", status_code=201)
     def create(body: FactorCreate) -> FactorJobView:

@@ -7,6 +7,7 @@ import stat
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from threading import Barrier, Event
 
 import pytest
@@ -44,10 +45,12 @@ def test_directory_and_utf8_round_trip_survive_new_process(client, configuration
     assert client.get(PREFIX + "/files", params={"path": path}).json() == {"path": path, "strategy_id": path, "source": source}
     (root / "研究/日频/not-a-strategy.txt").write_text("ignored")
     assert client.get(PREFIX + "/directories", params={"path": "研究"}).json()["entries"] == [
-        {"name": "日频", "path": "研究/日频", "kind": "directory"},
+        {"name": "日频", "path": "研究/日频", "kind": "directory",
+         "modified_at": datetime.fromtimestamp((root / "研究/日频").stat().st_mtime, UTC).isoformat().replace("+00:00", "Z")},
     ]
     assert client.get(PREFIX + "/directories", params={"path": "研究/日频"}).json()["entries"] == [
-        {"name": "动量.py", "path": path, "strategy_id": path, "kind": "file"},
+        {"name": "动量.py", "path": path, "strategy_id": path, "kind": "file",
+         "modified_at": datetime.fromtimestamp((root / path).stat().st_mtime, UTC).isoformat().replace("+00:00", "Z")},
     ]
     program = """
 import json, sys

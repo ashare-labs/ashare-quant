@@ -43,6 +43,7 @@ def daily_contract(document, catalogue):
         and "1d" in catalogue.get("frequencies", [])
         and isinstance(catalogue.get("daily"), dict)
         and valid_environment(catalogue.get("environment_id"))
+        and catalogue.get("data_status", {}).get("status") != "unavailable"
     )
 
 
@@ -91,6 +92,8 @@ async def capabilities(backend):
                     "submission_enabled": (factor_ready if family == "factors" else daily_ready
                                            if family == "python_daily" else
                                            python["available"] and prefix + "/jobs" in paths
+                                           and valid_environment(python.get("value", {}).get("environment_id"))
+                                           and python.get("value", {}).get("data_status", {}).get("status") != "unavailable"
                                            if family == "python_minute" else False),
                     "available": (
                         factor_ready

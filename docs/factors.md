@@ -2,6 +2,8 @@
 
 `/api/v1/factors` 提供统一因子目录浏览、多源因子值计算与 Alphalens 横截面统计评价。目录共包含 **368 项** 因子定义：聚宽命名研究因子 19 项（`joinquant`）、国泰君安 Alpha191 191 项（`alpha191`，默认 `gtja191.explicit.v1`，可选 `gtja191.public.v1`）以及 Qlib Alpha158 工程特征 158 项（`qlib_alpha158`，定义版本 `qlib.alpha158.v0.9.7`）。
 
+目录定义可以在行情不可用时浏览。`GET /catalogue` 的 `data_status` 仅说明目录元数据读取状态，不能代表数据或执行准入；`execution_verified` 固定为 `false`。环境读取超过 5 秒或失败时，`environment_id=null`，`data_status.status="unavailable"` 并携带具体错误。`GET /sources` 在读取失败时使用相同状态契约。客户端不得把两个空环境 ID 判为可执行。每类目录最多保留一个在途读操作，超时不声称已取消磁盘读取；重试不会积累新读器，也不复用已完成操作的旧环境。
+
 ## 运行环境与数据源配置
 
 安装配对的 A数达 wheel 后，同步 `factor-evaluation` 可选依赖以启用 Alphalens 评价能力（未安装该 extra 时仍可浏览目录与计算因子值）：

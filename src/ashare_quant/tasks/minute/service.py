@@ -43,14 +43,14 @@ class PythonJobs(TaskService):
 
         return Jobs(self.repo.store, self.config).for_job(row)
 
-    def environment(self):
+    def environment(self, *, local=False):
         self.guard()
         require(
             self.product is not None,
             "PYTHON_DATA_NOT_CONFIGURED",
             "Configure the formal product profile",
         )
-        config = self.product.configured()
+        config = self.product.local_configured() if local else self.product.configured()
         return digest(
             {
                 "source": self.source,

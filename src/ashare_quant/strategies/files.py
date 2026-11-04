@@ -7,6 +7,7 @@ import re
 import stat
 import unicodedata
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
@@ -243,6 +244,7 @@ class StrategyFiles:
                         else:
                             continue
                         entries.append({"name": name, "path": relative, "kind": kind,
+                                        "modified_at": datetime.fromtimestamp(info.st_mtime, UTC).isoformat().replace("+00:00", "Z"),
                                         **({"strategy_id": relative} if kind == "file" else {}),
                                         **({"strategy_id": metadata["project_id"]} if kind == "project" else {})})
             except FileNotFoundError:

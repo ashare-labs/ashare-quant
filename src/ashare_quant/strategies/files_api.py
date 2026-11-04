@@ -3,7 +3,7 @@
 from typing import Literal
 
 from fastapi import Query, Request
-from pydantic import Field, field_validator, model_validator
+from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from ashare_quant.contracts import Contract, DomainError
 from ashare_quant.strategies.files import StrategyFiles, parts, source_bytes, validate_workspace
@@ -46,6 +46,7 @@ class StrategyEntry(StrategyPath):
     name: str
     kind: Literal["directory", "file", "project"]
     strategy_id: StrategyID | None = Field(default=None, exclude_if=lambda value: value is None)
+    modified_at: AwareDatetime
 
 
 class StrategyDirectory(Contract):
@@ -115,12 +116,12 @@ def mount(app, product):
 
     def files(request, *, query=False):
         validate_query(request, {"path"} if query else set())
-        return StrategyFiles(product.configured().control_db.parent, workspace=workspace_handle(request))
+        return StrategyFiles(product.local_configured().control_db.parent, workspace=workspace_handle(request))
 
     def projects(request, *, query=False):
         validate_query(request, {"path", "strategy_id"} if query else set())
         policy = app.state.python_jobs.repo.policy
-        return ProjectFiles(product.configured().control_db.parent,
+        return ProjectFiles(product.local_configured().control_db.parent,
                             total_bytes=policy.artifact_bytes, workspace=workspace_handle(request))
 
     @app.get(prefix + "/directories")

@@ -6,6 +6,7 @@ import shutil
 import stat
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from threading import Barrier
 
 import pytest
@@ -46,7 +47,8 @@ def test_plain_project_save_move_reopen_and_source_delete(projects):
     assert projects.read_id(edited["strategy_id"]) == moved
     assert not (projects.root / edited["path"]).exists()
     assert folders.list("归档/子类")["entries"] == [
-        {"name": "新名", "path": moved["path"], "kind": "project", "strategy_id": moved["strategy_id"]},
+        {"name": "新名", "path": moved["path"], "kind": "project", "strategy_id": moved["strategy_id"],
+         "modified_at": datetime.fromtimestamp((projects.root / moved["path"]).stat().st_mtime, UTC).isoformat().replace("+00:00", "Z")},
     ]
     renamed = save(projects, moved, {"runner.py": "from .utils import value\n", "utils.py": "value = 2"}, "runner.py")
     assert sorted(p.name for p in (projects.root / moved["path"]).iterdir()) == ["aquant.toml", "runner.py", "utils.py"]

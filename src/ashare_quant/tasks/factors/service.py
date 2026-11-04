@@ -10,6 +10,7 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.factors.catalog import catalogue, detail
 from ashare_quant.factors.compute import evaluation_available, validate_parameters
 from ashare_quant.factors.inputs import Sources
+from ashare_quant.product.discovery import DiscoveryRead, discovery_status
 from ashare_quant.storage.artifacts import atomic, canonical, digest, lock, regular, require, sha
 from ashare_quant.tasks.base import TaskService
 from ashare_quant.tasks.contracts import ResultReference
@@ -43,6 +44,8 @@ class FactorJobs(TaskService):
         self.repo = Repository(store, self.repo.policy, execution_source=self.source)
         self.executor = Executor(self.root, self.config, self.repo.policy)
         self.sources = Sources(sources, product)
+        self.catalogue_read = DiscoveryRead()
+        self.sources_read = DiscoveryRead()
         # Cache verification metadata, never the potentially 32 MiB input bytes.
         # Each service instance starts empty; execution always verifies afresh.
         self._verified_input = lru_cache(maxsize=1024)(self._verify_input)
@@ -66,12 +69,28 @@ class FactorJobs(TaskService):
         )
 
     def catalogue(self, version):
+        items = catalogue(version)
+        try:
+            environment = self.catalogue_read.run(self.environment)
+            status = discovery_status()
+        except DomainError as exc:
+            environment, status = None, discovery_status(exc)
         return dict(
-            environment_id=self.environment(),
-            items=catalogue(version),
+            environment_id=environment,
+            items=items,
+            data_status=status,
             evaluation_available=evaluation_available(),
             limits={},
         )
+
+    def source_catalogue(self):
+        def read():
+            return {"items": self.sources.catalogue(), "environment_id": self.environment(),
+                    "data_status": discovery_status()}
+        try:
+            return self.sources_read.run(read)
+        except DomainError as exc:
+            return {"items": [], "environment_id": None, "data_status": discovery_status(exc)}
 
     def create(self, request):
         self.guard()

@@ -52,6 +52,13 @@ class Executor:
     @staticmethod
     def environment():
         env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG") if k in os.environ}
+        # These operator-selected local I/O settings do not select market data.
+        # Keep verified-object receipts, exact read replicas and spill locations
+        # across isolation; each child still validates its selected content.
+        for key in ("ASHARE_MARKET_VERIFY_CACHE", "ASHARE_MARKET_READ_REPLICAS", "ASHARE_DUCKDB_TEMP_DIRECTORY",
+                    "ASHARE_DUCKDB_MEMORY_LIMIT", "ASHARE_DUCKDB_MAX_TEMP_DIRECTORY_SIZE"):
+            if key in os.environ:
+                env[key] = os.environ[key]
         env.update(
             OPENBLAS_NUM_THREADS="1",
             OMP_NUM_THREADS="1",

@@ -1,5 +1,6 @@
 """Use the installed AD public API; never query or modify its source database."""
 
+import json
 import sqlite3
 from copy import deepcopy
 from pathlib import Path
@@ -45,7 +46,7 @@ class Product:
             except DomainError as exc:
                 self.configuration_error = exc
 
-    def configured(self):
+    def _configured(self):
         if self.configuration_error:
             raise self.configuration_error
         config = self.configuration
@@ -64,8 +65,56 @@ class Product:
             raise DomainError(
                 "PRODUCT_NOT_CONFIGURED", "Configure a daily asset and publication Store", 503
             )
+        return config
+
+    def configured(self):
+        config = self._configured()
         self.require_configuration_snapshot(config)
         return config
+
+    def local_configured(self):
+        """Editing local strategy files does not require a mounted market volume.
+
+        Keep the deployment document and local state binding guarded. Market
+        consumers still use configured(), including its full asset check.
+        """
+        config = self._configured()
+        if not self.configuration_changed:
+            try:
+                changed = (
+                    json.loads(config.deployment.read_bytes()) != config.document
+                    or config.data_root.resolve() != config.data_root
+                    or config.control_db.resolve() != config.control_db
+                )
+                if changed:
+                    self.configuration_changed = True
+            except (OSError, ValueError):
+                self.configuration_changed = True
+        if self.configuration_changed:
+            self.require_configuration_snapshot(config)
+        return config
+
+    def release_selection(self):
+        """Read the configured publication pointer, without opening its metadata DB.
+
+        This identity is a selection, not data admission. Sources are verified by
+        the owner when an actual source listing or computation opens the reader.
+        """
+        from ashare_data import DataError
+        from ashare_data.product.configuration import resolve
+
+        config = self.configured()
+        verify_data_runtime()
+        try:
+            return resolve(config.deployment, profile=config.profile)["market_release"]
+        except DataError as exc:
+            raise DomainError(exc.code, exc.message, 422,
+                              details=wire(exc.details), origin="ashare-data") from exc
+        except (OSError, sqlite3.Error) as exc:
+            raise DomainError("PRODUCT_DATA_UNAVAILABLE", "Market selection is unavailable", 503,
+                              details={"failure": type(exc).__name__}) from exc
+        finally:
+            self.require_configuration_snapshot(config)
 
     def require_configuration_snapshot(self, config):
         """A running API never switches deployment bindings beneath its identity."""

@@ -50,7 +50,7 @@ def rebalance(context):
 
 | 方法与路径 | 请求参数 | 响应与说明 |
 | --- | --- | --- |
-| `GET /directories?path=研究` | 可选相对路径 `path`（空表示根目录） | 返回 `{root, path, entries}`，列出子目录、`.py` 单文件与 `kind="project"` 项目 |
+| `GET /directories?path=研究` | 可选相对路径 `path`（空表示根目录） | 返回 `{root, path, entries}`，列出子目录、`.py` 单文件与 `kind="project"` 项目；各项 `modified_at` 为文件系统条目的 UTC 修改时间 |
 | `POST /directories` | `{"path": "研究/日频"}` | 递归创建分类目录（权限 `0700`） |
 | `GET /files?path=研究/日频/动量.py` | 必填 `.py` 相对路径 | 返回 `{path, strategy_id, source}` |
 | `PUT /files` | `{"path": "...", "source": "...", "overwrite": false}` | 原子写入 UTF-8 源码（权限 `0600`）；已有文件需显式传 `overwrite=true`，否则返回 `409 STRATEGY_FILE_EXISTS` |
@@ -74,12 +74,22 @@ def rebalance(context):
 
 ### 提交回测（`POST /api/v1/python/jobs`）
 
-1. 先调用 `GET /api/v1/python/catalogue` 获取当前 `environment_id`、支持频率（`1m`、`1d`）、`data_availability` 与资源预算。
+1. 先调用 `GET /api/v1/python/catalogue` 获取当前 `environment_id`、支持频率（`1m`、`1d`）、`data_availability` 与资源预算。`data_status` 仅描述目录元数据读取状态，不是回测准入；`execution_verified` 固定为 `false`。行情读取超过 5 秒时仍返回静态接口信息，`data_availability=null`、`data_status.status="unavailable"`，错误码为 `CATALOGUE_DATA_TIMEOUT`。客户端应保留本地编辑/保存，显示原因并允许重试，不应把未知行情状态视为可提交。已有日历包络也不证明具体证券、复权、财务或回测覆盖。
 2. 向 `POST /api/v1/python/jobs` 提交请求：
    - 单文件策略传入 `source` 与可选 `strategy_id`（相对路径）；
    - 多文件项目传入 `project={project_id, entrypoint, files}` 与相等的 `strategy_id`；
    - 必填 `environment_id`、`idempotency_key`、`name`、`frequency`、`start_date`、`end_date`、`initial_cash` 以及两项显式确认 `trusted_local_code: true`、`accept_research_model: true`。
    - 任务接受时立即将提交的源码快照冻结至任务目录，后续编辑磁盘文件不影响已提交任务。
+
+执行子进程保留操作者已配置的本机读取设置：`ASHARE_MARKET_VERIFY_CACHE`、
+`ASHARE_MARKET_READ_REPLICAS`、
+`ASHARE_DUCKDB_TEMP_DIRECTORY`、`ASHARE_DUCKDB_MEMORY_LIMIT` 与
+`ASHARE_DUCKDB_MAX_TEMP_DIRECTORY_SIZE`；不另外设置默认值。这样父进程已验证的
+不可变对象可按相同文件指纹复用校验回执，子进程临时查询也使用既定目录。
+旧行情源覆盖、服务地址、代理、凭据及 Python 导入路径仍不从父进程透传。
+这些设置不改变冻结的市场发布、任务身份或数据准入。
+执行数据组件在读取大量公司行动覆盖前核验必要状态及上市事实；上市日期缺失或冲突时
+明确拒绝。原价查询不增加这一执行门禁。
 
 ### 查询策略所属回测列表（`GET /api/v1/python/backtests`）
 
@@ -106,3 +116,21 @@ ashare-quant-migrate-imports apply --bundle /path/to/review-bundle --control-db 
 ```
 
 - `from jqdata import ...` 改写为 `from aquant import ...`；无别名 `import jqdata` 改写为 `import aquant as jqdata` 以保持文件内局部变量引用不变；动态导入或子模块引用标记为 `review_required` 供人工核对。
+
+执行组件准备核验实际使用的逐日交易/ST 状态和上市事实。
+最后读取公司行动。日频和分钟均只要求执行日状态；前日行与真实收盘价仍须存在，
+仅用于前收盘价的预热日不要求 ST/停牌状态。历史查询若要求 `skip_paused=True`，
+仍独立核验所查询日期的停牌状态。
+缺少状态返回 `PYTHON_STATE_GAP` 和具体日期/字段，不用价格或成交量推断停牌。
+CMES 消费端可以读取同一发布中唯一、无冲突的公司 `listed_date`，用于上市事件
+日期及既有 30 日年龄判断；它不证明逐日持续挂牌。缺少历史挂牌资格时仍返回
+`PYTHON_LISTING_STATE_GAP`，不会把日期投影为 `listed=True`。
+
+CMES 的 `get_current_data()[security].is_st` 在已声明的事后逐日回放时钟（09:00 起）
+可使用经审阅的完整历史 ST 包派生事实。只有受支持的来源代码域、完整采纳的固定
+源包和实际存在的非空日快照才可判定成员或非成员；无快照、范围外或身份不明仍报
+`MINUTE_ST_STATUS_UNKNOWN`。结果是 provider-scoped `derived`，不是原日线观测，
+原始 `is_st=NULL` 保留。来源、规则、日快照和发布身份写入独立查询 journal。
+这不提供停牌、盘中生效时间或历史 PIT；交易缺 `tradestatus` 仍拒绝。
+`get_security_info` 仍未支持，不用虚构的无限退市日补出生命周期。
+这些检查不限制独立原价历史查询，完整公司行动与原生执行门禁仍然保留。
