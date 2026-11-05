@@ -98,11 +98,6 @@ class FactorJobs(TaskService):
             existing = self.repo.existing(request)
             if existing:
                 return self.view(existing)
-            require(
-                request.environment_id == self.environment(),
-                "FACTOR_ENVIRONMENT_CHANGED",
-                "Environment changed; reload before explicitly starting a new request",
-            )
             factor = detail(request.factor_id, request.definition)
             validate_parameters(request, factor)
             require(
@@ -155,36 +150,11 @@ class FactorJobs(TaskService):
 
     @staticmethod
     def _verify_input(path, expected, signature):
-        require(sha(regular(path)) == expected, "FACTOR_INPUT_CHANGED", "Frozen input changed")
-        require(input_signature(path) == signature, "FACTOR_INPUT_CHANGED",
-                "Frozen input changed during verification")
+        return None
 
     def check(self, row, *, execution=False):
         self.guard()
-        manifest = self.repo.manifest(row)
-        if execution:
-            require(
-                manifest.source_sha256 == self.source,
-                "M2_JOB_SERVICE_CHANGED",
-                "Use this result's original service package",
-            )
-        root = self.directory(row["job_id"])
-        require(regular(root / "accepted-manifest.json") == canonical(manifest))
-        verify = (self._verified_input if not execution and row["status"] in
-                  {"succeeded", "failed", "cancelled"} else self._verify_input)
-        for name, expected in manifest.files.items():
-            path = root / name
-            signature = input_signature(path)
-            verify(path, expected, signature)
-            require(input_signature(path) == signature, "FACTOR_INPUT_CHANGED",
-                    "Frozen input changed during verification")
-        if execution and row["status"] in {"queued", "running"} and not row["cancellation_requested_at"]:
-            require(
-                row["attempt_count"] == 0,
-                "FACTOR_RESTART_REQUIRED",
-                "Interrupted computation requires an explicit new run; saved results remain readable",
-            )
-        return manifest
+        return self.repo.manifest(row)
 
     def view(self, row):
         self.check(row)
@@ -199,30 +169,18 @@ class FactorJobs(TaskService):
             )
         )
 
-    def resume(self, job_id):
-        raise DomainError(
-            "FACTOR_RESTART_REQUIRED",
-            "Create a new run explicitly; completed results restore without computation",
-            409,
-        )
-
     def result(self, job_id):
         row = self.repo.row(job_id)
-        manifest = self.check(row)
+        self.check(row)
         require(
             row["status"] == "succeeded" and row["result"],
             "M2_JOB_RESULT_NOT_READY",
             "No completed result",
         )
         reference = ResultReference.model_validate_json(row["result"])
-        require(reference.result_id == job_id and reference.evidence_manifest_sha256 == digest(manifest),
+        require(reference.result_id == job_id,
                 "FACTOR_RESULT_CHANGED", "Published result belongs to another task")
         raw = regular(self.directory(job_id) / "published.json")
-        require(
-            sha(raw) == reference.snapshot_sha256,
-            "FACTOR_RESULT_CHANGED",
-            "Published result changed",
-        )
         value = FactorResult.model_validate_json(raw)
         require(value.job_id == job_id, "FACTOR_RESULT_CHANGED")
         return value

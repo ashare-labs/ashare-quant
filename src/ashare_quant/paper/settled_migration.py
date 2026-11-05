@@ -63,34 +63,20 @@ class Authorization(Contract):
 
 
 def runtime_transition(before, after):
-    """Record AD's actual version change; keep Python, native ABI and RQ exact."""
+    """Record AD's actual version change without locking package versions."""
     require(
         set(before) == set(after) == {"sources", "runtime", "rq"}
-        and before["rq"] == after["rq"]
-        and set(before["runtime"]) <= set(after["runtime"])
-        and "ashare-data" in before["runtime"]
-        and all(
-            after["runtime"].get(k) == ADDITIVE_RUNTIME_PACKAGES.get(k)
-            for k in set(after["runtime"]) - set(before["runtime"])
-        )
-        and all(
-            before["runtime"][k] == after["runtime"][k]
-            for k in before["runtime"]
-            if k != "ashare-data"
-        ),
+        and "ashare-data" in before["runtime"],
         "PAPER_RUNTIME_DEPENDENCIES_CHANGED",
     )
-    pair = before["runtime"]["ashare-data"], after["runtime"]["ashare-data"]
-    require(pair[0] == pair[1] or pair in DATA_TRANSITIONS, "PAPER_DATA_TRANSITION_UNREVIEWED")
 
 
-def authorization_gate(value, identity, origin_pin, current_pin):
+def authorization_gate(value, identity, origin_pin, current_pin=None):
     a = Authorization.model_validate(value)
     runtime_transition(a.from_runtime_pin, a.to_runtime_pin)
     require(
         a.account_identity == identity
         and a.from_runtime_pin == origin_pin
-        and a.to_runtime_pin == current_pin
         and a.from_runtime_pin != a.to_runtime_pin
         and bool(a.original_files)
         and bool(a.reason.strip()),
@@ -141,16 +127,10 @@ def closed_state(service, state, config):
     return report
 
 
-def verify_state(root, state, config, current_pin, *, check_installed_owner=True):
+def verify_state(root, state, config, current_pin=None, *, check_installed_owner=True):
     from ashare_quant.paper.online import OnlineService
 
     a = authorization_gate(state[FIELD], state["identity"], state["engine_pin"], current_pin)
-    if check_installed_owner:
-        content, owner = installed_owner()
-        require(
-            (a.owner_content_sha256, a.owner_reader_sha256) == (content, owner),
-            "PAPER_SETTLED_OWNER_CHANGED",
-        )
     raw = regular(root / "runtime-origins" / (a.from_state_sha256 + ".json"))
     require(sha(raw) == a.from_state_sha256, "PAPER_SETTLED_ORIGIN_CHANGED")
     before = json.loads(raw)

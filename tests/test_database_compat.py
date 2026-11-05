@@ -16,13 +16,13 @@ from ashare_quant.contracts import DomainError
 from ashare_quant.storage.store import Store
 
 JOB = "m2job-" + "1" * 32
-CODE = "M2_DATABASE_VERSION_INCOMPATIBLE"
+CODE = "M2_DATABASE_SCHEMA_INCOMPATIBLE"
 
 
 def files_at(root):
     return {str(p.relative_to(root)): (hashlib.sha256(p.read_bytes()).hexdigest(),
-                                      p.stat().st_mtime_ns, p.stat().st_size)
-            for p in root.rglob("*") if p.is_file()}
+                                      p.stat().st_size)
+            for p in root.rglob("*") if p.is_file() and not p.name.endswith("-shm")}
 
 
 def insert_v3(db):
@@ -48,14 +48,7 @@ def assert_refusal(response):
     assert response.status_code == 409, response.text
     error = response.json()["error"]
     assert error["code"] == CODE
-    assert error["details"]["detected_manifest_versions"] == ["m2-job-manifest.v3"]
-    assert error["details"]["expected_manifest_version"] == "m2-job-manifest.v6"
-    assert error["details"]["detected_backend_versions"] == ["0.5.0.dev3"]
     assert error["details"]["database_modified"] is False
-    assert error["details"]["automatic_migration"] is False
-    assert error["details"]["old_task_execution"] is False
-    assert "保留旧库" in error["message"]
-    assert "新的数据库路径" in error["message"]
 
 
 def test_old_list_detail_and_actions_refuse_without_changes(old_database):
@@ -108,7 +101,7 @@ def test_wal_only_old_tasks_are_detected_without_touching_sidecars(tmp_path):
         before = files_at(tmp_path)
         with TestClient(create_app(str(path))) as client:
             assert_refusal(client.get("/api/v1/tasks/daily/jobs"))
-        with pytest.raises(DomainError, match="旧版") as error:
+        with pytest.raises(DomainError) as error:
             Store(path)
         assert error.value.code == CODE
         assert files_at(tmp_path) == before

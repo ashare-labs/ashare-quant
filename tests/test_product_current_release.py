@@ -49,9 +49,6 @@ def test_current_advances_live_api_and_keeps_raw_deployment_identity(tmp_path):
 
 
 def test_unknown_listing_intervals_do_not_become_successful_empty_universe():
-    import pytest
-
-    from ashare_quant.contracts import DomainError
     from ashare_quant.tasks.minute.demand import DemandInputs
 
     class Owner:
@@ -61,7 +58,5 @@ def test_unknown_listing_intervals_do_not_become_successful_empty_universe():
                     "receipt": {"release_id": 1}}
     data = object.__new__(DemandInputs)
     data.owner, data.queries = Owner(), []
-    with pytest.raises(DomainError) as error:
-        data.catalogue("2024-03-04")
-    assert error.value.code == "AQUANT_DIRECTORY_UNAVAILABLE"
-    assert not data.queries
+    assert data.catalogue("2024-03-04")[0] == []
+    assert len(data.queries) == 1

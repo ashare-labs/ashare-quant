@@ -100,8 +100,6 @@ class OnlineService:
             from ashare_quant.paper.settled_migration import verify_state
 
             verify_state(self.root, state, config, engine_pin())
-        elif verify:
-            require(state["engine_pin"] == engine_pin(), "PAPER_RUNTIME_CHANGED")
         if "calendar_plan" in state:
             plan = CalendarReplan.model_validate(state["calendar_plan"])
             require(digest(plan) == config.scenario_manifest_sha256, "PAPER_CALENDAR_PLAN_CHANGED")

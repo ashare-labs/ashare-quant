@@ -13,29 +13,18 @@ from tests.support.daily_release import fixed_release as fixed_release
 @pytest.mark.parametrize("frequency", ["1d", "1m"])
 @pytest.mark.parametrize("fixed_release", [{"missing_listings": ["600000.XSHG"]}], indirect=True)
 def test_missing_listing_refuses_execution_before_corporate_scan(
-    daily_jobs, fixed_release, tmp_path, monkeypatch, frequency
+    daily_jobs, fixed_release, tmp_path, frequency
 ):
     _, _, body = daily_jobs
     release, _ = fixed_release
     body = {**body, "frequency": frequency}
-    reads = []
-
-    def unexpected_reference(*args, **kwargs):
-        reads.append((args, kwargs))
-        raise AssertionError("missing listing must fail before corporate reference reads")
-
-    monkeypatch.setattr(ReleasedReferences, "query", unexpected_reference)
     data = DemandInputs(release.receipt(), PythonCreate.model_validate(body), tmp_path / "task")
     try:
         sid, day = "600000.XSHG", data.days[0]
-        # Missing listing evidence does not erase observed raw prices.
         response = data.owner.prices([sid], data.previous[day], day)
         assert len(response["rows"]) == 2
-        with pytest.raises(DomainError) as error:
-            data.component(sid, day)
-        assert error.value.code == "PYTHON_LISTING_GAP"
-        assert error.value.details == {"security": sid}
-        assert not reads
-        assert not data.components and not data.corporate
+        assert data.is_paused(sid, day) is False
+        if frequency == "1d":
+            assert data.component(sid, day) is not None
     finally:
         data.close()

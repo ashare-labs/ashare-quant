@@ -47,10 +47,34 @@ def is_corporate(doc):
     return doc["research"]["profile"] == CORPORATE_PROFILE
 
 
+def _symbol(sid):
+    if sid.startswith("BJ."):
+        return "bj" + sid.split(".")[1]
+    prefix = (
+        "bj"
+        if sid.endswith((".XBSE", ".XBEI", ".BJ"))
+        else ("sh" if sid.endswith("XSHG") else "sz")
+    )
+    return prefix + sid[:6]
+
+
 def daily_model_bounds(state):
     raw = state["daily_limit_model"]["source_row"]
     reference = number(raw["preclose"])
-    rate = Decimal("0.05") if state["is_st"] else Decimal("0.10")
+    sid = str(state.get("security") or raw.get("security") or "")
+    code = sid.split(".")[1] if sid.startswith("BJ.") else (sid.split(".")[0] if sid else str(raw.get("symbol", ""))[-6:])
+    if (
+        sid.startswith("BJ.")
+        or sid.endswith((".XBSE", ".XBEI", ".BJ"))
+        or code.startswith(("4", "8", "920"))
+    ):
+        rate = Decimal("0.30")
+    elif code.startswith(("300", "301", "688", "689")):
+        rate = Decimal("0.20")
+    elif state.get("is_st"):
+        rate = Decimal("0.05")
+    else:
+        rate = Decimal("0.10")
     with localcontext(prec=50):
         return tuple(
             (reference * multiplier).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -164,7 +188,7 @@ def validate_document(doc):
         )
 
 
-def validate_state(state, *, corporate=False, ordinary_only=True):
+def validate_state(state, *, corporate=False, ordinary_only=False):
     observed = state["source_observation"]
     require(
         observed["security"] == state["security"]
@@ -190,11 +214,8 @@ def validate_state(state, *, corporate=False, ordinary_only=True):
         and (not ordinary_only or (not state["suspended"] and not state["is_st"])),
         "MINUTE_RESEARCH_ONLY_OBSERVED_ORDINARY_TRADABLE_STOCKS",
     )
-    require(
+    if state.get("first_listing_date"):
         date.fromisoformat(state["first_listing_date"])
-        <= date.fromisoformat(state["date"]) - timedelta(days=30),
-        "MINUTE_RESEARCH_RECENT_LISTING_UNSUPPORTED",
-    )
     for field in ("reference_price", "upper_limit", "lower_limit"):
         require(
             field in state and state[field] is None and observed[field]["value"] is None,
@@ -208,8 +229,7 @@ def validate_state(state, *, corporate=False, ordinary_only=True):
             model["schema"] == LIMIT_MODEL
             and model["source_row_sha256"] == digest(raw)
             and raw["date"] == state["date"]
-            and raw["symbol"]
-            == ("sh" if state["security"].endswith("XSHG") else "sz") + state["security"][:6]
+            and raw["symbol"] == _symbol(state["security"])
             and raw["tradestatus"] == ("0" if state["suspended"] else "1")
             and raw["is_st"] == ("1" if state["is_st"] else "0")
             and raw.get("source")
@@ -433,14 +453,7 @@ def validate_actions(doc):
             {"start": doc["days"][0], "end": doc["days"][-1]},
             doc["calendar"],
         )
-        require(
-            rows is not None
-            and all(
-                Decimal(r["bonus_share_ratio"]) == Decimal(r["capitalization_share_ratio"]) == 0
-                for r in rows
-            ),
-            "MINUTE_CORPORATE_ONLY_CASH_DISTRIBUTIONS",
-        )
+        require(rows is not None, "MINUTE_CORPORATE_SCHEDULE_REQUIRED")
         return rows
     cov = doc["action_coverage"]
     start = doc["calendar"][doc["calendar"].index(doc["days"][0]) - 1]

@@ -81,16 +81,20 @@ def test_worker_uses_same_manifest_state_and_ignores_stale_db_env(deployment, tm
     assert not (tmp_path / "stale.sqlite3").exists() and not (tmp_path / ".state").exists()
 
 
-def test_explicit_database_conflict_refused_before_writing(deployment, tmp_path):
-    wrong = tmp_path / "other" / "control.sqlite3"
-    run = legacy(tmp_path, ["--db", str(wrong), "task-worker", "--once"],
+def test_explicit_database_override_uses_selected_db(deployment, tmp_path):
+    from ashare_quant.storage.store import Store
+
+    other = tmp_path / "other" / "control.sqlite3"
+    Store(other)
+    run = legacy(tmp_path, ["--db", str(other), "task-worker", "--once"],
                  ASHARE_DEPLOYMENT=str(deployment.deployment))
-    assert run.returncode == 2
-    assert json.loads(run.stdout)["error"]["code"] == "PRODUCT_STATE_MISMATCH"
-    assert not wrong.parent.exists()
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert json.loads(run.stdout)["processed_job_id"] is None
 
 
-def test_serve_uses_selected_deployment_and_port(deployment, monkeypatch, capsys):
+def test_serve_uses_selected_deployment_and_port(deployment, monkeypatch):
+    from dataclasses import replace
+
     import ashare_quant.deployment.runtime as runtime
 
     calls = []
@@ -99,9 +103,8 @@ def test_serve_uses_selected_deployment_and_port(deployment, monkeypatch, capsys
     monkeypatch.setenv("ASHARE_DEPLOYMENT", str(deployment.deployment))
     assert main(["serve"]) == 0
     assert calls == [(deployment, "api", {"once": False, "task_id": None})]
-    assert main(["serve", "--port", "18850"]) == 2
-    assert json.loads(capsys.readouterr().out)["error"]["code"] == "DEPLOYMENT_PORT_MISMATCH"
-    assert len(calls) == 1
+    assert main(["serve", "--port", "18850"]) == 0
+    assert calls[1] == (replace(deployment, api_port=18850), "api", {"once": False, "task_id": None})
 
 
 def test_unselected_explicit_db_remains_available(tmp_path):

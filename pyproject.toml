@@ -118,5 +118,4 @@ select = ["E4", "E7", "E9", "F", "I"]
 "tests/fixtures/minute_reference/gap_probe.py" = ["F403", "F405", "I001"]
 
 [tool.uv.sources]
-# Build this artifact from the fixed public source with scripts/stage_owner.py before sync.
-ashare-data = { path = "local-dependencies/ashare_data-0.10.0.dev100-py3-none-any.whl" }
+ashare-data = { path = "../ashare-data", editable = true }

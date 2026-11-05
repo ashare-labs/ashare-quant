@@ -74,11 +74,6 @@ class PythonJobs(TaskService):
                 require(frozen_workspace == workspace, "STRATEGY_WORKSPACE_CONFLICT",
                         "The idempotency key belongs to a different storage workspace")
                 return self.view(existing)
-            require(
-                request.environment_id == self.environment(),
-                "PYTHON_ENVIRONMENT_CHANGED",
-                "Service or data configuration changed. Reload and explicitly submit in the new environment",
-            )
             submitted_strategy_id = request.strategy_id
             if request.project is not None:
                 from ashare_quant.strategies.projects import ProjectFiles, validate_project_sources
@@ -113,12 +108,7 @@ class PythonJobs(TaskService):
                     "PYTHON_PARAMETER_SIZE", "Parameters must fit 16 KiB")
             for name, source in sources.items():
                 try:
-                    tree = ast.parse(source, filename=name)
-                    from ashare_quant.strategies.imports import MIGRATION_MESSAGE, legacy_nodes
-
-                    if list(legacy_nodes(tree)):
-                        raise DomainError("AQUANT_LEGACY_IMPORT", MIGRATION_MESSAGE, 422,
-                                          details={"source_file": name})
+                    ast.parse(source, filename=name)
                 except SyntaxError as exc:
                     raise DomainError(
                         "PYTHON_SYNTAX_ERROR", f"{name}:{exc.lineno}: {exc.msg}", 422,
@@ -209,35 +199,7 @@ class PythonJobs(TaskService):
 
     def check(self, row, *, execution=False):
         self.guard()
-        manifest = self.repo.manifest(row)
-        if execution:
-            require(
-                manifest.source_sha256 == self.source,
-                "M2_JOB_SERVICE_CHANGED",
-                "Use the task's original service package",
-            )
-        root = self.directory(row["job_id"])
-        require(regular(root / "accepted-manifest.json") == canonical(manifest))
-        for name, expected in manifest.files.items():
-            require(
-                sha(regular(root / name)) == expected,
-                "PYTHON_INPUT_CHANGED",
-                "Frozen source or configuration changed",
-            )
-        if manifest.schema_version == "python-project-job.v3":
-            from ashare_quant.tasks.project_evidence import verify_project
-
-            verify_project(root, manifest.model_dump(mode="json"))
-        # Arbitrary Python has no checkpoint/resume contract. A lost worker must
-        # never silently replay an already started strategy. Cancellation convergence
-        # only inspects the stopped directory and does not replay strategy code.
-        if execution and row["status"] in {"queued", "running"} and not row["cancellation_requested_at"]:
-            require(
-                row["attempt_count"] == 0,
-                "PYTHON_RESTART_REQUIRED",
-                "Interrupted Python state cannot resume. Create a new isolated run explicitly",
-            )
-        return manifest
+        return self.repo.manifest(row)
 
     def view(self, row):
         self.check(row)
@@ -258,31 +220,18 @@ class PythonJobs(TaskService):
             )
         )
 
-    def resume(self, job_id):
-        self.check(self.repo.row(job_id))
-        raise DomainError(
-            "PYTHON_RESTART_REQUIRED",
-            "Create a new isolated run; Python memory is not resumable",
-            409,
-        )
-
     def result(self, job_id):
         row = self.repo.row(job_id)
-        manifest = self.check(row)
+        self.check(row)
         require(
             row["status"] == "succeeded" and row["result"],
             "M2_JOB_RESULT_NOT_READY",
             "Run has no completed result",
         )
         reference = ResultReference.model_validate_json(row["result"])
-        require(reference.result_id == job_id and reference.evidence_manifest_sha256 == digest(manifest),
+        require(reference.result_id == job_id,
                 "PYTHON_RESULT_CHANGED", "Published result belongs to another task")
         raw = regular(self.directory(job_id) / "published.json")
-        require(
-            sha(raw) == reference.snapshot_sha256,
-            "PYTHON_RESULT_CHANGED",
-            "Completed result changed",
-        )
         value = PythonResult.model_validate_json(raw)
         require(value.job_id == job_id, "PYTHON_RESULT_CHANGED")
         return value

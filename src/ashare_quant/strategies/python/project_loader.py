@@ -104,9 +104,13 @@ class FrozenProject(importlib.abc.MetaPathFinder, importlib.abc.Loader):
             require(not path.is_symlink(), "PYTHON_PROJECT_CHANGED", "Frozen project contains a link")
             if path.is_dir():
                 continue
-            # macOS can enumerate decomposed Unicode spellings for the same
-            # canonical filename. The snapshot keeps its normalized Python name.
             relative = unicodedata.normalize("NFC", path.relative_to(self.root).as_posix())
+            if relative not in self.files and (
+                not path.name.endswith(".py")
+                or path.name.startswith(".")
+                or "__pycache__" in path.parts
+            ):
+                continue
             require(
                 path.is_file() and relative in self.files and relative not in found,
                 "PYTHON_PROJECT_CHANGED", f"Unlisted frozen project source: {relative}",
@@ -119,6 +123,7 @@ class FrozenProject(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         self.verify()
         require(not self.active, "PYTHON_PROJECT_INVALID", "Project loader is already active")
         self.active = True
+        self._had_jqdata = "jqdata" in sys.modules
         sys.meta_path.insert(0, self)
         return self
 
@@ -128,6 +133,8 @@ class FrozenProject(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         for name in tuple(sys.modules):
             if name == self.name or name.startswith(self.name + "."):
                 del sys.modules[name]
+        if not getattr(self, "_had_jqdata", False):
+            sys.modules.pop("jqdata", None)
         self.active = False
         self.namespace = None
 

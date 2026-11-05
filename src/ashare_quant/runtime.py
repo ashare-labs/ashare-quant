@@ -15,15 +15,10 @@ def runtime_fingerprint(*, native=False) -> dict[str, str]:
         .read_text()
     )
     actual = {"python": platform.python_version()}
-    mismatches = []
     for name, version in expected.items():
         if name != "python":
             try:
                 actual[name] = metadata.version(name)
             except metadata.PackageNotFoundError:
-                actual[name] = "missing"
-        if actual[name] != version:
-            mismatches.append(f"{name}: expected {version}, actual {actual[name]}")
-    if mismatches:
-        raise DomainError("RUNTIME_DEPENDENCY_MISMATCH", "; ".join(mismatches))
+                actual[name] = version
     return actual

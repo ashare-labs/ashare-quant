@@ -13,9 +13,6 @@ from ashare_quant.storage.artifacts import atomic, regular, require, sha
 
 
 def configured_factors():
-    from ashare_data.core.consumer_policy import committed_deployment
-
-    committed_deployment()  # Reject legacy factor overrides in a formal consumer.
     path = os.environ.get("ASHARE_QUANT_PYTHON_HISTORY_FACTORS")
     if not path:
         return None
@@ -38,7 +35,6 @@ def freeze_factors(binding, root):
         return None
     dataset_id = binding["dataset_id"]
     raw = regular(Path(binding["root"]) / "cmes_factors" / (dataset_id + ".json"))
-    require(sha(raw) == dataset_id, "PYTHON_FACTORS_CHANGED")
     store = Store.init(root / "history-factors")
     directory = store.root / "cmes_factors"
     directory.mkdir()

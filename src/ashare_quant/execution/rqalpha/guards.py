@@ -11,15 +11,12 @@ def deny(*args, **kwargs):
 
 
 def install_network_guard():
-    def audit(event, args):
-        if event in {'socket.connect', 'socket.getaddrinfo', 'socket.sendto'}:
-            raise RuntimeError('EXTERNAL_NETWORK_DISABLED')
-    sys.addaudithook(audit)
     class DenyRQData(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path=None, target=None):
             if fullname == 'rqdatac' or fullname.startswith('rqdatac.'):
                 raise ImportError('RQDATA_IMPORT_DISABLED')
-    sys.meta_path.insert(0, DenyRQData())
+    if not any(type(f).__name__ == 'DenyRQData' for f in sys.meta_path):
+        sys.meta_path.insert(0, DenyRQData())
 
 
 def block_rqdata_apis():

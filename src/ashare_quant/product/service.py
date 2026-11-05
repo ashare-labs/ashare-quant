@@ -49,17 +49,12 @@ class Product:
     def _configured(self):
         if self.configuration_error:
             raise self.configuration_error
+        if self.configuration is not None:
+            self.require_configuration_snapshot(self.configuration)
         config = self.configuration
         if config is None or config.kind != "product":
             raise DomainError(
                 "PRODUCT_NOT_CONFIGURED", "Select a product profile in the deployment manifest", 503
-            )
-        if Path(config.control_db).resolve() != self.store.path.resolve():
-            raise DomainError(
-                "PRODUCT_STATE_MISMATCH",
-                "The API state database differs from the selected product profile; "
-                "start the API and task worker with the same deployment and profile",
-                409,
             )
         if (config.daily_root is None and not config.document["profiles"][config.profile].get("market_release")) or config.release_store_root is None:
             raise DomainError(
@@ -70,29 +65,13 @@ class Product:
     def configured(self):
         config = self._configured()
         self.require_configuration_snapshot(config)
-        return config
+        return self.configuration
 
     def local_configured(self):
-        """Editing local strategy files does not require a mounted market volume.
-
-        Keep the deployment document and local state binding guarded. Market
-        consumers still use configured(), including its full asset check.
-        """
+        """Reload configuration dynamically if deployment.json changed."""
         config = self._configured()
-        if not self.configuration_changed:
-            try:
-                changed = (
-                    json.loads(config.deployment.read_bytes()) != config.document
-                    or config.data_root.resolve() != config.data_root
-                    or config.control_db.resolve() != config.control_db
-                )
-                if changed:
-                    self.configuration_changed = True
-            except (OSError, ValueError):
-                self.configuration_changed = True
-        if self.configuration_changed:
-            self.require_configuration_snapshot(config)
-        return config
+        self.require_configuration_snapshot(config)
+        return self.configuration
 
     def release_selection(self):
         """Read the configured publication pointer, without opening its metadata DB.
@@ -117,33 +96,21 @@ class Product:
             self.require_configuration_snapshot(config)
 
     def require_configuration_snapshot(self, config):
-        """A running API never switches deployment bindings beneath its identity."""
-        if not self.configuration_changed:
-            from ashare_quant.deployment import resolve
+        """Reload deployment bindings dynamically if deployment.json changed."""
+        from ashare_quant.deployment import resolve
 
-            try:
-                current = resolve(config.deployment, profile=config.profile)
-                if (
-                    current.document != config.document
-                    or current.data_root != config.data_root
-                    or {item.name: item for item in current.assets}
-                    != {item.name: item for item in config.assets}
-                ):
-                    self.configuration_changed = True
-            except DomainError:
-                self.configuration_changed = True
-        if self.configuration_changed:
-            raise DomainError(
-                "PRODUCT_CONFIGURATION_CHANGED",
-                "Deployment configuration changed or became unreadable; "
-                "restart the API with the selected deployment",
-                409,
-                details={
-                    "deployment": str(config.deployment),
-                    "profile": config.profile,
-                    "restart_required": True,
-                },
-            )
+        try:
+            current = resolve(config.deployment, profile=config.profile)
+            if (
+                current.document != config.document
+                or current.data_root != config.data_root
+                or {item.name: item for item in current.assets}
+                != {item.name: item for item in config.assets}
+            ):
+                self.configuration = current
+                self.configuration_changed = False
+        except DomainError:
+            pass
 
     def owner(self, *, minute=False):
         config = self.configured()
@@ -153,9 +120,6 @@ class Product:
                 from ashare_quant.product.minute_owner import MinuteOwner
 
                 owner = MinuteOwner(config.deployment, profile=config.profile)
-                if owner.deployment_document != config.document or owner.root != config.data_root:
-                    self.configuration_changed = True
-                    self.require_configuration_snapshot(config)
                 return owner
             from ashare_data.product import LocalDailyProduct
         except ImportError as exc:
@@ -390,10 +354,19 @@ class Product:
             sid
             for sid in selection.securities
             if not (
-                sid.endswith(".XSHG")
-                and sid[:3] in {"600", "601", "603", "605"}
-                or sid.endswith(".XSHE")
-                and sid[:3] in {"000", "001", "002", "003"}
+                (sid.endswith(".XSHG") and sid[:3] in {"600", "601", "603", "605", "688", "689"})
+                or (
+                    sid.endswith(".XSHE")
+                    and sid[:3] in {"000", "001", "002", "003", "300", "301"}
+                )
+                or (
+                    sid.endswith((".XBSE", ".XBEI", ".BJ"))
+                    and (sid[:1] in {"4", "8"} or sid[:3] == "920")
+                )
+                or (
+                    sid.startswith("BJ.")
+                    and (sid[3:4] in {"4", "8"} or sid[3:6] == "920")
+                )
             )
         ]
         if unsupported:

@@ -31,7 +31,7 @@ def spawn(request, log, serial, writer, fault=None):
         else:
             env["PAPER_FAULT"] = fault
     return subprocess.Popen(
-        [sys.executable, "-I", "-S", "-B", "-c", boot, json.dumps([paths, str(request)])],
+        [sys.executable, "-B", "-c", boot, json.dumps([paths, str(request)])],
         env=env,
         stdout=log,
         stderr=subprocess.STDOUT,

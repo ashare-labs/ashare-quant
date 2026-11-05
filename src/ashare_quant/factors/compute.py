@@ -36,7 +36,7 @@ def evaluation_available():
     try:
         return (
             find_spec("ashare_data.factors.evaluation") is not None
-            and version("alphalens-reloaded") == "0.5.0"
+            and find_spec("alphalens") is not None
         )
     except (ImportError, PackageNotFoundError):
         return False

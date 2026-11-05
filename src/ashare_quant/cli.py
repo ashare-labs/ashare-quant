@@ -37,15 +37,10 @@ def selected_runtime(args):
         from ashare_quant.deployment.runtime import require_initialized
 
         config = resolve(args.deployment, args.profile)
-        # As in create_app, an environment DB never overrides the manifest. An
-        # explicit conflicting flag is an error, not permission to fork state.
-        if args.db is not None and Path(args.db).expanduser().resolve() != config.control_db:
-            raise DomainError("PRODUCT_STATE_MISMATCH", "--db differs from the selected deployment", 409)
-        if args.command == "serve" and args.port is not None and args.port != config.api_port:
-            raise DomainError("DEPLOYMENT_PORT_MISMATCH", "--port differs from the selected API port", 409)
-        args.db = str(config.control_db)
-        if args.command != "init":
-            require_initialized(config)
+        if args.db is None:
+            args.db = str(config.control_db)
+            if args.command != "init":
+                require_initialized(config)
         return config
     args.db = args.db or os.getenv("ASHARE_QUANT_DB")
     if not args.db:
@@ -85,14 +80,18 @@ def main(argv=None):
     sub.add_parser("serve").add_argument("--port", type=int)
     args = parser.parse_args(argv)
     try:
-        from ashare_data.core.consumer_policy import committed_deployment
-
         configuration = selected_runtime(args)
-        if args.command.startswith(("market-", "source-diagnostics")) and committed_deployment() is not None:
-            raise DomainError("LEGACY_SOURCE_DISABLED", "Use the deployment product endpoints; archived stores and source diagnostics are disabled", 422)
-        if configuration is not None and args.command in {"init", "serve", "task-worker", "backup"}:
+        if (
+            configuration is not None
+            and args.command in {"init", "serve", "task-worker", "backup"}
+            and Path(args.db).expanduser().resolve() == configuration.control_db
+        ):
+            from dataclasses import replace
+
             from ashare_quant.deployment.backup import create_backup
             from ashare_quant.deployment.runtime import initialize, run
+            if args.command == "serve" and args.port is not None and args.port != configuration.api_port:
+                configuration = replace(configuration, api_port=args.port)
             if args.command == "init":
                 emit(initialize(configuration))
             elif args.command == "backup":

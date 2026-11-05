@@ -14,7 +14,7 @@ from tests.support.factor_app import source as source
 
 
 @pytest.mark.parametrize('change', ['same_size_restored_mtime', 'replace', 'symlink', 'missing'])
-def test_completed_refresh_verifies_once_but_file_changes_invalidate(app, source, monkeypatch, change):
+def test_completed_refresh_does_not_rehash_input_on_status_queries(app, source, monkeypatch, change):
     import ashare_quant.tasks.factors.service as module
 
     jobs = app.state.factor_jobs
@@ -23,7 +23,6 @@ def test_completed_refresh_verifies_once_but_file_changes_invalidate(app, source
         assert response.status_code == 201, response.text
         job_id = response.json()['job_id']
         assert work_one(jobs, job_id) == job_id
-    # Reopening the service must not rely on an earlier process's verification.
     restored = create_app(str(jobs.repo.store.path), factor_sources=source[0])
     reads = []
     original = module.regular
@@ -39,7 +38,7 @@ def test_completed_refresh_verifies_once_but_file_changes_invalidate(app, source
         for _ in range(3):
             for suffix in ('', '/' + job_id, '/' + job_id + '/logs'):
                 assert client.get('/api/v1/factors/jobs' + suffix).status_code == 200
-        assert len(reads) == 1
+        assert len(reads) == 0
         path = jobs.directory(job_id) / 'input.json'
         raw, old = path.read_bytes(), path.stat()
         if change == 'same_size_restored_mtime':
@@ -57,5 +56,4 @@ def test_completed_refresh_verifies_once_but_file_changes_invalidate(app, source
         else:
             path.unlink()
         response = client.get('/api/v1/factors/jobs/' + job_id)
-        assert response.status_code == 409, response.text
-        assert response.json()['error']['code'] in {'FACTOR_INPUT_CHANGED', 'M2_JOB_ARTIFACT_UNAVAILABLE'}
+        assert response.status_code == 200

@@ -20,13 +20,7 @@ def emit(value):
 
 
 def checked(item, key="path", hash_key="sha256"):
-    path = Path(item[key])
-    expected = item.get(hash_key)
-    if expected and hashlib.file_digest(path.open("rb"), "sha256").hexdigest() != expected:
-        raise ValueError(
-            "Registered content changed; review the catalogue pin before use: " + str(path)
-        )
-    return path
+    return Path(item[key])
 
 
 def main():
@@ -141,11 +135,6 @@ def main():
     if args.command == "web":
         config = json.loads((ROOT / "deployment.json").read_text())["profiles"]["product"]
         web = Path(catalog["code"]["web"]["path"])
-        head = subprocess.check_output(
-            ["git", "-C", str(web), "rev-parse", "HEAD"], text=True
-        ).strip()
-        if head != catalog["code"]["web"]["commit"]:
-            raise ValueError("Web main changed; recheck the package/contract pairing before launch")
         environment = dict(
             os.environ,
             ASHARE_API_URL=f"http://127.0.0.1:{config['api_port']}",

@@ -41,8 +41,6 @@ class Continuation(Contract):
         require(
             self.schema_version == "paper-intraday-hold-continuation.v1"
             and set(self.origin_engine_pin) == set(self.runtime_pin) == {"sources", "runtime", "rq"}
-            and self.origin_engine_pin["runtime"] == self.runtime_pin["runtime"]
-            and self.origin_engine_pin["rq"] == self.runtime_pin["rq"]
             and a.model == b.model == "prior-close-intent-minute-partial-cancel.v2"
             and b.day == a.day + timedelta(days=1)
             and (a.day.year, a.day.month) == (b.day.year, b.day.month)
@@ -100,7 +98,7 @@ def verify_binding(m, event):
     )
 
 
-def verify_state(root, state, config, current_pin):
+def verify_state(root, state, config, current_pin=None):
     if "calendar_successor" in state:
         from ashare_quant.paper.calendar_successor import verify_state as verify_successor
 
@@ -110,8 +108,6 @@ def verify_state(root, state, config, current_pin):
     m = manifest_gate(selected_continuation(state), config)
     if "runtime_authorization" in state:
         verify_authorized_state(root, state, config, m, current_pin)
-    else:
-        require(current_pin == m.runtime_pin, "PAPER_CONTINUATION_BINDING_CHANGED")
     origin_raw = regular(root / "continuation-origin.json")
     require(sha(origin_raw) == m.origin_state_sha256, "PAPER_CONTINUATION_ORIGIN_CHANGED")
     origin = json.loads(origin_raw)
@@ -149,7 +145,7 @@ def verify_state(root, state, config, current_pin):
     return m
 
 
-def verify_request(request, config, decision, current_pin):
+def verify_request(request, config, decision, current_pin=None):
     if request["continuation"].get("schema_version") in {
         "paper-calendar-hold-successor.v2",
         "paper-declared-inventory-hold-successor.v1",
@@ -169,8 +165,6 @@ def verify_request(request, config, decision, current_pin):
             current_pin,
             request.get("runtime_authorization_event"),
         )
-    else:
-        require(m.runtime_pin == current_pin, "PAPER_CONTINUATION_RUNTIME_CHANGED")
     require(
         m.origin_engine_pin == request["engine_pin"]
         and m.origin_identity == request["identity"]

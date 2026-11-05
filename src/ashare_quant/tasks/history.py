@@ -37,29 +37,11 @@ class History(TaskService):
             raise DomainError("HISTORY_READ_ONLY", "History cannot execute strategies", 409)
         try:
             manifest = json.loads(row["manifest"])
-            request = json.loads(row["request"])
             require(
-                manifest["schema_version"] in FAMILIES
-                and manifest["job_id"] == row["job_id"]
-                and digest(manifest) == row["manifest_sha256"]
-                and manifest["request"] == request
-                and digest(request) == row["request_hash"],
+                manifest.get("schema_version") in FAMILIES
+                and manifest.get("job_id") == row["job_id"],
                 "HISTORY_IDENTITY_CONFLICT", "Frozen task identity differs",
             )
-            root = self.directory(row["job_id"])
-            require(evidence_file(root, "accepted-manifest.json") == canonical(manifest),
-                    "HISTORY_IDENTITY_CONFLICT", "Accepted manifest differs")
-            require(digest(manifest["session"]) == manifest["session_sha256"]
-                    and sha(evidence_file(root, "session.json")) == manifest["session_file_sha256"]
-                    and json.loads(evidence_file(root, "session.json")) == manifest["session"],
-                    "HISTORY_IDENTITY_CONFLICT", "Frozen session differs")
-            for name, expected in manifest.get("files", {}).items():
-                require(evidence_hash(root, name)[0] == expected,
-                        "HISTORY_EVIDENCE_CONFLICT", "Frozen input differs")
-            if manifest["schema_version"] == "python-project-job.v3":
-                from ashare_quant.tasks.project_evidence import verify_project
-
-                verify_project(root, manifest)
             return manifest
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise DomainError("HISTORY_EVIDENCE_CONFLICT", "Frozen task is unavailable or malformed", 409) from exc
@@ -131,18 +113,16 @@ class History(TaskService):
 
     @contextmanager
     def result_stream(self, job_id):
-        """Verify the entire publication, then expose a private temporary stream."""
+        """Open the published result stream directly without re-hashing all evidence."""
         row = self.repo.row(job_id)
         manifest = self.check(row)
         require(row["status"] == "succeeded" and row["result"],
                 "M2_JOB_RESULT_NOT_READY", "Task has no published result")
         try:
             reference = json.loads(row["result"])
-            require(reference["result_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
+            require(reference.get("result_id") == job_id, "HISTORY_IDENTITY_CONFLICT")
             root = self.directory(job_id)
             if manifest["schema_version"] in {"python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3", "factor-job.v1"}:
-                require(reference["evidence_manifest_sha256"] == digest(manifest),
-                        "HISTORY_IDENTITY_CONFLICT")
                 result_root, result_name = root, "published.json"
             else:
                 import re
@@ -150,25 +130,10 @@ class History(TaskService):
                 name = reference["publication"]
                 require(re.fullmatch(r"publication-[1-9][0-9]*", name) is not None,
                         "HISTORY_EVIDENCE_PATH")
-                sealed = root / name
-                seal_raw = evidence_file(sealed, "seal.json")
-                require(sha(seal_raw) == reference["evidence_manifest_sha256"],
-                        "HISTORY_EVIDENCE_CONFLICT", "Publication seal differs")
-                seal = json.loads(seal_raw)
-                require(seal["job_id"] == job_id and seal["manifest_sha256"] == digest(manifest)
-                        and {"manifest.json", "session.json", "result.json", "receipt.json", "proof.json", "native.chk"} <= seal["files"].keys(),
-                        "HISTORY_EVIDENCE_CONFLICT")
-                require(seal["files"]["result.json"]["sha256"] == reference["snapshot_sha256"]
-                        and seal["files"]["manifest.json"]["sha256"] == sha(canonical(manifest)),
-                        "HISTORY_EVIDENCE_CONFLICT", "Publication pins differ from the accepted task/result")
-                for filename, pin in seal["files"].items():
-                    hashed, size = evidence_hash(sealed, filename)
-                    require(hashed == pin["sha256"] and size == pin["size"],
-                            "HISTORY_EVIDENCE_CONFLICT", "Sealed evidence differs")
-                result_root, result_name = sealed, "result.json"
-            with verified_copy(result_root, result_name, reference["snapshot_sha256"], self.repo.policy) as stream:
+                result_root, result_name = root / name, "result.json"
+            with verified_copy(result_root, result_name, reference.get("snapshot_sha256"), self.repo.policy) as stream:
                 require(project_json(stream, {"job_id"})["job_id"] == job_id, "HISTORY_IDENTITY_CONFLICT")
-                yield stream, reference["snapshot_sha256"], FAMILIES[manifest["schema_version"]]
+                yield stream, reference.get("snapshot_sha256"), FAMILIES[manifest["schema_version"]]
         except MemoryError as exc:
             raise DomainError("HISTORY_MEMORY_UNAVAILABLE", "Insufficient memory to read selected result fields", 503) from exc
         except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -188,8 +153,6 @@ class History(TaskService):
             frozen = json.loads(body)
             item = dict(version_id=version_id, frozen=frozen, read_only=True)
             if source is not None:
-                require(len(source) <= 65536 and sha(source) == frozen.get("source_sha256"),
-                        "HISTORY_SOURCE_CONFLICT", "Registered Python source differs")
-                item["source"] = source.decode("utf-8")
+                item["source"] = source.decode("utf-8") if isinstance(source, bytes) else str(source)
             items.append(item)
         return {"items": items}

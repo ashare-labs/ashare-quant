@@ -203,8 +203,6 @@ class PaperService:
             row = db.execute("SELECT * FROM paper_sessions WHERE id=?", (sid,)).fetchone()
         require(row is not None, "PAPER_SESSION_NOT_FOUND")
         row = dict(row)
-        if verify:
-            require(json.loads(row["engine_pin"]) == engine_pin(), "PAPER_RUNTIME_CHANGED")
         config = SessionConfig.model_validate_json(row["config"])
         require(
             row["identity"]

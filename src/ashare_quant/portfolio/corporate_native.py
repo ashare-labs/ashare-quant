@@ -236,7 +236,9 @@ def install(host, *, on_stage=None):
                     "CORPORATE_REVISION_RECONCILIATION_REQUIRED",
                 )
 
+    cs_position_cls = POSITION_TYPE_MAP.get(INSTRUMENT_TYPE.CS)
     require(
-        POSITION_TYPE_MAP[INSTRUMENT_TYPE.CS] is StockPosition, "CORPORATE_NATIVE_POSITION_REGISTRY"
+        isinstance(cs_position_cls, type) and issubclass(cs_position_cls, StockPosition),
+        "CORPORATE_NATIVE_POSITION_REGISTRY",
     )
     POSITION_TYPE_MAP[INSTRUMENT_TYPE.CS] = CorporateStockPosition

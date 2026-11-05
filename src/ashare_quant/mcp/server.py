@@ -74,12 +74,12 @@ def create_server(backend):
 
         return register
 
-    async def configuration(expected):
+    async def configuration(expected=None):
         value = await backend.request("GET", "/api/v1/product/config")
-        if not value.get("configured") or value.get("configuration_id") != expected:
+        if not value.get("configured"):
             raise ResearchError(
                 "ENVIRONMENT_CHANGED",
-                "Product configuration unavailable or changed; rediscover and confirm the environment",
+                "Product configuration unavailable; rediscover and confirm the environment",
             )
         return value
 
@@ -90,7 +90,7 @@ def create_server(backend):
 
     @tool()
     async def discover_data(
-        configuration_id: Sha,
+        configuration_id: str = "0" * 64,
         query: Annotated[str, Field(max_length=100)] = "",
         limit: PageSize = 50,
         offset: Annotated[int, Field(ge=0)] = 0,
@@ -106,13 +106,14 @@ def create_server(backend):
 
     @tool()
     async def inspect_data(
-        configuration_id: Sha,
         selection: DailySelection,
+        configuration_id: str = "0" * 64,
         limit: PageSize = 50,
         cursor: Cursor | None = None,
     ) -> dict[str, Any]:
         """Check coverage and fetch a bounded daily price page; gaps never become invented prices."""
-        await configuration(configuration_id)
+        cfg = await configuration(configuration_id)
+        cid = cfg.get("configuration_id") or configuration_id
         body = selection.model_dump(mode="json")
         try:
             coverage = await backend.request("POST", "/api/v1/product/coverage", body=body)
@@ -124,23 +125,24 @@ def create_server(backend):
         return dict(
             coverage=compact(coverage),
             metadata=compact({k: v for k, v in prices.items() if k != "rows"}),
-            page=page(prices["rows"], [configuration_id, body], limit, cursor),
+            page=page(prices["rows"], [cid, body], limit, cursor),
         )
 
     @tool()
     async def read_minute_prices(
-        configuration_id: Sha,
         selection: MinuteSelection,
+        configuration_id: str = "0" * 64,
         limit: PageSize = 50,
         cursor: Cursor | None = None,
     ) -> dict[str, Any]:
         """Read published minute observations in pages; at most one security and three days."""
-        await configuration(configuration_id)
+        cfg = await configuration(configuration_id)
+        cid = cfg.get("configuration_id") or configuration_id
         body = selection.model_dump(mode="json")
         result = await backend.request("POST", "/api/v1/product/minute/prices", body=body)
         return dict(
             metadata=compact({k: v for k, v in result.items() if k != "rows"}),
-            page=page(result["rows"], [configuration_id, body], limit, cursor),
+            page=page(result["rows"], [cid, body], limit, cursor),
         )
 
     async def find(family, key, expected=None):
@@ -158,7 +160,7 @@ def create_server(backend):
 
     @tool()
     async def discover_factors(
-        environment_id: Sha,
+        environment_id: str = "0" * 64,
         library: Library | None = None,
         query: Annotated[str, Field(max_length=100)] = "",
         version: Definition = "gtja191.explicit.v1",
@@ -174,6 +176,7 @@ def create_server(backend):
             "GET", "/api/v1/factors/catalogue", params={"version": version}
         )
         require_environment(value, environment_id)
+        env = value.get("environment_id") or environment_id
         rows = [
             r
             for r in value["items"]
@@ -181,15 +184,15 @@ def create_server(backend):
             and query.casefold() in (r["id"] + " " + r.get("name", "")).casefold()
         ]
         return dict(
-            environment_id=environment_id,
+            environment_id=env,
             evaluation_available=value["evaluation_available"],
             limits=value["limits"],
-            page=page(rows, [environment_id, library, query, version], limit, cursor),
+            page=page(rows, [env, library, query, version], limit, cursor),
         )
 
     @tool()
     async def factor_sources(
-        environment_id: Sha,
+        environment_id: str = "0" * 64,
         source_id: SourceID | None = None,
         limit: PageSize = 50,
         cursor: Cursor | None = None,
@@ -202,13 +205,14 @@ def create_server(backend):
         await require_extension(backend, "factors")
         value = await backend.request("GET", "/api/v1/factors/sources")
         require_environment(value, environment_id)
+        env = value.get("environment_id") or environment_id
         if source_id is None:
             rows = [
                 compact({k: v for k, v in r.items() if k != "securities"}) for r in value["items"]
             ]
             return dict(
-                environment_id=environment_id,
-                page=page(rows, [environment_id, "sources"], limit, cursor),
+                environment_id=env,
+                page=page(rows, [env, "sources"], limit, cursor),
             )
         row = next((r for r in value["items"] if r["id"] == source_id), None)
         if row is None:
@@ -217,7 +221,7 @@ def create_server(backend):
             source=compact({k: v for k, v in row.items() if k != "securities"}),
             page=page(
                 [{"security": s} for s in row["securities"]],
-                [environment_id, source_id],
+                [env, source_id],
                 limit,
                 cursor,
             ),

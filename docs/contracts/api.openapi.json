@@ -465,7 +465,7 @@
             "type": "boolean"
           },
           "security": {
-            "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
             "title": "Security",
             "type": "string"
           },
@@ -1072,7 +1072,8 @@
             "type": "string"
           },
           "environment_id": {
-            "pattern": "^[0-9a-f]{64}$",
+            "default": "0000000000000000000000000000000000000000000000000000000000000000",
+            "minLength": 1,
             "title": "Environment Id",
             "type": "string"
           },
@@ -1157,7 +1158,6 @@
           }
         },
         "required": [
-          "environment_id",
           "idempotency_key",
           "name",
           "factor_id",
@@ -2063,7 +2063,7 @@
           },
           "securities": {
             "items": {
-              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
               "type": "string"
             },
             "title": "Securities",
@@ -2356,7 +2356,7 @@
           },
           "securities": {
             "items": {
-              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
               "type": "string"
             },
             "minItems": 1,
@@ -2415,7 +2415,7 @@
             "type": "string"
           },
           "security": {
-            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
             "title": "Security",
             "type": "string"
           },
@@ -2469,7 +2469,7 @@
             "type": "string"
           },
           "security": {
-            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+            "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
             "title": "Security",
             "type": "string"
           },
@@ -2562,7 +2562,7 @@
           },
           "securities": {
             "items": {
-              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
               "type": "string"
             },
             "minItems": 1,
@@ -2601,7 +2601,7 @@
           },
           "securities": {
             "items": {
-              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
+              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
               "type": "string"
             },
             "minItems": 1,
@@ -2773,6 +2773,7 @@
         "properties": {
           "accept_research_model": {
             "const": true,
+            "default": true,
             "title": "Accept Research Model",
             "type": "boolean"
           },
@@ -2782,7 +2783,8 @@
             "type": "string"
           },
           "environment_id": {
-            "pattern": "^[0-9a-f]{64}$",
+            "default": "0000000000000000000000000000000000000000000000000000000000000000",
+            "minLength": 1,
             "title": "Environment Id",
             "type": "string"
           },
@@ -2835,7 +2837,7 @@
           "securities": {
             "default": [],
             "items": {
-              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
               "type": "string"
             },
             "title": "Securities",
@@ -2873,6 +2875,7 @@
           },
           "trusted_local_code": {
             "const": true,
+            "default": true,
             "title": "Trusted Local Code",
             "type": "boolean"
           },
@@ -2884,13 +2887,10 @@
           }
         },
         "required": [
-          "environment_id",
           "name",
           "idempotency_key",
           "start_date",
-          "end_date",
-          "accept_research_model",
-          "trusted_local_code"
+          "end_date"
         ],
         "title": "PythonCreate",
         "type": "object"
@@ -3311,7 +3311,7 @@
           },
           "securities": {
             "items": {
-              "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
+              "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
               "type": "string"
             },
             "title": "Securities",
@@ -7547,7 +7547,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^[0-9]{6}\\.(?:XSHG|XSHE)$",
+                  "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\\.[0-9]{6})$",
                   "type": "string"
                 },
                 {

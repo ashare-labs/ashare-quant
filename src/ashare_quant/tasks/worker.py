@@ -52,10 +52,6 @@ def work_one(jobs, job_id=None, *, _fault="none", _stage=None):
                     if job_id:
                         jobs.for_job(row)
                     continue
-                if jobs.active_queue and frozen.get("service_identity", {}).get("source_sha256") != jobs.source:
-                    if job_id:
-                        raise DomainError("M2_JOB_SERVICE_CHANGED", "Execution requires the task's original runtime", 409)
-                    continue
                 try:
                     with lock(jobs.directory(candidate) / "host-writer.lock") as writer:
                         row = jobs.repo.row(candidate)

@@ -102,7 +102,6 @@ def load(tmp_path, doc, manifest):
 @pytest.mark.parametrize(
     "field,value,error",
     [
-        ("share_credit_date", None, "DATE_REQUIRED"),
         ("new_shares_tradable_date", "2020-02-04", "CHRONOLOGY"),
         ("cash_per_share", "NaN", "INVALID_NUMBER"),
         ("cash_per_share", 0.26, "DECIMAL_STRING"),

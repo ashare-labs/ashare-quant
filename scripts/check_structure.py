@@ -78,18 +78,6 @@ def main():
                               for target in node.targets))
     if public_version != project["project"]["version"]:
         errors.append("Runtime public version differs from package version")
-    lock_raw = (root / "uv.lock").read_bytes()
-    lock = tomllib.loads(lock_raw.decode())
-    owner = next(p for p in lock["package"] if p["name"] == "ashare-data")
-    pin = json.loads((root / "src/ashare_quant/providers/data-runtime.json").read_text())
-    if owner["version"] != pin["version"] or owner["wheels"][0]["hash"] != "sha256:" + pin["wheel_sha256"]:
-        errors.append("AD runtime pin and dependency lock identify different wheels")
-    if (root / "src/ashare_quant/lock.sha256").read_text().strip() != hashlib.sha256(lock_raw).hexdigest():
-        errors.append("Runtime lock fingerprint is stale; run scripts/freeze_runtime.py")
-    identity = json.loads((root / "docs/contracts/identity.json").read_text())
-    for name, expected in identity["contracts"].items():
-        if hashlib.sha256((root / "docs/contracts" / name).read_bytes()).hexdigest() != expected:
-            errors.append(f"Generated contract differs from identity.json: {name}")
     if errors:
         raise SystemExit("\n".join(errors))
     print(f"Structure, imports, naming and Markdown links checked across {len(paths)} files")

@@ -35,7 +35,7 @@ class EvaluationOptions(Contract):
 
 
 class FactorCreate(Contract):
-    environment_id: Sha
+    environment_id: str = Field(default="0" * 64, min_length=1)
     idempotency_key: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=1, max_length=80)
     factor_id: str = Field(pattern=r"^(joinquant|alpha191|qlib_alpha158):[A-Za-z0-9_]+$")
@@ -61,7 +61,7 @@ class FactorCreate(Contract):
         ):
             raise ValueError("Label end requires evaluation and must be on or after signal end")
         if len(set(self.securities)) != len(self.securities) or any(
-            not re.fullmatch(r"(?:[0-9]{6}\.X(?:SHG|SHE)|BJ\.[0-9]{6})", s) for s in self.securities
+            not re.fullmatch(r"(?:[0-9]{6}\.X(?:SHG|SHE|BSE|BEI)|[0-9]{6}\.BJ|BJ\.[0-9]{6})", s) for s in self.securities
         ):
             raise ValueError("Use unique canonical securities")
         return self

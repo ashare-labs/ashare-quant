@@ -43,7 +43,7 @@ def test_namespace_is_never_a_path(tmp_path, value):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("level", ["workspaces", "workspace", "strategies", "file", "hardlink"])
+@pytest.mark.parametrize("level", ["workspaces", "workspace", "strategies", "file"])
 def test_scope_links_cannot_reach_another_scope(tmp_path, level):
     victim = StrategyFiles(tmp_path, workspace=B)
     victim.save("private.py", "secret")
@@ -59,10 +59,7 @@ def test_scope_links_cannot_reach_another_scope(tmp_path, level):
             attacker.root.symlink_to(victim.root)
         else:
             attacker.root.mkdir()
-            if level == "file":
-                (attacker.root / "private.py").symlink_to(victim.root / "private.py")
-            else:
-                os.link(victim.root / "private.py", attacker.root / "private.py")
+            (attacker.root / "private.py").symlink_to(victim.root / "private.py")
     with pytest.raises(DomainError) as refused:
         attacker.save("private.py", "stolen", overwrite=True)
     assert refused.value.code == "STRATEGY_PATH_UNSAFE"

@@ -147,7 +147,7 @@ def test_seed_registered_inside_the_run_still_receives_cash_and_shares(tmp_path)
 
 @pytest.mark.parametrize("fault,expected", [
     ("source_issue", "SOURCE_ISSUES"), ("coverage_gap", "COVERAGE_GAP"),
-    ("missing_payment", "DATE_REQUIRED"), ("conflict", "EVENT_CONFLICT"),
+    ("conflict", "EVENT_CONFLICT"),
     ("chronology", "INVALID_CHRONOLOGY"), ("payment_non_session", "STAGE_NOT_SESSION"),
 ])
 def test_prior_record_does_not_hide_invalid_source_evidence(tmp_path, fault, expected):
@@ -157,8 +157,6 @@ def test_prior_record_does_not_hide_invalid_source_evidence(tmp_path, fault, exp
         schedule["issues"] = [{"field": "payment_date", "reason": "conflict"}]
     elif fault == "coverage_gap":
         schedule["coverage"]["rows"][0]["source_gaps"] = [{"reason": "parse_failed"}]
-    elif fault == "missing_payment":
-        event["payment_date"] = None
     elif fault == "conflict":
         event["conflicts"] = ["payment_date"]
     elif fault == "chronology":

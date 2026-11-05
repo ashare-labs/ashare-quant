@@ -8,7 +8,9 @@ from pydantic import BeforeValidator, Field, JsonValue
 Sha = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 # Paper/diagnostics publish this spelling; preserving it avoids schema churn.
 EvidenceSha = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
-ResearchSecurity = Annotated[str, Field(pattern=r"^[0-9]{6}\.(XSHG|XSHE)$")]
+ResearchSecurity = Annotated[
+    str, Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\.[0-9]{6})$")
+]
 JSONObject = dict[str, JsonValue]
 
 

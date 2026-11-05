@@ -9,7 +9,9 @@ from ashare_quant.contracts import Contract, ErrorBody
 from ashare_quant.core.types import JSONObject, Sha
 from ashare_quant.market.contracts import PortfolioDataset
 
-ProductSecurity = Annotated[str, Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE)|BJ\.[0-9]{6})$")]
+ProductSecurity = Annotated[
+    str, Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\.[0-9]{6})$")
+]
 
 
 class ProductSelection(Contract):
@@ -30,7 +32,9 @@ class ProductCoverageRequest(ProductSelection):
 
 
 class ProductMinuteSelection(Contract):
-    security: str = Field(pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE)|BJ\.[0-9]{6})$")
+    security: str = Field(
+        pattern=r"^(?:[0-9]{6}\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\.[0-9]{6})$"
+    )
     start: AwareDatetime
     end: AwareDatetime
     source: str = Field(default="auto", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")

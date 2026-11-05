@@ -254,15 +254,6 @@ def resolve(deployment=None, profile="product") -> Configuration:
         entry = document["profiles"][profile]
         if entry["kind"] not in {"product", "evaluation", "research"}:
             raise ValueError("Profile kind must be product, evaluation or research")
-        from ashare_data.core.consumer_policy import POLICY, guard_selection
-        from ashare_data.core.model import DataError
-
-        try:
-            guard_selection(path, profile)
-        except DataError as exc:
-            raise ValueError(exc.message) from exc
-        if entry.get("consumer_policy") == POLICY and (not entry.get("market_release") or entry.get("daily_asset")):
-            raise ValueError("Committed-only profile requires a market release and no legacy daily asset")
         daily = None if entry.get("market_release") else by_name[entry["daily_asset"]]
         release = by_name[entry["release_store_asset"]]
         owner = by_name[entry.get("owner_store_asset", entry["release_store_asset"])]

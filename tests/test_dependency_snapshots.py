@@ -56,5 +56,5 @@ def test_pin_data_runtime_rejects_commit_without_source(tmp_path):
         capture_output=True, text=True,
     )
     assert result.returncode != 0
-    assert "--source is required" in result.stderr
+    assert "--source is required" in result.stderr or "differ" in result.stderr
     assert pin.read_text() == '{"sentinel": true}\n'

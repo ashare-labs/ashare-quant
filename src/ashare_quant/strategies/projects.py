@@ -1,13 +1,11 @@
 """Complete Python project transactions over ordinary, inspectable directories."""
 
-import ctypes
 import errno
 import json
 import keyword
 import os
 import shutil
 import stat
-import sys
 import tomllib
 import unicodedata
 import uuid
@@ -111,21 +109,23 @@ def descriptor_bytes(project_id, entrypoint):
 
 
 def rename_directory(source_fd, source, target_fd, target, *, exchange=False):
-    """No two-rename gap: macOS and Linux supply atomic exchange/no-clobber."""
-    libc = ctypes.CDLL(None, use_errno=True)
-    name = "renameatx_np" if sys.platform == "darwin" else "renameat2"
-    try:
-        rename = getattr(libc, name)
-    except AttributeError:
-        raise DomainError("STRATEGY_PROJECT_ATOMIC_UNAVAILABLE", "This filesystem platform has no atomic project rename", 503) from None
-    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-    rename.restype = ctypes.c_int
-    flags = 2 if exchange else (4 if sys.platform == "darwin" else 1)
-    if rename(source_fd, os.fsencode(source), target_fd, os.fsencode(target), flags) != 0:
-        code = ctypes.get_errno()
-        if code in {errno.ENOSYS, errno.ENOTSUP, errno.EINVAL}:
-            raise DomainError("STRATEGY_PROJECT_ATOMIC_UNAVAILABLE", "The filesystem does not support atomic project transactions", 503)
-        raise OSError(code, os.strerror(code))
+    """Use standard os.rename without ctypes renameatx_np/renameat2."""
+    if exchange:
+        backup = INTERNAL_PREFIX + "swap-" + uuid.uuid4().hex
+        os.rename(target, backup, src_dir_fd=target_fd, dst_dir_fd=target_fd)
+        os.rename(source, target, src_dir_fd=source_fd, dst_dir_fd=target_fd)
+        os.rename(backup, source, src_dir_fd=target_fd, dst_dir_fd=source_fd)
+    else:
+        try:
+            target_info = os.stat(target, dir_fd=target_fd, follow_symlinks=False)
+            source_info = os.stat(source, dir_fd=source_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            os.rename(source, target, src_dir_fd=source_fd, dst_dir_fd=target_fd)
+        else:
+            if os.path.samestat(source_info, target_info):
+                os.rename(source, target, src_dir_fd=source_fd, dst_dir_fd=target_fd)
+            else:
+                raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), target)
 
 
 class ProjectFiles:
@@ -143,28 +143,40 @@ class ProjectFiles:
                 continue
             if name_key(name) == PROJECT_DESCRIPTOR:
                 raise invalid("Project descriptors cannot be nested or aliased")
-            relative = prefix + unicodedata.normalize("NFC", name)
-            parts(relative)
-            key = name_key(name)
-            if key in names:
-                raise invalid("Source names collide after Unicode or case normalization")
-            names.add(key)
             info = os.stat(name, dir_fd=fd, follow_symlinks=False)
             if stat.S_ISDIR(info.st_mode):
-                if not module_name(unicodedata.normalize("NFC", name)):
-                    raise invalid("Project source directories must be Python package identifiers")
+                if name == "__pycache__" or name.startswith("."):
+                    continue
+                relative = prefix + unicodedata.normalize("NFC", name)
+                parts(relative)
                 child = open_directory(fd, name)
                 try:
                     children = self._sources(child, relative + "/", budget)
+                    if not children:
+                        continue
+                    key = name_key(name)
+                    if key in names:
+                        raise invalid("Source names collide after Unicode or case normalization")
+                    names.add(key)
+                    if not module_name(unicodedata.normalize("NFC", name)):
+                        raise invalid("Project source directories must be Python package identifiers")
                     if result.keys() & children.keys():
                         raise invalid("Source paths collide after Unicode normalization")
                     result.update(children)
                 finally:
                     os.close(child)
             else:
+                if stat.S_ISLNK(info.st_mode):
+                    regular(info)
+                if not name.endswith(".py") or name.startswith("."):
+                    continue
+                relative = prefix + unicodedata.normalize("NFC", name)
+                parts(relative)
+                key = name_key(name)
+                if key in names:
+                    raise invalid("Source names collide after Unicode or case normalization")
+                names.add(key)
                 regular(info)
-                if not name.endswith(".py"):
-                    raise invalid("Project directories may contain only aquant.toml and Python source files")
                 try:
                     raw = read_bytes(fd, name)
                     budget[0] += len(raw)

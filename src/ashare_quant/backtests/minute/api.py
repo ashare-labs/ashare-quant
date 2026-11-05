@@ -45,12 +45,10 @@ def unsupported(name):
 
 
 def validate_reference_calendar(security):
-    # This argument selects a clock, not a data subscription. A Shanghai or
-    # Shenzhen cash-market reference uses the existing A-share session calendar.
-    # Other venues (especially futures/night sessions) need an explicit model.
     require(
         security is None or (
-            isinstance(security, str) and re.fullmatch(r"[0-9]{6}\.(XSHG|XSHE)", security)
+            isinstance(security, str)
+            and re.fullmatch(r"(?:[0-9]{6}\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\.[0-9]{6})", security)
         ),
         "AQUANT_REFERENCE_CALENDAR_UNSUPPORTED:expected_Shanghai_or_Shenzhen_cash_market",
     )
@@ -845,6 +843,7 @@ class API:
 
         module.__getattr__ = missing
         sys.modules["aquant"] = module
+        sys.modules["jqdata"] = module
         result["__builtins__"] = {**vars(builtins), "__import__": strategy_import}
         return result
 

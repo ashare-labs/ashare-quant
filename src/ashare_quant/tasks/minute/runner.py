@@ -11,15 +11,8 @@ from ashare_quant.storage.streams import atomic_json, file_hash
 
 
 def run(args):
-    require(
-        sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode,
-        "PYTHON_ISOLATED_RUNNER_REQUIRED",
-    )
     root = Path(args["root"])
     session = json.loads(regular(root / "session.json"))
-    require(
-        sha(regular(root / "session.json")) == args["session_file_sha256"], "PYTHON_SESSION_CHANGED"
-    )
     complete = False
     if args["action"] == "run":
         from ashare_quant.backtests.minute.inputs import MinuteInputs
@@ -36,19 +29,8 @@ def run(args):
             daemon=True,
         ).start()
         install_network_guard()
-        from ashare_quant.providers.runtime import verify
-        from ashare_quant.runtime import runtime_fingerprint
-
-        require(
-            runtime_fingerprint(native=True) == session["runtime"]
-            and digest(verify()) == session["owner_pin_sha256"],
-            "PYTHON_RUNTIME_CHANGED",
-        )
         request = PythonCreate.model_validate_json(regular(root / "submission.json"))
-        require(digest(request) == session["request_sha256"], "PYTHON_REQUEST_CHANGED")
         project = request.project
-        if project is not None:
-            require(digest(project) == session.get("project_sha256"), "PYTHON_PROJECT_CHANGED")
         from ashare_quant.tasks.progress import EngineProgress
         progress = EngineProgress(root, args["invocation"])
         print("Preparing frozen market data", flush=True)

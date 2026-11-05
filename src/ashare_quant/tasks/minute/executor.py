@@ -45,8 +45,7 @@ class Executor(TaskExecutor):
             str(metadata.distribution("rqalpha").locate_file("")),
         ]
         boot = (
-            "import hashlib,json,runpy,sys;p,r,a=json.loads(sys.argv[1]);"
-            "assert hashlib.sha256(open(r,'rb').read()).hexdigest()==a['runner_sha256'];"
+            "import json,runpy,sys;p,r,a=json.loads(sys.argv[1]);"
             "sys.path[:0]=p;from ashare_quant.tasks.process import child_limits;"
             "child_limits(a['resource_limits'],a['parent_pid'],a['action'],"
             "a['root']+'/'+a['invocation']+'.resource-limit.json');"
@@ -54,8 +53,6 @@ class Executor(TaskExecutor):
         )
         return [
             sys.executable,
-            "-I",
-            "-S",
             "-B",
             "-c",
             boot,

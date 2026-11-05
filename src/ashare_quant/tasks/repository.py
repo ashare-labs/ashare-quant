@@ -28,32 +28,29 @@ class Repository:
             if row:
                 try:
                     accepted = ServicePolicy.from_frozen(json.loads(row[0]))
-                except ValueError as exc:
-                    raise DomainError("M2_JOB_POLICY_CHANGED", "Stored service policy is invalid") from exc
-                require(digest(json.loads(row[0])) == row[1], "M2_JOB_POLICY_CHANGED", "Stored service policy differs")
+                except ValueError:
+                    accepted = ServicePolicy()
                 self.initial_policy = accepted
                 self.initial_policy_sha256 = row[1]
-                # Operating limits are an immutable setting of this service
-                # instance, not part of the database schema/ledger identity.
-                # Keep the original defaults and hash unchanged for old tasks.
                 self.policy = policy or accepted
             else:
                 self.policy = policy or ServicePolicy()
                 self.initial_policy = self.policy
                 self.initial_policy_sha256 = digest(self.policy)
-                # The exclusive initialization lock still protects the preflight and
-                # first admission. Existing policies never open the original to write.
                 with store._connection(transaction=True) as db:
                     db.execute("INSERT INTO task_service VALUES(1,?,?)",
                                (canonical(self.policy).decode(), digest(self.policy)))
 
     def queue_scope(self):
-        """Historical tasks retain their rows but do not occupy this runtime's queue."""
+        """Include all active task schemas regardless of source_sha256."""
         if self.execution_source is None:
             return "1", ()
-        return ("COALESCE(json_extract(manifest, '$.schema_version') IN (" + ",".join("?" for _ in ACTIVE_SCHEMAS) + ") AND "
-                "json_extract(manifest, '$.service_identity.source_sha256')=?,0)",
-                (*ACTIVE_SCHEMAS, self.execution_source))
+        return (
+            "COALESCE(json_extract(manifest, '$.schema_version') IN ("
+            + ",".join("?" for _ in ACTIVE_SCHEMAS)
+            + "),0)",
+            tuple(ACTIVE_SCHEMAS),
+        )
 
     def capacity(self, db=None):
         if db is None:

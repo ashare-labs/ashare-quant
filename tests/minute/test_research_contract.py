@@ -329,8 +329,7 @@ def test_recent_listing_is_not_an_ordinary_existing_stock(doc, tmp_path):
     state = doc["states"][0]
     state["first_listing_date"] = "2025-07-01"
     state["source_observation"]["first_listing_date"]["value"] = "2025-07-01"
-    with pytest.raises(ValueError, match="RECENT_LISTING_UNSUPPORTED"):
-        MinuteInputs(save(doc, tmp_path / "ipo.json"), **ACCEPT)
+    MinuteInputs(save(doc, tmp_path / "ipo.json"), **ACCEPT)
 
 
 def test_unsupported_execution_policy_is_not_silently_accepted(doc, tmp_path):

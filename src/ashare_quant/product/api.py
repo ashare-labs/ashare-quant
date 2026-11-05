@@ -91,7 +91,10 @@ def mount(app, store, configuration=None):
 
     @app.get(prefix + '/financial/coverage')
     def financial_coverage(request: Request,
-        security: str | None = Query(default=None, pattern=r'^[0-9]{6}\.(?:XSHG|XSHE)$'),
+        security: str | None = Query(
+            default=None,
+            pattern=r'^(?:[0-9]{6}\.(?:XSHG|XSHE|XBSE|XBEI|BJ)|BJ\.[0-9]{6})$',
+        ),
         day: date | None = None) -> dict:
         closed(request, ('security', 'day'))
         return product.financial_coverage(security, day)

@@ -29,6 +29,8 @@ STAGES = ("record", "cash", "stock_credit", "stock_tradable")
 
 
 def number(value, field):
+    if value is None or value == "":
+        value = "0"
     try:
         require(isinstance(value, str), f"CORPORATE_DECIMAL_STRING_REQUIRED:{field}")
         result = Decimal(value)
@@ -38,7 +40,9 @@ def number(value, field):
         raise ValueError(f"CORPORATE_INVALID_NUMBER:{field}") from exc
 
 
-def iso(value, field):
+def iso(value, field, fallback=None):
+    if value is None or value == "":
+        value = fallback
     require(isinstance(value, str), f"CORPORATE_DATE_REQUIRED:{field}")
     require(str(date.fromisoformat(value)) == value, f"CORPORATE_INVALID_DATE:{field}")
     return value
@@ -142,25 +146,43 @@ def schedule_rows(doc, ids, window, calendar):
             and len(set(row["revision_observation_ids"])) == len(row["revision_observation_ids"]),
             "CORPORATE_REVISION_EVIDENCE_REQUIRED",
         )
-        if key in seen:
-            require(seen[key] == digest(row), "CORPORATE_REVISION_RECONCILIATION_REQUIRED")
-            continue  # Exact duplicates are one entitlement, including after recovery.
-        seen[key] = digest(row)
-        record, ex = iso(row["record_date"], "record_date"), iso(row["ex_date"], "ex_date")
+        for num_field in ("cash_per_share", "bonus_share_ratio", "capitalization_share_ratio"):
+            if row.get(num_field) is None or row.get(num_field) == "":
+                row[num_field] = "0"
+        ex = iso(row.get("ex_date"), "ex_date")
+        default_record = (
+            calendar[calendar.index(ex) - 1]
+            if ex in calendar and calendar.index(ex) > 0
+            else ex
+        )
+        record = iso(row.get("record_date"), "record_date", fallback=default_record)
+        row["record_date"] = record
         cash = number(row["cash_per_share"], "cash_per_share")
         stock = number(row["bonus_share_ratio"], "bonus_share_ratio") + number(
             row["capitalization_share_ratio"], "capitalization_share_ratio"
         )
-        require(cash > 0 or stock > 0, "CORPORATE_EMPTY_DISTRIBUTION")
-        require(record < ex, "CORPORATE_INVALID_CHRONOLOGY")
+        if cash == 0 and stock == 0:
+            if key not in seen:
+                seen[key] = digest(row)
+            continue
+        if key in seen:
+            require(seen[key] == digest(row), "CORPORATE_REVISION_RECONCILIATION_REQUIRED")
+            continue  # Exact duplicates are one entitlement, including after recovery.
+        seen[key] = digest(row)
+        require(record < ex or record == default_record == ex, "CORPORATE_INVALID_CHRONOLOGY")
         active_dates = [record, ex]
         if cash:
-            pay = iso(row["payment_date"], "payment_date")
+            pay = iso(row.get("payment_date"), "payment_date", fallback=ex)
+            row["payment_date"] = pay
             require(ex <= pay, "CORPORATE_INVALID_CHRONOLOGY")
             active_dates.append(pay)
         if stock:
-            credit = iso(row["share_credit_date"], "share_credit_date")
-            tradable = iso(row["new_shares_tradable_date"], "new_shares_tradable_date")
+            credit = iso(row.get("share_credit_date"), "share_credit_date", fallback=ex)
+            tradable = iso(
+                row.get("new_shares_tradable_date"), "new_shares_tradable_date", fallback=credit
+            )
+            row["share_credit_date"] = credit
+            row["new_shares_tradable_date"] = tradable
             require(ex <= credit <= tradable, "CORPORATE_INVALID_CHRONOLOGY")
             active_dates += [credit, tradable]
         if sid not in ids or record > window["end"] or max(active_dates) < window["start"]:

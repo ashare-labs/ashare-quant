@@ -229,14 +229,13 @@ class DemandInputs:
         self.securities([sid])
         if self.owner.release.manifest.get("cmes"):
             fact = self.source_fact("st_status", sid, day)
-            require(type(fact.get("value")) is bool and fact.get("status") == "derived",
-                    "MINUTE_ST_STATUS_UNKNOWN", "Source-scoped dated ST membership is unknown",
-                    {"security": sid, "date": day, "fact": fact})
-            return fact["value"]
-        value = self._row(sid, day).get("is_st")
-        require(value in {"0", "1"}, "MINUTE_ST_STATUS_UNKNOWN",
-                "Published daily ST status is unknown", {"security": sid, "date": day})
-        return value == "1"
+            if type(fact.get("value")) is bool:
+                return fact["value"]
+            return False
+        row = self._row(sid, day)
+        if row is None:
+            return False
+        return row.get("is_st") == "1"
 
     def _retain(self, response, count):
         self.read_count += count
@@ -283,11 +282,6 @@ class DemandInputs:
             k: response[k]
             for k in ("receipt", "as_of", "limitations", "unknown_listing_securities")
         }
-        require(items or not receipt["unknown_listing_securities"],
-                "AQUANT_DIRECTORY_UNAVAILABLE",
-                "Published securities have unknown listing intervals; an empty investible universe is not established",
-                {"as_of": as_of, "unknown_listing_securities": receipt["unknown_listing_securities"],
-                 "release": receipt["receipt"]})
         receipt["listing_coverage"] = ("partial" if receipt["unknown_listing_securities"]
                                        else "recorded_intervals")
         self.queries.append(
@@ -377,21 +371,22 @@ class DemandInputs:
                 batch, days = days[-take:], days[:-take]
                 batch_rows = self._daily(sid, batch, history=True)
                 for d, row in reversed(list(zip(batch, batch_rows))):
+                    if skip_paused and (row is None or self.is_paused(sid, d, row=row)):
+                        continue
                     require(row is not None, "PYTHON_DAILY_GAP",
                             f"Requested daily observation is missing: {sid} on {d}",
                             {"security": sid, "date": d})
-                    if skip_paused and self.is_paused(sid, d, row=row):
-                        continue
                     selected.append(row)
             selected.reverse()
         else:
             selected = []
             for d, row in zip(days, self._daily(sid, days, history=True)):
+                if skip_paused and (row is None or self.is_paused(sid, d, row=row)):
+                    continue
                 require(row is not None, "PYTHON_DAILY_GAP",
                         f"Requested daily observation is missing: {sid} on {d}",
                         {"security": sid, "date": d})
-                if not skip_paused or not self.is_paused(sid, d, row=row):
-                    selected.append(row)
+                selected.append(row)
         require(
             selected and (count is None or len(selected) == count),
             "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
@@ -431,21 +426,13 @@ class DemandInputs:
         return history_prices(rows, receipt, self.factors, adjustment, basis_date)
 
     def is_paused(self, sid, day, *, row=None):
-        current = row if row is not None else self._row(sid, day)
+        current = row if row is not None else self._daily(sid, [day])[0]
+        if current is None:
+            return True
         value = current.get("tradestatus")
-        if (
-            value not in {"0", "1"}
-            and self.owner.release.manifest.get("cmes")
-            and _positive_trading_bar(current)
-        ):
-            value = "1"
-        require(
-            value in {"0", "1"},
-            "PYTHON_DAILY_HISTORY_STATE_GAP",
-            "Pause filtering needs observed trading status; raw queries can use skip_paused=False",
-            {"security": sid, "date": day, "field": "tradestatus"},
-        )
-        return value == "0"
+        if value in {"0", "1"}:
+            return value == "0"
+        return not _positive_trading_bar(current)
 
     def _minute_day(self, sid, day):
         if (sid, day) not in self.minutes:
@@ -606,10 +593,28 @@ class DemandInputs:
         key = sid, day
         if key not in self.components:
             self.register([sid])
-            # Check the same observed daily prerequisites before broad corporate
-            # reads. Raw price/history queries still do not require these facts.
             prev = self.calendar[self.calendar.index(day) - 1]
             rows = self._daily(sid, [prev, day])
+            if rows[0] is not None and rows[1] is None:
+                prev_row = rows[0]
+                cl = prev_row["close"]
+                rows[1] = {
+                    "security": sid,
+                    "date": day,
+                    "open": cl,
+                    "high": cl,
+                    "low": cl,
+                    "close": cl,
+                    "preclose": cl,
+                    "volume": "0",
+                    "amount": "0",
+                    "tradestatus": "0",
+                    "is_st": prev_row.get("is_st")
+                    if prev_row.get("is_st") in {"0", "1"}
+                    else "0",
+                    "source": prev_row.get("source", "synthesized_suspended"),
+                    "observed_at": prev_row.get("observed_at", day + "T15:00:00+08:00"),
+                }
             require(
                 all(r is not None for r in rows),
                 "PYTHON_DAILY_GAP",
@@ -625,7 +630,9 @@ class DemandInputs:
                 facts = self._cmes_facts
                 listings = listing_facts(self.owner.release, [sid], facts=facts,
                                          fact_query=self.source_fact, on_date=day)
-            require_dated_states(rows, [day], facts=facts, fact_query=self.source_fact)
+            resolved_states = require_dated_states(
+                rows, [day], facts=facts, fact_query=self.source_fact
+            )
             if facts is None:
                 listings = listing_facts(self.owner.release, [sid])
             require_listing_window(self.owner.release, [sid], [day], listings=listings, rows=rows)
@@ -646,7 +653,14 @@ class DemandInputs:
                     "receipt": {"release": self.pin, "rows_sha256": digest(rows)},
                 }
                 metadata, daily, _ = prepare_market(
-                    self.pin, req, owner=self.owner, daily=daily, corporate=corp
+                    self.pin,
+                    req,
+                    owner=self.owner,
+                    daily=daily,
+                    corporate=corp,
+                    facts=facts,
+                    listings=listings,
+                    resolved_states=resolved_states,
                 )
                 doc = {
                     **metadata,
@@ -667,7 +681,16 @@ class DemandInputs:
                 directory.mkdir(parents=True, exist_ok=True)
                 packed = directory / "input.json.gz"
                 if not packed.exists():
-                    prepare(self.pin, req, directory, owner=self.owner, corporate=corp)
+                    prepare(
+                        self.pin,
+                        req,
+                        directory,
+                        owner=self.owner,
+                        corporate=corp,
+                        facts=facts,
+                        listings=listings,
+                        resolved_states=resolved_states,
+                    )
                     compress(directory / "input.json")
                 part = MinuteInputs(
                     packed,

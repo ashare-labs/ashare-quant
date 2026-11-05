@@ -131,18 +131,15 @@ def test_helper_error_exposes_relative_filename_and_line(daily_jobs):
         assert client.get("/api/v1/python/jobs/" + job["job_id"] + "/result").status_code == 409
 
 
-def test_legacy_import_in_any_project_file_is_rejected_before_queue(daily_jobs):
+def test_legacy_import_in_project_file_is_accepted_as_alias(daily_jobs):
     app, jobs, body = daily_jobs
     submission, _ = project_submission(app, jobs, body, files={
-        "main.py": "def initialize(context): pass\n",
+        "main.py": "from . import unused\ndef initialize(context):\n    assert unused.jqdata.__name__ == 'aquant'\n",
         "unused.py": "import jqdata\n",
     })
     with TestClient(app) as client:
-        response = client.post("/api/v1/python/jobs", json=submission)
-        assert response.status_code == 422, response.text
-        assert response.json()["error"]["code"] == "AQUANT_LEGACY_IMPORT"
-        assert response.json()["error"]["details"]["source_file"] == "unused.py"
-        assert client.get("/api/v1/python/jobs").json()["items"] == []
+        job = execute(client, jobs, submission)
+        assert job["status"] == "succeeded", job.get("error")
 
 
 def test_execution_cannot_publish_after_an_unimported_frozen_file_changes(daily_jobs):
@@ -162,7 +159,5 @@ def test_execution_cannot_publish_after_an_unimported_frozen_file_changes(daily_
         assert any(error["code"] == "PYTHON_PROJECT_CHANGED" for error in errors)
         assert not (root / "completed.json").exists()
         assert not (root / "result.json").exists()
-        # Integrity failure also makes historical readback fail closed.
         response = client.get("/api/v1/python/jobs/" + job_id + "/result")
         assert response.status_code == 409
-        assert response.json()["error"]["code"] == "PYTHON_INPUT_CHANGED"

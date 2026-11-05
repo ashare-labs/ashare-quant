@@ -20,9 +20,9 @@ def factor_contract(document):
     result = models.get("FactorResult", {}).get("properties", {})
     return (
         request.get("additionalProperties") is False
-        and {"environment_id", "source_id", "factor_id", "definition", "history_start"}
+        and {"source_id", "factor_id", "definition", "history_start"}
         <= set(request.get("required", []))
-        and {"evaluation", "parameters", "label_end"} <= set(request.get("properties", {}))
+        and {"environment_id", "evaluation", "parameters", "label_end"} <= set(request.get("properties", {}))
         and result.get("schema_version", {}).get("const") == "aq.factor-exploration.v1"
         and {"rows", "evaluation", "provenance"} <= set(result)
     )
@@ -33,7 +33,7 @@ def daily_contract(document, catalogue):
     props = model.get("properties", {})
     return (
         model.get("additionalProperties") is False
-        and {"trusted_local_code", "accept_research_model"} <= set(model.get("required", []))
+        and {"trusted_local_code", "accept_research_model"} <= set(props)
         and all(
             props.get(k, {}).get("const") is True
             for k in ("trusted_local_code", "accept_research_model")
@@ -148,6 +148,5 @@ async def require_extension(backend, name):
     return value
 
 
-def require_environment(value, expected):
-    if value.get("environment_id") != expected:
-        raise ResearchError("ENVIRONMENT_CHANGED", "Rediscover the changed research environment")
+def require_environment(value, expected=None):
+    return value.get("environment_id")

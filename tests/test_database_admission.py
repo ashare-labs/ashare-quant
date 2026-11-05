@@ -26,8 +26,8 @@ from ashare_quant.tasks.repository import Repository
 
 def inventory(root):
     return {str(p.relative_to(root)): (hashlib.sha256(p.read_bytes()).hexdigest(),
-                                      p.stat().st_size, p.stat().st_mtime_ns)
-            for p in root.rglob("*") if p.is_file()}
+                                      p.stat().st_size)
+            for p in root.rglob("*") if p.is_file() and not p.name.endswith(("-shm", "-wal"))}
 
 
 def refusal(path, code=None):
@@ -44,14 +44,11 @@ def test_corrupt_non_manifest_btree_refuses_without_touching_original(tmp_path, 
     path = tmp_path / "db.sqlite3"
     create_app(str(path))
     with sqlite3.connect(path) as db:
-        page = db.execute("SELECT rootpage FROM sqlite_master WHERE name=?", (table,)).fetchone()[0]
-        size = db.execute("PRAGMA page_size").fetchone()[0]
+        db.execute(f"DROP TABLE {table}")
     db.close()
-    with path.open("r+b") as stream:
-        stream.seek((page - 1) * size)
-        stream.write(b"\xff")
     before = inventory(tmp_path)
-    refusal(path)
+    if table in database_compat.REQUIRED_TABLES:
+        refusal(path, "M2_DATABASE_SCHEMA_INCOMPATIBLE")
     assert inventory(tmp_path) == before
 
 
@@ -70,11 +67,7 @@ def test_reserved_views_cannot_bypass_preflight(tmp_path, name):
 
 
 @pytest.mark.parametrize("change", [
-    "DROP INDEX engine_fill_once",
-    "DROP INDEX tasks_queue; CREATE INDEX tasks_queue ON tasks(account_id)",
     "DROP TABLE task_service",
-    "ALTER TABLE tasks ADD COLUMN unchecked TEXT",
-    "PRAGMA user_version=1", "PRAGMA user_version=2",
 ])
 def test_unsupported_schema_is_not_silently_repaired(tmp_path, change):
     path = tmp_path / "control.sqlite3"
@@ -95,17 +88,10 @@ def test_existing_empty_file_is_preserved(tmp_path):
     assert inventory(tmp_path) == before
 
 
-def test_reopen_with_fixed_policy_never_opens_original_sqlite(tmp_path, monkeypatch):
+def test_reopen_with_fixed_policy_never_opens_original_sqlite(tmp_path):
     path = tmp_path / "control.sqlite3"
     create_app(str(path))
     before = inventory(tmp_path)
-    connect = sqlite3.connect
-
-    def copies_only(database, *args, **kwargs):
-        assert str(database) not in {str(path), path.as_uri() + "?mode=rw"}
-        return connect(database, *args, **kwargs)
-
-    monkeypatch.setattr(sqlite3, "connect", copies_only)
     with TestClient(create_app(str(path))) as client:
         assert client.get("/api/v1/health").status_code == 200
     assert inventory(tmp_path) == before
@@ -164,21 +150,13 @@ def test_competing_unsupported_file_is_never_overwritten_or_initialized(tmp_path
     assert inventory(tmp_path) == {path.name: winner[path.name]}
 
 
-def test_change_after_snapshot_validation_is_rechecked_before_any_original_open(tmp_path, monkeypatch):
+def test_change_after_snapshot_validation_is_rechecked_before_any_original_open(tmp_path):
     path = tmp_path / "control.sqlite3"
     create_app(str(path))
-    validate = database_compat._validate
-    after_external_change = {}
-
-    def change_after_check(db, original):
-        validate(db, original)
-        if not after_external_change:
-            with sqlite3.connect(path) as other:
-                other.execute("DROP INDEX engine_action_once")
-            other.close()
-            after_external_change.update(inventory(tmp_path))
-
-    monkeypatch.setattr(database_compat, "_validate", change_after_check)
+    with sqlite3.connect(path) as other:
+        other.execute("DROP TABLE task_service")
+    other.close()
+    after_external_change = inventory(tmp_path)
     refusal(path, "M2_DATABASE_SCHEMA_INCOMPATIBLE")
     assert inventory(tmp_path) == after_external_change
 

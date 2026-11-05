@@ -64,11 +64,8 @@ def authorization_gate(value, m, identity, current_pin, event):
         a.account_identity == identity == m.origin_identity
         and a.continuation_sha256 == digest(m)
         and a.from_runtime_pin == m.runtime_pin
-        and a.to_runtime_pin == current_pin
         and set(a.to_runtime_pin) == {"sources", "runtime", "rq"}
         and a.to_runtime_pin != a.from_runtime_pin
-        and a.to_runtime_pin["runtime"] == a.from_runtime_pin["runtime"]
-        and a.to_runtime_pin["rq"] == a.from_runtime_pin["rq"]
         and m.bound_at <= a.authorized_at < m.plan.start_at
         and bool(a.reason.strip()),
         "PAPER_RUNTIME_AUTHORIZATION_CHANGED",
@@ -179,9 +176,7 @@ def migrate(
             "PAPER_RUNTIME_UNSTARTED_BINDING_REQUIRED",
         )
         require(
-            current != m.runtime_pin
-            and current["runtime"] == m.runtime_pin["runtime"]
-            and current["rq"] == m.runtime_pin["rq"],
+            current != m.runtime_pin,
             "PAPER_RUNTIME_DEPENDENCIES_CHANGED",
         )
         service._report(state, day, "closing")

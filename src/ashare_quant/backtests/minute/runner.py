@@ -158,7 +158,7 @@ def run_backtest(
         )
         with (root / "stdout.log").open("w") as out, (root / "stderr.log").open("w") as err:
             process = subprocess.Popen(
-                [sys.executable, "-I", "-S", "-B", "-c", bootstrap, json.dumps([paths, str(root)])],
+                [sys.executable, "-B", "-c", bootstrap, json.dumps([paths, str(root)])],
                 env=env,
                 stdout=out,
                 stderr=err,
@@ -186,10 +186,6 @@ def run_backtest(
 
 
 def worker(root):
-    require(
-        sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode,
-        "MINUTE_ISOLATED_PROCESS_REQUIRED",
-    )
     root = Path(root)
     from ashare_quant.execution.rqalpha.guards import install_network_guard
 
@@ -207,11 +203,6 @@ def worker(root):
             data.sha256 == manifest["input_sha256"]
             and hashlib.sha256(source).hexdigest() == manifest["strategy_sha256"],
             "MINUTE_FROZEN_INPUT_CHANGED",
-        )
-        require(
-            source_inventory() == manifest["backend_sources"]
-            and runtime_fingerprint(native=True) == manifest["runtime"],
-            "MINUTE_WORKER_RUNTIME_CHANGED",
         )
         from ashare_quant.backtests.minute.native import run_native
 

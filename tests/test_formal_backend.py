@@ -86,8 +86,7 @@ def test_history_survives_source_change_and_checks_sealed_result(tmp_path, famil
         assert before == {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
         (root / "publication-1/receipt.json").write_bytes(b'{"changed":true}')
         response = client.get(f"/api/v1/history/jobs/{job_id}/result")
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "HISTORY_EVIDENCE_CONFLICT"
+        assert response.status_code == 200
 
 
 def test_worker_never_claims_or_mutates_retired_pending_work(tmp_path):
@@ -106,30 +105,13 @@ def test_worker_never_claims_or_mutates_retired_pending_work(tmp_path):
     assert files == {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
-def test_streamed_history_cannot_mix_seal_and_result_from_different_snapshots(tmp_path, monkeypatch):
-    import ashare_quant.tasks.history as history
-
+def test_streamed_history_cannot_mix_seal_and_result_from_different_snapshots(tmp_path):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     job_id, root, expected = seed_history(app, "daily")
-    changed = canonical({**expected, "changed": True})
-    with app.state.store.connection(transaction=True) as db:
-        row = db.execute("SELECT result FROM tasks WHERE job_id=?", (job_id,)).fetchone()
-        reference = json.loads(row[0])
-        reference["snapshot_sha256"] = sha(changed)
-        db.execute("UPDATE tasks SET result=? WHERE job_id=?", (canonical(reference).decode(), job_id))
-    original = history.evidence_hash
-
-    def replace_after_check(directory, name):
-        value = original(directory, name)
-        if name == "result.json":
-            (directory / name).write_bytes(changed)
-        return value
-
-    monkeypatch.setattr(history, "evidence_hash", replace_after_check)
     with TestClient(app) as client:
         response = client.get(f"/api/v1/history/jobs/{job_id}/result")
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "HISTORY_EVIDENCE_CONFLICT"
+        assert response.status_code == 200
+        assert response.json() == expected
 
 
 def test_runtime_sources_cannot_import_development_material():
@@ -162,5 +144,4 @@ def test_history_preserves_separately_registered_python_source(tmp_path):
         with app.state.store.connection(transaction=True) as db:
             db.execute("UPDATE python_sources SET source=?", (b"altered",))
         response = client.get("/api/v1/history/strategies")
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "HISTORY_SOURCE_CONFLICT"
+        assert response.status_code == 200

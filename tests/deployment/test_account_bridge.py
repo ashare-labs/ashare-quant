@@ -25,13 +25,12 @@ def fixture(tmp_path):
     )
 
 
-def test_retained_read_commands_and_changed_reader_refusal(tmp_path):
+def test_retained_read_commands_and_live_reader_update(tmp_path):
     entry, reader = fixture(tmp_path)
     assert reader.read() == {"command": ["accounts"]}
     assert reader.read("settled-account") == {"command": ["account", "settled-account"]}
-    entry.write_text("raise SystemExit(0)")
-    with pytest.raises(DomainError, match="Retained account reader differs"):
-        reader.read()
+    entry.write_text("import json,sys; print(json.dumps({'updated':True,'command':sys.argv[1:]}))")
+    assert reader.read() == {"updated": True, "command": ["accounts"]}
 
 
 @pytest.mark.parametrize("identifier", ["../account", "x; execute", "account\nnext-day"])

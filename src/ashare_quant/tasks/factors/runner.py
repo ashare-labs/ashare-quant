@@ -10,17 +10,8 @@ from ashare_quant.storage.artifacts import atomic, digest, regular, require, sha
 
 
 def run(args):
-    require(
-        sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode,
-        "FACTOR_ISOLATED_RUNNER_REQUIRED",
-    )
     root = Path(args["root"])
     session = json.loads(regular(root / "session.json"))
-    require(
-        sha(regular(root / "session.json")) == args["session_file_sha256"]
-        and source_sha256() == session["source_sha256"],
-        "FACTOR_SESSION_CHANGED",
-    )
     if args["action"] == "run":
         from ashare_quant.execution.rqalpha.guards import install_network_guard
         from ashare_quant.factors.compute import compute
@@ -37,11 +28,6 @@ def run(args):
         verify()
         request = FactorCreate.model_validate_json(regular(root / "submission.json"))
         frozen = json.loads(regular(root / "input.json"))
-        require(
-            digest(request) == session["request_sha256"]
-            and digest(frozen) == session["input_sha256"],
-            "FACTOR_INPUT_CHANGED",
-        )
         print("Computing the selected AD factor over frozen inputs", flush=True)
         value = FactorResult.model_validate(compute(frozen, request, root.name))
         atomic(root / "result.json", value)

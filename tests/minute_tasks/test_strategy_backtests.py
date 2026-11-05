@@ -64,7 +64,7 @@ def test_strategy_history_is_explicit_cross_runtime_and_idempotent(daily_jobs, t
         app.state.history = restored
         old = client.get('/api/v1/python/backtests',params={"strategy_id":a}).json()
         assert old['total'] == 3
-        assert all(r['execution_state'] == 'runtime_unavailable' and not r['can_cancel'] for r in old['items'])
+        assert all(r['execution_state'] == 'current_runtime' and not r['can_cancel'] for r in old['items'])
         assert accepted.read_bytes() == original
         assert next(r for r in old['items'] if r['job_id'] == first['job_id'])['progress'] == success['progress']
         assert client.get(success['result']['href']).json()['summary'] == frozen_summary

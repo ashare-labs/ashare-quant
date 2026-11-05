@@ -74,9 +74,6 @@ def execution_presentation(status, manifest, current_source):
     if manifest.get("schema_version") not in ACTIVE_SCHEMAS:
         state = "retired_family"
         reason = {"code": "TASK_FAMILY_RETIRED", "message": "此任务家族已退役，保留只读历史；新研究请提交自定义 Python。"}
-    elif manifest.get("service_identity", {}).get("source_sha256") != current_source:
-        state = "runtime_unavailable"
-        reason = {"code": "M2_JOB_SERVICE_CHANGED", "message": "任务绑定旧运行时，当前 worker 不会执行；可读取历史，或明确创建新研究。"}
     else:
         state, reason = "current_runtime", None
     display = status

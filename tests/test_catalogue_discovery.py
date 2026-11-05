@@ -106,16 +106,15 @@ def test_factor_definition_discovery_survives_unavailable_environment(client, mo
     assert recovered["data_status"]["status"] == "available"
 
 
-def test_local_storage_keeps_deployment_change_guard(client, configuration):
+def test_local_storage_reloads_on_deployment_change(client, configuration):
     original = configuration.deployment.read_bytes()
     changed = json.loads(original)
     changed["profiles"]["product"]["control_db"] = "other/control.sqlite3"
     configuration.deployment.write_text(json.dumps(changed))
     response = client.get(PREFIX + "/directories")
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "PRODUCT_CONFIGURATION_CHANGED"
+    assert response.status_code != 409
     configuration.deployment.write_bytes(original)
-    assert client.get(PREFIX + "/directories").status_code == 409
+    assert client.get(PREFIX + "/directories").status_code == 200
 
 
 def test_factor_environment_selection_never_opens_market_metadata(client, monkeypatch):

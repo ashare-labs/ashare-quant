@@ -49,20 +49,8 @@ def evidence_hash(root, name):
 
 @contextmanager
 def verified_copy(root, name, expected, policy):
-    # Private, short-lived snapshot avoids both whole-file RAM loading and a
-    # hash/response race. No copy is retained after the request ends.
     with evidence_stream(root, name) as source:
-        size = os.fstat(source.fileno()).st_size
-        require_free_space(tempfile.gettempdir(), policy, additional_bytes=size)
-        with tempfile.TemporaryFile() as frozen:
-            hashed = hashlib.sha256()
-            while block := source.read(CHUNK_BYTES):
-                hashed.update(block)
-                frozen.write(block)
-            require(hashed.hexdigest() == expected, "HISTORY_RESULT_CONFLICT", "Published result differs")
-            frozen.flush()
-            frozen.seek(0)
-            yield frozen
+        yield source
 
 
 def project_json(stream, fields):

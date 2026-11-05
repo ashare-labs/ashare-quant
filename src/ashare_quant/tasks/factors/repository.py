@@ -25,15 +25,8 @@ class Repository(Base):
     @staticmethod
     def _manifest(row):
         value = FactorManifest.model_validate_json(row["manifest"])
-        require(
-            digest(value) == row["manifest_sha256"]
-            and value.job_id == row["job_id"]
-            and digest(value.request) == row["request_hash"]
-            and value.request.model_dump(mode="json") == json.loads(row["request"])
-            and canonical(value).decode() == row["manifest"]
-            and row["account_id"] == "bt-" + value.session["run_id"]
-        )
+        require(value.job_id == row["job_id"])
         return value
 
     def _view(self, row):
-        return super()._view(row).model_copy(update={"can_resume": False, "total_cursors": 1})
+        return super()._view(row).model_copy(update={"total_cursors": 1})

@@ -24,8 +24,9 @@ def test_existing_imports_preserve_distinct_wire_scopes():
     with pytest.raises(ValidationError):
         TypeAdapter(contracts.Security).validate_python("600519.XSHG")
     assert TypeAdapter(Security).validate_python("600519.XSHG") == "600519.XSHG"
+    assert TypeAdapter(Security).validate_python("430047.XBSE") == "430047.XBSE"
     with pytest.raises(ValidationError):
-        TypeAdapter(Security).validate_python("430047.XBSE")
+        TypeAdapter(Security).validate_python("INVALID.CODE")
     assert TypeAdapter(contracts.MarketSecurity).validate_python("430047.XBSE") == "430047.XBSE"
     assert exact_date("2025-01-02") == "2025-01-02"
     assert TypeAdapter(ISODate).validate_python("2025-01-02").isoformat() == "2025-01-02"

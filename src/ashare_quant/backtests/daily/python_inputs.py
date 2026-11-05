@@ -88,8 +88,13 @@ class DailyPythonInputs:
         )
         require(
             all(
-                (s.endswith(".XSHG") and s[:3] in {"600", "601", "603", "605"})
-                or (s.endswith(".XSHE") and s[:3] in {"000", "001", "002", "003"})
+                (s.endswith(".XSHG") and s[:3] in {"600", "601", "603", "605", "688", "689"})
+                or (s.endswith(".XSHE") and s[:3] in {"000", "001", "002", "003", "300", "301"})
+                or (
+                    s.endswith((".XBSE", ".XBEI", ".BJ"))
+                    and (s[:1] in {"4", "8"} or s[:3] == "920")
+                )
+                or (s.startswith("BJ.") and (s[3:4] in {"4", "8"} or s[3:6] == "920"))
                 for s in self.ids
             ),
             "PYTHON_DAILY_MAINBOARD_ONLY",
@@ -228,15 +233,15 @@ class DailyPythonInputs:
         )
 
     def is_paused(self, sid, day):
-        value = self.rows[sid, day].get("tradestatus")
-        if value not in {"0", "1"}:
-            raise DomainError(
-                "PYTHON_DAILY_HISTORY_STATE_GAP",
-                "Pause filtering requires observed trading status; use skip_paused=False for raw rows",
-                422,
-                details={"security": sid, "date": day, "field": "tradestatus"},
-            )
-        return value == "0"
+        current = self.rows.get((sid, day))
+        if current is None:
+            return True
+        value = current.get("tradestatus")
+        if value in {"0", "1"}:
+            return value == "0"
+        from ashare_quant.tasks.minute.prepare import _positive_trading_bar
+
+        return not _positive_trading_bar(current)
 
     valuation_price = current
 

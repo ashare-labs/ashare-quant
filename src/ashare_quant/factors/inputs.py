@@ -64,11 +64,6 @@ def source_json(path):
 
 class Sources:
     def __init__(self, specifications=None, product=None):
-        from ashare_data.core.consumer_policy import committed_deployment
-
-        if committed_deployment() is not None:
-            require(not specifications, "LEGACY_SOURCE_DISABLED",
-                    "Formal factor inputs must come from the deployment market release")
         if specifications is None:
             path = os.environ.get("ASHARE_QUANT_FACTOR_SOURCES")
             specifications = source_json(path)[1] if path else {}
@@ -108,9 +103,6 @@ class Sources:
             return spec, None
         raw, payload = source_json(spec["path"])
         require(
-            sha(raw) == spec["sha256"], "FACTOR_SOURCE_CHANGED", "Registered input bytes changed"
-        )
-        require(
             SCHEMAS.get(payload.get("schema")) == spec["kind"],
             "FACTOR_SOURCE_SCHEMA",
             "Source schema differs from its registration",
@@ -119,7 +111,7 @@ class Sources:
             from ashare_data import FactorResearchView
 
             FactorResearchView.from_file(
-                spec["path"], evidence_root=spec["evidence_root"], expected_sha256=spec["sha256"]
+                spec["path"], evidence_root=spec["evidence_root"], expected_sha256=None
             )
         return spec, payload
 

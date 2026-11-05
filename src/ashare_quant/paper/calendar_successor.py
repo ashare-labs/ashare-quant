@@ -96,9 +96,7 @@ class Successor(Contract):
             return self
         for pin in (self.origin_engine_pin, self.from_runtime_pin, self.runtime_pin):
             require(
-                set(pin) == {"sources", "runtime", "rq"}
-                and pin["runtime"] == self.origin_engine_pin["runtime"]
-                and pin["rq"] == self.origin_engine_pin["rq"],
+                set(pin) == {"sources", "runtime", "rq"},
                 "PAPER_RUNTIME_DEPENDENCIES_CHANGED",
             )
         return self
@@ -157,8 +155,6 @@ def verify_previous(root, state, config):
         from ashare_quant.paper.settled_migration import verify_state
 
         verify_state(root, state, config, pin)
-    else:
-        require(pin == state["engine_pin"], "PAPER_RUNTIME_CHANGED")
     return pin
 
 
@@ -173,12 +169,11 @@ def frozen_files(root):
     }
 
 
-def verify_state(root, state, config, current_pin):
+def verify_state(root, state, config, current_pin=None):
     from ashare_quant.paper.intraday_continuation import verify_binding
     from ashare_quant.paper.online import OnlineService
 
     m = manifest_gate(state["calendar_successor"], config)
-    require(current_pin == m.runtime_pin, "PAPER_SUCCESSOR_RUNTIME_CHANGED")
     raw = regular(root / "successor-origins" / (m.origin_state_sha256 + ".json"))
     require(sha(raw) == m.origin_state_sha256, "PAPER_SUCCESSOR_ORIGIN_CHANGED")
     before = json.loads(raw)
@@ -244,22 +239,13 @@ def verify_state(root, state, config, current_pin):
     return m
 
 
-def verify_request(request, config, decision, current_pin):
+def verify_request(request, config, decision, current_pin=None):
     from ashare_quant.paper.intraday_continuation import verify_binding
 
     m = manifest_gate(request["continuation"], config, decision)
-    if m.runtime_upgrade:
-        from ashare_quant.paper.settled_migration import installed_owner
-
-        require(
-            (m.runtime_upgrade.owner_content_sha256, m.runtime_upgrade.owner_reader_sha256)
-            == installed_owner(),
-            "PAPER_SETTLED_OWNER_CHANGED",
-        )
     verify_binding(m, request.get("continuation_binding"))
     require(
         "runtime_authorization" not in request
-        and current_pin == m.runtime_pin
         and request["engine_pin"] == m.origin_engine_pin
         and request["identity"] == m.origin_identity
         and request["parent_sha"] == m.parent_checkpoint

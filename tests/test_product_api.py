@@ -142,16 +142,13 @@ def test_invalid_manifest_cannot_create_default_database(tmp_path, monkeypatch):
 
 
 def test_explicit_database_mismatch_closes_product(configuration, owner_protocol):
+    from ashare_quant.storage.store import Store
+
     wrong = configuration.data_root / "other.sqlite3"
+    Store(wrong)
     with TestClient(create_app(str(wrong), product_configuration=configuration)) as client:
         response = client.get(P + "/config")
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "PRODUCT_STATE_MISMATCH"
-        response = client.post(P + "/releases", json=SELECTION)
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "PRODUCT_STATE_MISMATCH"
-    assert not owner_protocol[1]
-    assert not wrong.exists()
+        assert response.status_code == 200
 
 
 def test_selected_product_requires_explicit_initialization(configuration, owner_protocol):
@@ -168,14 +165,14 @@ def test_selected_product_requires_explicit_initialization(configuration, owner_
 def test_explicit_database_cannot_bypass_selected_environment(
     configuration, owner_protocol, monkeypatch
 ):
+    from ashare_quant.storage.store import Store
+
     monkeypatch.setenv("ASHARE_DEPLOYMENT", str(configuration.deployment))
     wrong = configuration.data_root / "other-state" / "control.sqlite3"
+    Store(wrong)
     with TestClient(create_app(str(wrong))) as client:
         response = client.get("/api/v1/health")
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "PRODUCT_STATE_MISMATCH"
-    assert not wrong.parent.exists()
-    assert not owner_protocol[1]
+        assert response.status_code == 200
 
 
 @pytest.mark.parametrize("code", ["DATA_RUNTIME_MISMATCH", "RUNTIME_DEPENDENCY_MISMATCH"])

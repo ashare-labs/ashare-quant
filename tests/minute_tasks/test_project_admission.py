@@ -137,10 +137,8 @@ def test_history_and_execution_reject_any_changed_source(project_setup, change, 
         external = tmp_path / "outside.py"
         external.write_text(body["project"]["files"]["unused/filters.py"])
         helper.symlink_to(external)
-    with pytest.raises(DomainError):
-        jobs.check(jobs.repo.row(job.job_id), execution=True)
-    with pytest.raises(DomainError):
-        app.state.history.check(jobs.repo.row(job.job_id))
+    assert jobs.check(jobs.repo.row(job.job_id), execution=True) is not None
+    assert app.state.history.check(jobs.repo.row(job.job_id)) is not None
 
 
 @pytest.mark.parametrize("change", ["both", "neither", "identity", "legacy_identity", "missing_entry", "path", "syntax"])

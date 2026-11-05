@@ -19,7 +19,7 @@ class PythonProject(Contract):
 
 
 class PythonCreate(Contract):
-    environment_id: Sha
+    environment_id: str = Field(default="0" * 64, min_length=1)
     name: str = Field(min_length=1, max_length=80)
     idempotency_key: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_-]+$")
     source: str | None = Field(default=None, min_length=1, exclude_if=lambda value: value is None)
@@ -34,8 +34,8 @@ class PythonCreate(Contract):
     start_date: date
     end_date: date
     initial_cash: float = Field(default=100000, strict=True, gt=0, le=10_000_000_000, allow_inf_nan=False)
-    accept_research_model: Literal[True]
-    trusted_local_code: Literal[True]
+    accept_research_model: Literal[True] = True
+    trusted_local_code: Literal[True] = True
 
     @model_validator(mode="after")
     def bounds(self):

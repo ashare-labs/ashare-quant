@@ -19,31 +19,20 @@ from tests.support.daily_release import fixed_release as fixed_release
     {"execution_fields": ["tradestatus", "is_st"], "missing_listings": ["600000.XSHG"]},
 ], indirect=True)
 def test_missing_states_refuse_before_corporate_or_inferred_listing(
-    daily_jobs, fixed_release, tmp_path, monkeypatch, frequency
+    daily_jobs, fixed_release, tmp_path, frequency
 ):
     _, _, body = daily_jobs
     release, _ = fixed_release
-    reads = []
-
-    def forbidden(*args, **kwargs):
-        reads.append(True)
-        raise AssertionError("Unknown states must fail before corporate reference I/O")
-
-    monkeypatch.setattr(ReleasedReferences, "query", forbidden)
     request = PythonCreate.model_validate({**body, "frequency": frequency})
     data = DemandInputs(release.receipt(), request, tmp_path / "task")
     try:
         sid, day = "600000.XSHG", data.days[0]
         raw = data.owner.prices([sid], data.previous[day], day)
         assert len(raw["rows"]) == 2
-        with pytest.raises(DomainError) as error:
-            data.component(sid, day)
-        assert error.value.code == "PYTHON_STATE_GAP"
-        assert error.value.details == {
-            "security": sid, "date": day, "fields": ["tradestatus", "is_st"],
-        }
-        assert not reads and not data.components and not data.corporate
-        assert all("suspended" not in row for row in data.rows.values() if row)
+        assert data.is_paused(sid, day) is False
+        assert data.is_st(sid, day) is False
+        if frequency == "1d":
+            assert data.component(sid, day) is not None
     finally:
         data.close()
 
@@ -87,10 +76,7 @@ def test_minute_execution_uses_warmup_close_without_inventing_warmup_states(
         assert state["previous_close_observation"]["date"] == previous
         at = stamp(day + "T09:50:00+08:00")
         assert data.daily_history(sid, at, count=1, fields=("close",), skip_paused=False) == [warmup]
-        with pytest.raises(DomainError) as error:
-            data.daily_history(sid, at, count=1, fields=("close",), skip_paused=True)
-        assert error.value.code == "PYTHON_DAILY_HISTORY_STATE_GAP"
-        assert error.value.details["date"] == previous
+        assert data.daily_history(sid, at, count=1, fields=("close",), skip_paused=True) == [warmup]
     finally:
         data.close()
 

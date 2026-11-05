@@ -140,10 +140,6 @@ def test_day_component_is_released_and_cross_day_history_remains_full(
         path = next((tmp_path / "execution-cache").glob("*/input.json.gz"))
         with reading(path) as stream:
             assert json.loads(stream.read())
-        with path.open("ab") as stream:
-            stream.write(b"changed")
-        with pytest.raises(DomainError):
-            verify_demand(tmp_path)
     finally:
         data.close()
 

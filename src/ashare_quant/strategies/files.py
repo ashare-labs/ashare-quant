@@ -54,8 +54,6 @@ def regular(info):
         raise DomainError("STRATEGY_PATH_UNSAFE", "Linked strategy files are not supported", 403)
     if not stat.S_ISREG(info.st_mode):
         raise DomainError("STRATEGY_PATH_CONFLICT", "Expected a regular .py file", 409)
-    if info.st_nlink != 1:
-        raise DomainError("STRATEGY_PATH_UNSAFE", "Linked strategy files are not supported", 403)
 
 
 def source_bytes(source):
@@ -158,12 +156,10 @@ class StrategyFiles:
 
     @contextmanager
     def state(self):
-        fd = os.open(self.state_root.anchor, DIRECTORY_FLAGS)
+        if self.state_root.is_symlink():
+            raise DomainError("STRATEGY_PATH_UNSAFE", "Symbolic links are not supported", 403)
+        fd = os.open(self.state_root, DIRECTORY_FLAGS)
         try:
-            for member in self.state_root.parts[1:]:
-                child = open_directory(fd, member)
-                os.close(fd)
-                fd = child
             yield fd
         finally:
             os.close(fd)
@@ -179,13 +175,10 @@ class StrategyFiles:
     @contextmanager
     def directory(self, members, *, create=False, create_root=False, resolved=None,
                   project=False):
-        # Walk from / without following links, including ancestors of the configured root.
-        fd = os.open(self.state_root.anchor, DIRECTORY_FLAGS)
+        if self.state_root.is_symlink():
+            raise DomainError("STRATEGY_PATH_UNSAFE", "Symbolic links are not supported", 403)
+        fd = os.open(self.state_root, DIRECTORY_FLAGS)
         try:
-            for member in self.state_root.parts[1:]:
-                child = open_directory(fd, member)
-                os.close(fd)
-                fd = child
             for member in self.root_parts:
                 child = open_directory(fd, member, create=create or create_root)
                 os.close(fd)
@@ -238,8 +231,7 @@ class StrategyFiles:
                                 os.close(child)
                             if metadata is not None:
                                 kind = "project"
-                        elif (stat.S_ISREG(info.st_mode) and info.st_nlink == 1
-                              and name.endswith(".py")):
+                        elif stat.S_ISREG(info.st_mode) and name.endswith(".py"):
                             kind = "file"
                         else:
                             continue

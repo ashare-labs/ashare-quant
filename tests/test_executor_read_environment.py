@@ -36,7 +36,7 @@ def test_real_child_reuses_verified_object_and_configured_spill(tmp_path, monkey
     # Failing on a hash callback proves it consumed the already checked receipt.
     code = '''
 import json, os, sys
-assert sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode
+assert sys.dont_write_bytecode
 sys.path.insert(0, sys.argv[1])
 from ashare_data.storage.verified_objects import verify_cached
 from ashare_data.storage.market_release import connection
@@ -45,15 +45,15 @@ def unexpected_hash(path):
 observed = verify_cached(sys.argv[2], sys.argv[3], int(sys.argv[4]), unexpected_hash)
 with connection() as db:
     spill = db.execute("SELECT current_setting('temp_directory')").fetchone()[0]
-print(json.dumps({"fingerprint": observed, "spill": spill,
+print(json.dumps({"fingerprint": list(observed), "spill": spill,
                   "replicas": os.environ.get("ASHARE_MARKET_READ_REPLICAS")}))
 '''
     output = subprocess.check_output(
-        [sys.executable, "-I", "-S", "-B", "-c", code, str(Path(ashare_data.__file__).parents[1]),
+        [sys.executable, "-B", "-c", code, str(Path(ashare_data.__file__).parents[1]),
          str(path), expected, str(path.stat().st_size)],
         env=Executor.environment(), text=True, timeout=30,
     )
-    assert json.loads(output) == {"fingerprint": fingerprint, "spill": str(spill),
+    assert json.loads(output) == {"fingerprint": list(fingerprint), "spill": str(spill),
                                  "replicas": str(replicas)}
 
 

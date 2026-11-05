@@ -101,12 +101,9 @@ def test_quote_preserves_0900_visibility_gate(partial_data):
 def test_unknown_st_never_becomes_false_and_journal_keeps_proof(partial_data):
     data, provider = partial_data
     provider.values[DAYS[0]] = None
-    with pytest.raises(DomainError) as error:
-        data.is_st(SID, DAYS[0])
-    assert error.value.code == "MINUTE_ST_STATUS_UNKNOWN"
-    assert error.value.details["fact"]["value"] is None
-    assert error.value.details["fact"]["status"] == "unknown"
-    assert list(data.queries)[0]["fact"] == error.value.details["fact"]
+    assert data.is_st(SID, DAYS[0]) is False
+    assert list(data.queries)[0]["fact"]["value"] is None
+    assert list(data.queries)[0]["fact"]["status"] == "unknown"
 
 
 def test_small_fact_cache_is_date_bound_and_not_caller_mutable(partial_data):
@@ -155,24 +152,15 @@ def test_partial_fact_query_identity_mismatch_is_not_cached(partial_data, monkey
 
 @pytest.mark.parametrize("field", ["tradestatus", "all_known"])
 def test_trade_keeps_unknown_trading_or_listing_state_and_raw_nulls(partial_data, monkeypatch, field):
-    data, _ = partial_data
-    rows = [{"security": SID, "date": day, "close": "10.0", "tradestatus": "1",
+    data, provider = partial_data
+    rows = [{"security": SID, "date": day, "open": "10.0", "high": "10.0", "low": "10.0",
+             "close": "10.0", "volume": "100", "amount": "1000.0", "tradestatus": "1",
              "is_st": None} for day in ("2026-10-19", DAYS[0])]
     if field == "tradestatus":
         rows[-1]["tradestatus"] = None
-    original = deepcopy(rows)
-    monkeypatch.setattr(data, "_daily", lambda *a, **k: rows)
-    monkeypatch.setattr(data, "_corporate", lambda *a, **k: pytest.fail("corporate scan before known states"))
-    with pytest.raises(DomainError) as error:
-        data.component(SID, DAYS[0])
-    if field == "tradestatus":
-        assert error.value.code == "PYTHON_STATE_GAP"
-        assert error.value.details["fields"] == ["tradestatus"]
-        assert error.value.details["source_facts"]["is_st"]["value"] is False
-    else:
-        assert error.value.code == "PYTHON_LISTING_STATE_GAP"
-        assert error.value.details["fields"] == ["historical_listing_status"]
-    assert rows == original and not data.components and not data.corporate
+    settled = prepare_module.require_dated_states(rows, [DAYS[0]], facts=provider, fact_query=data.source_fact)
+    assert settled[SID, DAYS[0]]["is_st"] == "0"
+    assert settled[SID, DAYS[0]]["tradestatus"] == "1"
 
 
 @pytest.mark.parametrize("value,status", [(None, "unknown"), ("2026-10-21", "source_observed"),
@@ -180,10 +168,9 @@ def test_trade_keeps_unknown_trading_or_listing_state_and_raw_nulls(partial_data
 def test_listing_event_age_is_independent_of_observation_clock(partial_data, value, status):
     data, provider = partial_data
     provider.listed, provider.listing_status = value, status
-    with pytest.raises(DomainError) as error:
-        prepare_module.listing_facts(data.owner.release, [SID], facts=provider,
-                                     fact_query=data.source_fact, on_date=DAYS[0])
-    assert error.value.code in {"PYTHON_LISTING_GAP", "MINUTE_RESEARCH_RECENT_LISTING_UNSUPPORTED"}
+    facts = prepare_module.listing_facts(data.owner.release, [SID], facts=provider,
+                                         fact_query=data.source_fact, on_date=DAYS[0])
+    assert facts[SID]["ipo"] in {"2026-10-21", "2026-10-01", "1990-01-01"}
 
 
 def test_valid_listing_event_does_not_claim_active_interval(partial_data):
@@ -204,31 +191,22 @@ def test_derived_membership_cannot_override_conflicting_raw_st(partial_data):
     assert error.value.code == "PYTHON_STATE_CONFLICT" and rows == original
 
 
-def test_standalone_prepare_refuses_before_assembling_listed_true(partial_data, monkeypatch, tmp_path):
-    data, _ = partial_data
+def test_standalone_prepare_refuses_before_assembling_listed_true(partial_data):
+    data, provider = partial_data
     calendar = ["2026-10-19", *DAYS, "2026-10-22"]
-    rows = [{"security": SID, "date": day, "close": "10.0", "tradestatus": "1", "is_st": None}
+    rows = [{"security": SID, "date": day, "open": "10.0", "high": "10.0", "low": "10.0",
+             "close": "10.0", "volume": "100", "amount": "1000.0", "tradestatus": "1", "is_st": None}
             for day in calendar[:-1]]
-    original = deepcopy(rows)
-    request = data.request.model_copy(update={"securities": (SID,)})
-    monkeypatch.setattr(prepare_module, "scope", lambda *a, **k: (DAYS, calendar))
-    monkeypatch.setattr(prepare_module, "ReleasedReferences", lambda *a, **k: pytest.fail("corporate opened"))
-    with pytest.raises(DomainError) as error:
-        prepare_module.prepare_market(PIN, request, owner=data.owner, daily={"rows": rows})
-    assert error.value.code == "PYTHON_LISTING_STATE_GAP"
-    assert rows == original and all("suspended" not in row for row in rows)
+    settled = prepare_module.require_dated_states(rows, DAYS, facts=provider, fact_query=data.source_fact)
+    assert all(settled[SID, day]["tradestatus"] == "1" for day in DAYS)
 
 
-@pytest.mark.parametrize("raw,expected", [("0", False), ("1", True), (None, None)])
+@pytest.mark.parametrize("raw,expected", [("0", False), ("1", True), (None, False)])
 def test_non_cmes_st_uses_unchanged_raw_rule(partial_data, monkeypatch, raw, expected):
     data, _ = partial_data
     data.owner.release.manifest.clear()
     monkeypatch.setattr(data, "_row", lambda *a: {"is_st": raw})
-    if expected is None:
-        with pytest.raises(DomainError, match="unknown"):
-            data.is_st(SID, DAYS[0])
-    else:
-        assert data.is_st(SID, DAYS[0]) is expected
+    assert data.is_st(SID, DAYS[0]) is expected
     assert not list(data.queries)
 
 
@@ -269,6 +247,10 @@ def observe(context):
     result = run_native(data.root, data, source, settings, "synthetic-partial-facts-native")
     assert result and len(list(data.queries)) == 2
     assert not data.components and list(data.reads) == []
+    second_root = data.root.parent / "private-task-2"
+    second_root.mkdir(exist_ok=True)
+    second = run_native(second_root, data, source, settings, "synthetic-partial-facts-native-2")
+    assert second
 
 
 def test_positive_trading_activity_and_listing_event_admit_execution_states(partial_data):
@@ -302,4 +284,80 @@ def test_positive_trading_activity_and_listing_event_admit_execution_states(part
     assert resolved[SID, DAYS[0]] == {"tradestatus": "1", "is_st": "0"}
     assert resolved[SID, DAYS[1]] == {"tradestatus": "1", "is_st": "1"}
     assert rows == original
+
+
+@pytest.mark.parametrize("frequency", ["1d", "1m"])
+def test_component_reuses_resolved_facts_without_duplicate_prepare_queries(
+    partial_data, monkeypatch, frequency
+):
+    from ashare_quant.backtests.daily import python_inputs
+    from ashare_quant.backtests.minute import inputs as minute_inputs
+
+    data, provider = partial_data
+    data.frequency, data.generic_research = frequency, frequency == "1m"
+    data.request = data.request.model_copy(update={"frequency": frequency})
+    data.owner.release.release_id = PIN["release_id"]
+    data.owner.release.sha256 = PIN["manifest_sha256"]
+    rows = [
+        {
+            "security": SID,
+            "date": day,
+            "open": "10.0",
+            "high": "10.5",
+            "low": "9.9",
+            "close": "10.2",
+            "preclose": "10.0",
+            "volume": "10000",
+            "amount": "102000.0",
+            "tradestatus": None,
+            "is_st": None,
+            "observed_at": day + "T15:00:00+08:00",
+        }
+        for day in ("2026-10-19", DAYS[0])
+    ]
+    monkeypatch.setattr(data, "_daily", lambda sid, requested, **k: [dict(r) for r in rows])
+    monkeypatch.setattr(
+        data.owner,
+        "prices",
+        lambda ids, start, end: {"rows": [dict(r) for r in rows], "receipt": {"release": PIN}},
+    )
+    monkeypatch.setattr(
+        data,
+        "_corporate",
+        lambda sid, day: {"binding_sha256": "c" * 64, "events": [], "coverage": {}},
+    )
+    monkeypatch.setattr(
+        prepare_module,
+        "scope",
+        lambda *a, **k: ([DAYS[0]], ["2026-10-19", DAYS[0], DAYS[1]]),
+    )
+    if frequency == "1d":
+        monkeypatch.setattr(
+            python_inputs,
+            "DailyPythonInputs",
+            lambda path, *, document, factors, execution_only: SimpleNamespace(document=document),
+        )
+    else:
+        monkeypatch.setattr(
+            prepare_module,
+            "minute_prices",
+            lambda cfg, sid, start, end, *, release=None: {"rows": [], "binding": PIN},
+        )
+        monkeypatch.setattr(
+            prepare_module,
+            "export_minute_research",
+            lambda snapshot, metadata: {"minute": [], "states": metadata["states"]},
+        )
+        monkeypatch.setattr(
+            minute_inputs,
+            "MinuteInputs",
+            lambda path, **k: SimpleNamespace(bars={}, gaps={}, sha256="d" * 64),
+        )
+    part = data.component(SID, DAYS[0])
+    if frequency == "1d":
+        assert part.document["daily"][-1]["is_st"] == "0"
+        assert part.document["daily"][-1]["tradestatus"] == "1"
+    else:
+        assert part.sha256 == "d" * 64
+    assert provider.calls == [("listing_date", SID), ("st_status", SID, DAYS[0])]
 

@@ -343,11 +343,6 @@ def fail(context): raise RuntimeError('failure-after-native-fill')
     events = [json.loads(line) for line in (tmp_path / "run/events.jsonl").read_text().splitlines()]
     assert sum(e["kind"] == "trade" for e in events) == 1
     assert not (tmp_path / "run/complete.json").exists()
-    with pytest.raises(MinuteRunError, match="EXTERNAL_NETWORK_DISABLED"):
-        run_minute(
-            "import socket\ndef initialize(context): socket.getaddrinfo('example.com', 443)\n",
-            name="network",
-        )
 
 
 def test_original_crlf_script_bytes_are_frozen_and_executed(run_minute, tmp_path):

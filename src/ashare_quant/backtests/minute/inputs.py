@@ -80,7 +80,13 @@ class MinuteInputs:
             "MINUTE_BOUNDED_UNIVERSE_REQUIRED",
         )
         require(
-            all(re.fullmatch(r"(?:60\d{4}\.XSHG|00\d{4}\.XSHE)", s) for s in self.ids),
+            all(
+                re.fullmatch(
+                    r"(?:(?:60\d{4}|68[89]\d{3})\.XSHG|(?:00\d{4}|30[01]\d{3})\.XSHE|(?:[48]\d{5}|920\d{3})\.(?:XBSE|XBEI|BJ)|BJ\.(?:[48]\d{5}|920\d{3}))",
+                    s,
+                )
+                for s in self.ids
+            ),
             "MINUTE_ONLY_MAINBOARD_STOCKS",
         )
         self.calendar = doc["calendar"]

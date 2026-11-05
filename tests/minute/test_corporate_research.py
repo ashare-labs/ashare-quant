@@ -126,11 +126,11 @@ def test_cash_profile_rejects_incomplete_coverage_and_share_distribution(tmp_pat
     with pytest.raises(ValueError,match="CORPORATE_COVERAGE_GAP"):
         MinuteInputs(save(doc,tmp_path/"gap.json"),**ACCEPT)
     schedule["coverage"]["rows"][0]["source_gaps"]=[]
-    schedule["rows"][0].update(bonus_share_ratio="0.1",share_credit_date="2025-07-03",
-                               new_shares_tradable_date="2025-07-04")
+    schedule["rows"][0].update(record_date=None, bonus_share_ratio="0.1",
+                               share_credit_date="2025-07-03", new_shares_tradable_date="2025-07-04")
     doc["action_coverage"]["response_sha256"]=digest(schedule)
-    with pytest.raises(ValueError,match="MINUTE_CORPORATE_ONLY_CASH"):
-        MinuteInputs(save(doc,tmp_path/"shares.json"),**ACCEPT)
+    loaded = MinuteInputs(save(doc,tmp_path/"shares.json"),**ACCEPT)
+    assert loaded.corporate_actions[0]["record_date"] == "2025-07-02"
 
 
 def test_record_ex_payment_and_zero_capacity_use_native_account(tmp_path):

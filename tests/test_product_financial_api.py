@@ -22,4 +22,7 @@ def test_financial_routes_keep_cutoff_mode_and_do_not_create_jobs(configuration,
         assert client.post('/api/v1/product/financial/point',json=body,headers={'Origin':'https://example.com'}).status_code==403
         response=client.get('/api/v1/product/financial/coverage',params={'security':'001914.XSHE','day':'2012-01-04'})
         assert response.status_code==200 and response.json()['day']=='2012-01-04'
+        for bj_sec in ('BJ.920000', '920000.XBEI', '920000.BJ', '920000.XBSE'):
+            bj_resp = client.get('/api/v1/product/financial/coverage', params={'security': bj_sec})
+            assert bj_resp.status_code == 200 and bj_resp.json()['security'] == bj_sec
         assert client.get('/api/v1/product/financial/coverage',params={'unexpected':1}).status_code==422

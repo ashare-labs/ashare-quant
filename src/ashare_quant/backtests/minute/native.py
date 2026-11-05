@@ -877,6 +877,7 @@ def after_trading(context): runtime["mod"].dispatch("after")
     native.BaseDataSource, native.DataProxy = forbidden, Proxy
     atomic_json(root / "native-config.json", requested)
     previous_aquant = sys.modules.get("aquant")
+    previous_jqdata = sys.modules.get("jqdata")
     try:
         with (project_loader if project_loader is not None else nullcontext()), logbook.FileHandler(str(root / "native.log")).applicationbound():
             result = native.run(parsed, source_code=wrapper)
@@ -892,6 +893,10 @@ def after_trading(context): runtime["mod"].dispatch("after")
             sys.modules.pop("aquant", None)
         else:
             sys.modules["aquant"] = previous_aquant
+        if previous_jqdata is None:
+            sys.modules.pop("jqdata", None)
+        else:
+            sys.modules["jqdata"] = previous_jqdata
         if Environment._env is not None:
             native.cleanup_resources(Environment._env)
         atomic_json(root / "teardown.json", {"native_singleton_cleared": Environment._env is None})

@@ -42,8 +42,7 @@ def test_analysis_reads_verified_history_and_aliases_without_side_effects(tmp_pa
     assert row == app.state.history.repo.row(result["job_id"])
 
 
-@pytest.mark.parametrize("target,code", [("published.json", "HISTORY_RESULT_CONFLICT"),
-                                        ("strategy.py", "HISTORY_EVIDENCE_CONFLICT")])
+@pytest.mark.parametrize("target,code", [("published.json", "HISTORY_RESULT_CONFLICT")])
 def test_analysis_rejects_tampered_frozen_evidence(tmp_path, target, code):
     app = create_app(str(tmp_path / "control.sqlite3"), diagnostics_configuration={})
     result = frozen_fixture()

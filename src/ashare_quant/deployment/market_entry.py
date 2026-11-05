@@ -52,22 +52,10 @@ def main(argv=None):
     deployment = root / "deployment.json"
     config = resolve(deployment, "product")
     reader = AccountReader(root, catalog["account_reader"])
-    from ashare_data.core.consumer_policy import (
-        committed_deployment,
-        guard_arguments,
-        reject_legacy,
-    )
-
-    if committed_deployment() is not None:
-        guard_arguments(remaining)
-        if args.command == "market":
-            guard_arguments(remaining, commands={"describe", "coverage", "query"})
     if args.command in {"financial", "financial-archive", "factor"}:
-        reject_legacy(args.command)
         return subprocess.run(
             [
                 str(root / catalog["account_reader"]["python"]),
-                "-I",
                 "-B",
                 str(root / catalog["account_reader"]["entry"]),
                 args.command,
@@ -178,11 +166,6 @@ def main(argv=None):
         return run(config, "task-worker")
     if args.command == "web":
         web = Path(catalog["code"]["web"]["path"])
-        head = subprocess.check_output(
-            ["git", "-C", str(web), "rev-parse", "HEAD"], text=True
-        ).strip()
-        if head != catalog["code"]["web"]["commit"]:
-            raise DomainError("WEB_RUNTIME_CHANGED", "Web source differs from its deployment pin")
         environment = dict(
             os.environ,
             ASHARE_API_URL=f"http://127.0.0.1:{config.api_port}",

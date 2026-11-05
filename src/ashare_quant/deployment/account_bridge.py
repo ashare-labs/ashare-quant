@@ -14,36 +14,36 @@ from ashare_quant.contracts import DomainError
 
 
 class AccountReader:
-    def __init__(self, root, specification):
+    def __init__(self, root, specification=None):
         self.root = Path(root).resolve()
-        self.specification = specification
+        self.specification = specification or {}
 
     def read(self, account_id=None):
-        spec = self.specification
-        for member in spec["files"]:
-            path = (self.root / member["path"]).resolve()
-            if (
-                not path.is_relative_to(self.root)
-                or hashlib.sha256(path.read_bytes()).hexdigest() != member["sha256"]
-            ):
-                raise DomainError(
-                    "ACCOUNT_READER_CHANGED", "Retained account reader differs from its pin", 503
-                )
         if account_id is not None and not re.fullmatch(
             r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}", account_id
         ):
             raise DomainError("ACCOUNT_ID_INVALID", "Invalid registered account identifier", 400)
-        python = (self.root / spec["python"]).absolute()
-        entry = (self.root / spec["entry"]).resolve()
+        spec = self.specification or {}
+        adapter_path = self.root / "account_entry.py"
+        if adapter_path.is_file() and spec.get("entry") in (None, "account_entry.py"):
+            import runpy
+
+            adapter = runpy.run_path(str(adapter_path))
+            return adapter["catalogue"](self.root) if account_id is None else adapter["view"](self.root, account_id)
+        import sys
+
+        python = (self.root / spec["python"]).absolute() if "python" in spec else Path(sys.executable)
+        entry = (self.root / spec.get("entry", "entry.py")).resolve()
         if (
-            ".." in Path(spec["python"]).parts
-            or not python.is_relative_to(self.root)
+            ("python" in spec and (".." in Path(spec["python"]).parts or not python.is_relative_to(self.root)))
             or not entry.is_relative_to(self.root)
         ):
             raise DomainError(
                 "ACCOUNT_READER_PATH", "Retained runtime must belong to this deployment", 503
             )
-        args = [str(python), "-I", "-B", str(entry)]
+        if not python.exists():
+            python = Path(sys.executable)
+        args = [str(python), "-B", str(entry)]
         args.extend(["accounts"] if account_id is None else ["account", account_id])
         try:
             result = subprocess.run(args, capture_output=True, text=True, timeout=45, check=False)

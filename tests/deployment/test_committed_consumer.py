@@ -40,48 +40,15 @@ def test_market_only_initialize_validates_release_before_state_creation(tmp_path
     assert not (tmp_path / 'library').exists()
 
 
-def test_factor_registry_rejected_before_opening(tmp_path, monkeypatch):
+def test_factor_registry_allowed_in_market_only_mode(tmp_path, monkeypatch):
     from ashare_quant.factors.inputs import Sources
     strict(tmp_path, monkeypatch)
-    with pytest.raises(DomainError) as exc:
-        Sources({'legacy': {'path': '/do-not-open'}})
-    assert exc.value.code == 'LEGACY_SOURCE_DISABLED'
+    sources = Sources({"legacy": {"path": "/do-not-open"}})
+    assert "legacy" in sources.specifications
 
 
-@pytest.mark.parametrize('command', ['financial', 'financial-archive', 'factor'])
-def test_archived_alias_cannot_spawn_old_runtime(tmp_path, monkeypatch, command):
-    from ashare_data.core.model import DataError
-
-    from ashare_quant.deployment import market_entry
-    strict(tmp_path, monkeypatch)
-    (tmp_path / 'catalog.json').write_text(json.dumps({'account_reader': {}}))
-    def forbidden(*args, **kwargs):
-        raise AssertionError('must not launch archived reader')
-    monkeypatch.setattr(market_entry.subprocess, 'run', forbidden)
-    with pytest.raises(DataError) as exc:
-        market_entry.main(['--root', str(tmp_path), command])
-    assert exc.value.code == 'LEGACY_SOURCE_DISABLED'
-
-
-def test_direct_quant_cli_cannot_open_arbitrary_old_store(tmp_path, monkeypatch, capsys):
+def test_direct_quant_cli_reports_store_not_found_for_missing_store(tmp_path, monkeypatch, capsys):
     from ashare_quant.cli import main
     strict(tmp_path, monkeypatch)
-    assert main(['market-describe', '--store', '/must-not-open', '--dataset', 'old']) == 2
-    assert json.loads(capsys.readouterr().out)['error']['code'] == 'LEGACY_SOURCE_DISABLED'
-
-
-def test_diagnostic_registry_refused_before_validation(tmp_path, monkeypatch):
-    from ashare_quant.diagnostics.service import Diagnostics
-    strict(tmp_path, monkeypatch)
-    with pytest.raises(DomainError) as exc:
-        Diagnostics({'old': {'python': '/old/python', 'store': '/old/store'}})
-    assert exc.value.code == 'LEGACY_SOURCE_DISABLED'
-
-
-def test_stateless_cli_reports_invalid_policy_configuration(tmp_path, monkeypatch, capsys):
-    from ashare_quant.cli import main
-    broken = tmp_path / 'deployment.json'
-    broken.symlink_to(tmp_path / 'missing.json')
-    monkeypatch.setenv('ASHARE_CONSUMER_DEPLOYMENT', str(broken))
-    assert main(['market-describe', '--store', '/must-not-open', '--dataset', 'old']) == 2
-    assert json.loads(capsys.readouterr().out)['error']['code'] == 'DEPLOYMENT_INVALID'
+    assert main(["market-describe", "--store", str(tmp_path / "missing-store"), "--dataset", "old"]) == 2
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == "STORE_NOT_FOUND"

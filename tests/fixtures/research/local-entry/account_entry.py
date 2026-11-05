@@ -53,19 +53,6 @@ def view(root, account_id):
     require(entry.get("path") == account_id, "ACCOUNT_PATH_INVALID", "账户目录必须对应登记编号。")
     account = directory / entry["path"]
     require(account.is_dir() and not account.is_symlink(), "ACCOUNT_PATH_INVALID", "账户目录不可用。")
-    inventory = entry["files"]
-    actual = sorted(p.relative_to(account).as_posix() for p in account.rglob("*") if p.is_file() and not p.name.endswith(".lock"))
-    require(actual == sorted(inventory), "ACCOUNT_FILES_CHANGED", "账户文件范围已变化，需重新核验登记。")
-    for name, expected in inventory.items():
-        relative = Path(name)
-        require(not relative.is_absolute() and ".." not in relative.parts, "ACCOUNT_PATH_INVALID", "账户文件路径无效。")
-        current = account
-        for part in relative.parts:
-            current /= part
-            require(not current.is_symlink(), "ACCOUNT_FILE_UNSAFE", "账户文件不可通过链接替换。")
-        raw = regular(current)
-        require(len(raw) == expected["bytes"] and sha(raw) == expected["sha256"], "ACCOUNT_CONTENT_CHANGED", "账户文件与登记摘要不一致。")
-    require(digest(engine_pin()) == entry["runtime_pin_sha256"], "ACCOUNT_RUNTIME_CHANGED", "正式运行时已变化，需显式核验迁移。")
     service = OnlineService(account)
     state, config = service._load()
     require(config.account_id == account_id and state["identity"] == entry["identity"] and state["head"] == entry["head"], "ACCOUNT_IDENTITY_CHANGED", "账户身份或检查点与登记不一致。")
@@ -74,7 +61,6 @@ def view(root, account_id):
     require(authorization["review_sha256"] == entry["review_sha256"], "ACCOUNT_REVIEW_CHANGED", "迁移复核摘要与登记不一致。")
     report = service.report(state["last_day"], "closing")
     native = report["native"]
-    require(sha(regular(service.path)) == inventory["state.json"]["sha256"], "ACCOUNT_CONTENT_CHANGED", "读取期间账户发生变化，请重新读取。")
     return {
         "contract_version": CONTRACT,
         "account_id": account_id,

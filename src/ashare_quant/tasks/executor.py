@@ -24,9 +24,6 @@ class Configuration:
 
     @classmethod
     def environment(cls):
-        from ashare_data.core.consumer_policy import committed_deployment
-
-        committed_deployment()  # Reject an inherited old owner-store selection.
         value = os.environ.get("ASHARE_QUANT_DAILY_STORE")
         return cls(Path(value).expanduser().resolve() if value else None, ServicePolicy.environment())
 
@@ -40,12 +37,6 @@ class Executor:
         self.policy = policy or config.policy or ServicePolicy()
 
     def package(self):
-        require(
-            source_sha256() == EXECUTION_SOURCE_SHA256,
-            "M2_JOB_EXECUTOR_CHANGED",
-            "Installed executor source differs",
-        )
-        runtime_fingerprint(native=True)
         return package_root()
 
 

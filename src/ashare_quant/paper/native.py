@@ -766,8 +766,6 @@ def main():
     from ashare_quant.paper.service import engine_pin
 
     current_pin = engine_pin()
-    if "continuation" not in request:
-        require(current_pin == request["engine_pin"], "PAPER_RUNTIME_CHANGED")
     require(
         request["identity"]
         == digest({"config": request["session"], "engine": request["engine_pin"]}),
@@ -834,7 +832,15 @@ def main():
         else None,
         continuation=request.get("continuation"),
         runtime_authorization=request.get("runtime_authorization"),
-        execution_runtime_pin=current_pin,
+        execution_runtime_pin=(
+            (
+                request["runtime_authorization"]["to_runtime_pin"]
+                if request.get("runtime_authorization")
+                else request["continuation"]["runtime_pin"]
+            )
+            if request.get("continuation")
+            else current_pin
+        ),
         online=online,
         intraday=session.model in INTRADAY_MODELS,
         intraday_partial=session.model

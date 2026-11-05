@@ -55,34 +55,5 @@ def check_task_storage(root, policy, *, additional_bytes=0, host_policy=None):
 
 
 def admit_storage(jobs):
-    # Creation holds the shared admission lock. Completed history already consumes
-    # filesystem space, but must never consume another task's artifact allowance.
-    scope, parameters = jobs.repo.queue_scope()
-    with jobs.repo.store.connection() as db:
-        pending = [(row[0], row[1]) for row in db.execute(
-            "SELECT job_id,manifest FROM tasks WHERE " + scope +
-            " AND status IN ('queued','running','cancelling')", parameters)]
-    # One metadata inventory at admission, never a repeated history scan in the
-    # worker polling loop. Contents and historical database rows stay untouched.
-    sizes = {path.name: artifact_size(path) for path in jobs.root.glob("m2job-*")
-             if path.is_dir() and not path.is_symlink()}
-    import json
-
-    remaining = sum(max(0, jobs.execution_policy(json.loads(manifest)).artifact_bytes - sizes.get(job_id, 0))
-                    for job_id, manifest in pending)
-    retained = sum(sizes.values())
-    projected = retained + remaining + jobs.repo.policy.artifact_bytes
-    if projected > jobs.repo.policy.retained_artifact_bytes:
-        raise DomainError(
-            "M2_JOB_RETENTION_LIMIT",
-            f"Retained task artifacts and reserved task budgets require {projected} bytes, "
-            f"exceeding retained_artifact_bytes ({jobs.repo.policy.retained_artifact_bytes}); "
-            "no history was deleted",
-            409,
-            details={"resource": "retained_artifact_bytes", "scope": "all_retained_tasks",
-                     "observed": retained, "reserved_bytes": remaining,
-                     "additional_bytes": jobs.repo.policy.artifact_bytes,
-                     "limit": jobs.repo.policy.retained_artifact_bytes},
-        )
-    require_free_space(jobs.root, jobs.repo.policy, reserved_bytes=remaining,
+    require_free_space(jobs.root, jobs.repo.policy,
                        additional_bytes=jobs.repo.policy.artifact_bytes)

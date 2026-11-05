@@ -132,12 +132,15 @@ def test_failure_location_and_module_cleanup(tmp_path, body, expected_line):
     assert loader not in sys.meta_path
 
 
-def test_legacy_import_diagnostic_in_helper_and_single_file_location(tmp_path):
-    project = freeze(tmp_path, {"main.py": "from . import helper\n", "helper.py": "import jqdata\n"})
+def test_legacy_import_alias_in_helper_and_single_file_location(tmp_path, monkeypatch):
+    api = ModuleType("aquant")
+    api.answer = 99
+    monkeypatch.setitem(sys.modules, "aquant", api)
+    project = freeze(tmp_path, {"main.py": "from . import helper\n", "helper.py": "import jqdata\nvalue = jqdata.answer\n"})
     loader = FrozenProject(tmp_path, project)
-    with pytest.raises(ModuleNotFoundError, match="AQUANT_LEGACY_IMPORT") as error, loader:
-        loader.load({})
-    assert source_location(error.value, tmp_path) == ("helper.py", 1)
+    with loader:
+        ns = loader.load({})
+        assert ns["helper"].value == 99
     try:
         exec(compile("raise ValueError('old strategy')", str(tmp_path / "strategy.py"), "exec"), {})
     except ValueError as exc:

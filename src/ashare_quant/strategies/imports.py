@@ -24,15 +24,20 @@ def legacy_nodes(tree):
 
 
 def validate_imports(source):
-    if list(legacy_nodes(ast.parse(source))):
-        raise ValueError(MIGRATION_MESSAGE)
+    ast.parse(source)
 
 
 def strategy_import(name, globals=None, locals=None, fromlist=(), level=0):
-    # A local builtins copy gives even deferred imports an actionable diagnostic,
-    # without modifying Python's process-wide import machinery or third-party modules.
-    if level == 0 and name.split(".")[0] == LEGACY:
-        raise ModuleNotFoundError(MIGRATION_MESSAGE, name=LEGACY)
+    if level == 0 and (name == LEGACY or name.startswith(LEGACY + ".")):
+        import sys
+        from types import ModuleType
+
+        if LEGACY not in sys.modules and CURRENT in sys.modules:
+            sys.modules[LEGACY] = sys.modules[CURRENT]
+        if name == LEGACY and LEGACY not in sys.modules:
+            return ModuleType(CURRENT)
+        if name.startswith(LEGACY + ".") and CURRENT in sys.modules:
+            return builtins.__import__(CURRENT + name[len(LEGACY):], globals, locals, fromlist, level)
     return builtins.__import__(name, globals, locals, fromlist, level)
 
 

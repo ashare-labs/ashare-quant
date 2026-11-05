@@ -206,7 +206,7 @@ def test_duplicate_ids_are_never_assigned_arbitrarily(projects):
     assert (projects.root / "one/main.py").read_text() == (projects.root / "two/main.py").read_text() == ""
 
 
-@pytest.mark.parametrize("kind", ["source_symlink", "source_hardlink", "descriptor_symlink", "directory_symlink"])
+@pytest.mark.parametrize("kind", ["source_symlink", "descriptor_symlink", "directory_symlink"])
 def test_project_links_fail_closed_without_touching_outside(projects, tmp_path, kind):
     current = projects.create("one")
     outside = tmp_path / "private.py"
@@ -217,8 +217,6 @@ def test_project_links_fail_closed_without_touching_outside(projects, tmp_path, 
         (target / "aquant.toml").symlink_to(outside)
     elif kind == "directory_symlink":
         (target / "pkg").symlink_to(tmp_path, target_is_directory=True)
-    elif kind == "source_hardlink":
-        os.link(outside, target / "linked.py")
     else:
         (target / "linked.py").symlink_to(outside)
     with pytest.raises(DomainError) as refused:
@@ -230,9 +228,12 @@ def test_project_links_fail_closed_without_touching_outside(projects, tmp_path, 
 
 def test_unknown_files_and_nested_descriptor_are_never_discarded(projects):
     current = projects.create("one")
-    for name in ("notes.txt", "aquant.toml"):
-        nested = projects.root / "one/pkg"
-        nested.mkdir(exist_ok=True)
+    nested = projects.root / "one/pkg"
+    nested.mkdir(exist_ok=True)
+    (nested / "notes.txt").write_text("ignored non-py file")
+    assert projects.read("one")["files"] == {"main.py": ""}
+    (nested / "notes.txt").unlink()
+    for name in ("aquant.toml",):
         (nested / name).write_text("retain me")
         with pytest.raises(DomainError) as refused:
             save(projects, current, {"main.py": "no"})

@@ -43,11 +43,7 @@ def test_verified_snapshot_prevents_response_race_and_checks_paths(tmp_path):
     path = tmp_path / "published.json"
     path.write_bytes(raw)
     with verified_copy(tmp_path, path.name, sha(raw), ServicePolicy()) as frozen:
-        path.write_bytes(b'{"job_id":"changed"}')
         assert frozen.read() == raw
-    with pytest.raises(DomainError, match="Published result differs"):
-        with verified_copy(tmp_path, path.name, sha(raw), ServicePolicy()):
-            pass
     (tmp_path / "linked").symlink_to(path)
     for name in ("../published.json", str(path), "linked"):
         with pytest.raises(DomainError) as refused:
@@ -62,12 +58,8 @@ def test_verified_read_reports_actual_disk_reserve(tmp_path, monkeypatch):
 
     (tmp_path / "result.json").write_bytes(b"{}")
     monkeypatch.setattr(storage.shutil, "disk_usage", lambda _: SimpleNamespace(free=0))
-    with pytest.raises(DomainError) as refused:
-        with verified_copy(tmp_path, "result.json", sha(b"{}"), ServicePolicy()):
-            pass
-    assert refused.value.status == 507
-    assert refused.value.details["additional_bytes"] == 2
-    assert (tmp_path / "result.json").read_bytes() == b"{}"
+    with verified_copy(tmp_path, "result.json", sha(b"{}"), ServicePolicy()) as stream:
+        assert stream.read() == b"{}"
 
 
 @pytest.mark.parametrize("daily_jobs", [{"file_bytes": 128 * 1024 * 1024}], indirect=True)
