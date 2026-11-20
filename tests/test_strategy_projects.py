@@ -206,6 +206,39 @@ def test_duplicate_ids_are_never_assigned_arbitrarily(projects):
     assert (projects.root / "one/main.py").read_text() == (projects.root / "two/main.py").read_text() == ""
 
 
+@pytest.mark.parametrize("failed_steps", [{2}, {3}, {2, 3}])
+def test_partial_project_exchange_reports_actual_outcome(projects, monkeypatch, failed_steps):
+    StrategyFiles(projects.files.state_root).mkdir("nested")
+    current = projects.create("nested/one")
+    original = os.rename
+    calls = 0
+
+    def rename(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls in failed_steps:
+            raise OSError(errno.EIO, "controlled exchange failure")
+        return original(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(project_module.os, "rename", rename)
+        with pytest.raises(DomainError) as refused:
+            save(projects, current, {"main.py": "updated"})
+    if failed_steps == {2}:
+        assert refused.value.details["save_state"] == "not_saved"
+        assert projects.read(current["path"]) == current
+        assert sorted(p.name for p in (projects.root / "nested").iterdir()) == ["one"]
+    else:
+        assert refused.value.code == "STRATEGY_SAVE_UNCERTAIN"
+        assert refused.value.details["save_state"] == "uncertain"
+        recovery = projects.root / refused.value.details["recovery_directory"]
+        assert (recovery / "main.py").read_text() == ""
+        if failed_steps == {3}:
+            assert projects.read(current["path"])["files"] == {"main.py": "updated"}
+        else:
+            assert not (projects.root / current["path"]).exists()
+
+
 @pytest.mark.parametrize("kind", ["source_symlink", "descriptor_symlink", "directory_symlink"])
 def test_project_links_fail_closed_without_touching_outside(projects, tmp_path, kind):
     current = projects.create("one")

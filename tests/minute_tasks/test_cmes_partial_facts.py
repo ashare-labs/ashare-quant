@@ -170,7 +170,7 @@ def test_listing_event_age_is_independent_of_observation_clock(partial_data, val
     provider.listed, provider.listing_status = value, status
     facts = prepare_module.listing_facts(data.owner.release, [SID], facts=provider,
                                          fact_query=data.source_fact, on_date=DAYS[0])
-    assert facts[SID]["ipo"] in {"2026-10-21", "2026-10-01", "1990-01-01"}
+    assert facts[SID]["ipo"] == (value if status == "source_observed" and value in {"2026-10-21", "2026-10-01"} else None)
 
 
 def test_valid_listing_event_does_not_claim_active_interval(partial_data):
@@ -205,7 +205,7 @@ def test_standalone_prepare_refuses_before_assembling_listed_true(partial_data):
 def test_non_cmes_st_uses_unchanged_raw_rule(partial_data, monkeypatch, raw, expected):
     data, _ = partial_data
     data.owner.release.manifest.clear()
-    monkeypatch.setattr(data, "_row", lambda *a: {"is_st": raw})
+    monkeypatch.setattr(data, "_daily", lambda *a: [{"is_st": raw}])
     assert data.is_st(SID, DAYS[0]) is expected
     assert not list(data.queries)
 
@@ -281,8 +281,11 @@ def test_positive_trading_activity_and_listing_event_admit_execution_states(part
     prepare_module.require_listing_window(
         data.owner.release, [SID], DAYS, listings=listings, rows=rows
     )
-    assert resolved[SID, DAYS[0]] == {"tradestatus": "1", "is_st": "0"}
-    assert resolved[SID, DAYS[1]] == {"tradestatus": "1", "is_st": "1"}
+    for day, expected_st in zip(DAYS, ("0", "1")):
+        assert resolved[SID, day] == {
+            "tradestatus": "1", "is_st": expected_st,
+            "state_provenance": {"suspended": "derived", "is_st": "derived"},
+        }
     assert rows == original
 
 

@@ -31,8 +31,9 @@ class ReleasedQueries:
 class IndexedQueries(ReleasedQueries):
     """Same read-only snapshot protocol, indexed to avoid repeated year scans."""
 
-    def __init__(self, receipt, bundles):
+    def __init__(self, receipt, bundles, *, suspended_sessions=()):
         super().__init__(receipt, bundles)
+        self.suspended_sessions = set(suspended_sessions)
         self.by_symbol = {}
         self.unavailable = {}
         for b in bundles:
@@ -81,6 +82,7 @@ class IndexedQueries(ReleasedQueries):
         expected = {
             (s, (begin + timedelta(minutes=n)).isoformat())
             for s in ids
+            if (s, begin.date().isoformat()) not in self.suspended_sessions
             for n in range(int((finish - begin).total_seconds() / 60))
         }
         keys = [(r["symbol"], r["bar_start"]) for r in rows]

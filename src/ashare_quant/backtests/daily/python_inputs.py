@@ -267,6 +267,7 @@ class DailyPythonInputs:
             "trading_dates": self.days,
             "warmup_sessions": self.document["warmup_sessions"],
             "daily_rows": len(self.rows),
+            "daily_assumptions": self.document.get("daily_assumptions", []),
             "history_factors": self.document.get("history_factors"),
             "historical_pit_verified": False,
             "state_visibility": self.state_visibility,

@@ -204,7 +204,7 @@ def validate_state(state, *, corporate=False, ordinary_only=False):
         fact = observed[field]
         require(
             fact["value"] == state[field]
-            and fact["status"] == "source_observed"
+            and fact["status"] in {"source_observed", "derived", "assumed", "unknown"}
             and fact["source_refs"],
             "MINUTE_RESEARCH_STATE_PROJECTION",
         )

@@ -113,8 +113,24 @@ def rename_directory(source_fd, source, target_fd, target, *, exchange=False):
     if exchange:
         backup = INTERNAL_PREFIX + "swap-" + uuid.uuid4().hex
         os.rename(target, backup, src_dir_fd=target_fd, dst_dir_fd=target_fd)
-        os.rename(source, target, src_dir_fd=source_fd, dst_dir_fd=target_fd)
-        os.rename(backup, source, src_dir_fd=target_fd, dst_dir_fd=source_fd)
+        try:
+            os.rename(source, target, src_dir_fd=source_fd, dst_dir_fd=target_fd)
+        except OSError:
+            try:
+                os.rename(backup, target, src_dir_fd=target_fd, dst_dir_fd=target_fd)
+            except OSError as exc:
+                raise DomainError(
+                    "STRATEGY_SAVE_UNCERTAIN", "Project replacement failed; the original is retained for recovery", 503,
+                    details={"save_state": "uncertain", "recovery_directory": backup},
+                ) from exc
+            raise
+        try:
+            os.rename(backup, source, src_dir_fd=target_fd, dst_dir_fd=source_fd)
+        except OSError as exc:
+            raise DomainError(
+                "STRATEGY_SAVE_UNCERTAIN", "New project is present; reopen it to confirm the save", 503,
+                details={"save_state": "uncertain", "recovery_directory": backup},
+            ) from exc
     else:
         try:
             target_info = os.stat(target, dir_fd=target_fd, follow_symlinks=False)
@@ -327,7 +343,15 @@ class ProjectFiles:
                 with self._stage(parent, strategy_id, entrypoint, files) as (stage, retained):
                     # Catch edits made by external local editors while building the transaction.
                     self._expected(current["path"], strategy_id, expected_revision)
-                    rename_directory(parent, stage, parent, members[-1], exchange=True)
+                    try:
+                        rename_directory(parent, stage, parent, members[-1], exchange=True)
+                    except DomainError as exc:
+                        if exc.code != "STRATEGY_SAVE_UNCERTAIN":
+                            raise
+                        raise DomainError(exc.code, exc.message, exc.status, details={
+                            **exc.details, "path": path, "operation": "save",
+                            "recovery_directory": "/".join([*members[:-1], exc.details["recovery_directory"]]),
+                        }) from exc
                     retained[0] = True
                     try:
                         os.fsync(parent)

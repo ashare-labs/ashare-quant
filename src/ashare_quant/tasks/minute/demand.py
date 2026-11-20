@@ -23,6 +23,7 @@ from ashare_quant.storage.artifacts import atomic, digest
 from ashare_quant.storage.streams import Journal, compress, file_hash
 from ashare_quant.tasks.minute.prepare import (
     _positive_trading_bar,
+    carry_daily,
     cmes_facts,
     listing_facts,
     prepare_market,
@@ -135,6 +136,7 @@ class DemandInputs:
         self.ids = []  # Native instruments encountered; distinct from API.universe and read cache.
         self.register(request.securities)
         self.rows, self.history_rows, self.minutes, self.components, self.corporate = {}, {}, {}, {}, {}
+        self.execution_closes, self.daily_assumptions = {}, {}
         self.root.mkdir(parents=True, exist_ok=True)
         self.reads = Journal(self.root / "reads.jsonl.gz")
         self.queries = Journal(self.root / "queries.jsonl.gz")
@@ -165,6 +167,7 @@ class DemandInputs:
                 "Release-pinned retrospective observations; historical PIT is not certified",
                 "Directory uses recorded listing/code intervals; historical names and complete historical membership are not certified",
                 "Execution retains the declared main-board daily-preclose limit and source-scoped corporate model",
+                "Missing daily sessions use a prior observed close for valuation and cannot trade; this does not prove suspension",
             ],
         }
         if benchmark is not None:
@@ -232,10 +235,8 @@ class DemandInputs:
             if type(fact.get("value")) is bool:
                 return fact["value"]
             return False
-        row = self._row(sid, day)
-        if row is None:
-            return False
-        return row.get("is_st") == "1"
+        row = self._daily(sid, [day])[0]
+        return row is not None and row.get("is_st") == "1"
 
     def _retain(self, response, count):
         self.read_count += count
@@ -588,6 +589,31 @@ class DemandInputs:
                     )
         return self.corporate[key]
 
+    def _execution_row(self, sid, day, row=None):
+        """Keep price queries raw; carry missing observations only for account execution/valuation."""
+        if row is not None:
+            return row
+        cached = self.execution_closes.get(sid)
+        if cached is not None and cached["date"] == day:
+            return cached
+        end = self.calendar.index(day)
+        while end:
+            start = max(0, end - 64)
+            previous = self._daily(sid, self.calendar[start:end], history=True)
+            observed = next((r for r in reversed(previous) if r is not None), None)
+            if observed is not None:
+                return carry_daily(observed, day)
+            end = start
+        require(False, "PYTHON_DAILY_GAP",
+                f"No earlier observed price for {sid} on {day}", {"security": sid, "date": day})
+
+    def _record_daily_assumption(self, row):
+        key = row["security"], row["date"]
+        if row.get("assumption") and key not in self.daily_assumptions:
+            value = {"security": key[0], "date": key[1], **row["assumption"]}
+            self.daily_assumptions[key] = value
+            self.queries.append({"api": "execution_daily_assumption", **value})
+
     def component(self, sid, day):
         self.advance_day(day)
         key = sid, day
@@ -595,33 +621,12 @@ class DemandInputs:
             self.register([sid])
             prev = self.calendar[self.calendar.index(day) - 1]
             rows = self._daily(sid, [prev, day])
-            if rows[0] is not None and rows[1] is None:
-                prev_row = rows[0]
-                cl = prev_row["close"]
-                rows[1] = {
-                    "security": sid,
-                    "date": day,
-                    "open": cl,
-                    "high": cl,
-                    "low": cl,
-                    "close": cl,
-                    "preclose": cl,
-                    "volume": "0",
-                    "amount": "0",
-                    "tradestatus": "0",
-                    "is_st": prev_row.get("is_st")
-                    if prev_row.get("is_st") in {"0", "1"}
-                    else "0",
-                    "source": prev_row.get("source", "synthesized_suspended"),
-                    "observed_at": prev_row.get("observed_at", day + "T15:00:00+08:00"),
-                }
-            require(
-                all(r is not None for r in rows),
-                "PYTHON_DAILY_GAP",
-                f"Execution needs daily bars for {sid} on {prev} and {day}; "
-                "at least one observation is missing",
-                {"security": sid, "date": day},
-            )
+            rows[0] = self._execution_row(sid, prev, rows[0])
+            if rows[1] is None:
+                rows[1] = carry_daily(rows[0], day)
+            for row in rows:
+                self._record_daily_assumption(row)
+            self.execution_closes[sid] = rows[1]
             facts = None
             listings = None
             if self.owner.release.manifest.get("cmes"):
@@ -645,13 +650,13 @@ class DemandInputs:
                 }
             )
             corp = self._corporate(sid, day)
+            daily = {
+                "rows": rows,
+                "receipt": {"release": self.pin, "rows_sha256": digest(rows)},
+            }
             if self.frequency == "1d":
                 from ashare_quant.backtests.daily.python_inputs import DailyPythonInputs
 
-                daily = {
-                    "rows": rows,
-                    "receipt": {"release": self.pin, "rows_sha256": digest(rows)},
-                }
                 metadata, daily, _ = prepare_market(
                     self.pin,
                     req,
@@ -686,6 +691,7 @@ class DemandInputs:
                         req,
                         directory,
                         owner=self.owner,
+                        daily=daily,
                         corporate=corp,
                         facts=facts,
                         listings=listings,
@@ -716,7 +722,9 @@ class DemandInputs:
 
     def row(self, sid, day):
         if day not in self.days:
-            return self._row(sid, day)
+            row = self._execution_row(sid, day, self._daily(sid, [day])[0])
+            self._record_daily_assumption(row)
+            return row
         return self.component(sid, day).row(sid, day)
 
     def state(self, sid, day, *, at=None):
@@ -728,7 +736,9 @@ class DemandInputs:
             field = "close" if at.hour >= 15 or at.hour < 9 else "open"
             if at.hour * 60 + at.minute < 570:
                 day, field = self.previous[day], "close"
-            return self.observed_value(sid, day, field)
+            row = self._execution_row(sid, day, self._daily(sid, [day])[0])
+            self._record_daily_assumption(row)
+            return float(number(row.get(field)))
         return self.component(sid, day).current(sid, at)
 
     valuation_price = current
@@ -737,8 +747,17 @@ class DemandInputs:
         """A read-only last price does not prepare a native execution component."""
         if self.frequency == "1d":
             return self.current(sid, at)
+        day = str(at.date())
         if at.strftime("%H:%M") < "09:31":
-            return self.observed_value(sid, self.previous[str(at.date())], "close")
+            previous = self.previous[day]
+            row = self._execution_row(sid, previous, self._daily(sid, [previous])[0])
+            self._record_daily_assumption(row)
+            return float(number(row["close"]))
+        daily = self._daily(sid, [day])[0]
+        if daily is None:
+            row = self._execution_row(sid, day)
+            self._record_daily_assumption(row)
+            return float(number(row["close"]))
         row = self.minute_history(sid, at, count=1, fields=["close"])[-1]
         return float(row["close"])
 
@@ -787,6 +806,8 @@ class DemandInputs:
             "securities": list(self.ids),
             "trading_dates": self.days,
             "daily_rows": self.daily_read_rows,
+            "assumed_daily_rows": len(self.daily_assumptions),
+            "daily_assumptions": list(self.daily_assumptions.values()),
             "daily_row_count_basis": "actual rows read, including evicted-window rereads",
             "history_factors": self.document["history_factors"],
             "corporate_schedule_sha256": file_hash(self.root / "corporate.jsonl.gz"),

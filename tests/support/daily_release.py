@@ -92,6 +92,7 @@ def fixed_release(tmp_path, request):
                     observed("0", "is_st", i),
                 )
                 for i, d in enumerate(days[:-1])
+                if i not in omissions.get("missing_days", ())
             ]
             c.executemany("INSERT INTO prices VALUES(" + ",".join("?" for _ in rows[0]) + ")", rows)
             item = writer.parquet(c, "SELECT * FROM prices WHERE instrument_id=?", [n], f"bars{n}")

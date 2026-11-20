@@ -86,8 +86,20 @@ def _symbol(sid):
     return prefix + sid[:6]
 
 
+def first_observed_date(release, sid):
+    """A price coverage date is useful context, not an IPO date."""
+    if hasattr(release, "selected_files"):
+        instrument = release.identifiers.get(sid)
+        files = release.selected_files("bars_1d", instrument, "0001-01-01", "9999-12-31")
+        return min((item["first_date"] for item in files), default=None)
+    if hasattr(release, "metadata"):
+        with release.metadata() as db:
+            return db.execute("SELECT MIN(date) FROM bars WHERE symbol=?", (_symbol(sid),)).fetchone()[0]
+    return None
+
+
 def listing_facts(release, ids, *, facts=None, fact_query=None, on_date=None):
-    """Read listing event dates; fallback to first K-line date when missing."""
+    """Keep unknown IPO dates unknown; report price coverage separately."""
     facts = facts if facts is not None else cmes_facts(release)
     if facts is not None:
         query = fact_query or (lambda method, *args: query_cmes_fact(facts, method, *args))
@@ -99,19 +111,13 @@ def listing_facts(release, ids, *, facts=None, fact_query=None, on_date=None):
                 valid = isinstance(value, str) and date.fromisoformat(value).isoformat() == value
             except ValueError:
                 valid = False
-            if not valid:
-                value = "1990-01-01"
-                if hasattr(release, "metadata"):
-                    try:
-                        with release.metadata() as db:
-                            row = db.execute(
-                                "SELECT MIN(date) FROM daily_bars WHERE security=?", (sid,)
-                            ).fetchone()
-                            if row and row[0]:
-                                value = row[0]
-                    except Exception:
-                        pass
-            listings[sid] = {"ipo": value, "source_fact": fact}
+            known = valid and fact.get("status") == "source_observed"
+            listings[sid] = {
+                "ipo": value if known else None,
+                "status": "source_observed" if known else "unknown",
+                "first_observed_date": None if known else first_observed_date(release, sid),
+                "source_fact": fact,
+            }
         return listings
     listings = {}
     with release.metadata() as db:
@@ -124,20 +130,33 @@ def listing_facts(release, ids, *, facts=None, fact_query=None, on_date=None):
                     (symbol,),
                 )
             ]
-            if rows and len({r["ipo"] for r in rows if r.get("ipo")}) == 1:
-                listings[sid] = rows[0]
+            dated = [r for r in rows if r.get("ipo")]
+            if dated and len({r["ipo"] for r in dated}) == 1:
+                listings[sid] = {**dated[0], "status": "source_observed"}
             else:
-                first_date = "1990-01-01"
-                try:
-                    row = db.execute(
-                        "SELECT MIN(date) FROM daily_bars WHERE security=?", (sid,)
-                    ).fetchone()
-                    if row and row[0]:
-                        first_date = row[0]
-                except Exception:
-                    pass
-                listings[sid] = {"symbol": symbol, "ipo": first_date}
+                listings[sid] = {
+                    "symbol": symbol, "ipo": None, "status": "unknown",
+                    "first_observed_date": first_observed_date(release, sid),
+                }
     return listings
+
+
+def carry_daily(previous, day):
+    """Value an unobserved session from a past close, without creating tradable bars."""
+    require(previous["date"] < day, "PYTHON_DAILY_GAP", "Carry-forward requires an earlier price")
+    assumption = previous.get("assumption", {})
+    return {
+        "security": previous["security"], "date": day,
+        **dict.fromkeys(("open", "high", "low", "close", "preclose"), previous["close"]),
+        "volume": "0", "amount": "0", "tradestatus": "0", "is_st": None,
+        "source": "research_carry_forward", "observed_at": previous["observed_at"],
+        "assumption": {
+            "rule": "previous_observed_close_untradable",
+            "reference_date": assumption.get("reference_date", previous["date"]),
+            "reference_source": assumption.get("reference_source", previous.get("source")),
+            "reason": "missing_daily_observation",
+        },
+    }
 
 
 def _positive_trading_bar(row):
@@ -191,6 +210,14 @@ def require_dated_states(rows, days, *, facts=None, fact_query=None):
         resolved[row["security"], row["date"]] = {
             "tradestatus": tradestatus,
             "is_st": is_st,
+            "state_provenance": {
+                "suspended": "assumed" if row.get("assumption") else (
+                    "source_observed" if row.get("tradestatus") in {"0", "1"} else "derived"
+                ),
+                "is_st": "source_observed" if row.get("is_st") in {"0", "1"} else (
+                    "derived" if st_known else "assumed"
+                ),
+            },
         }
     return resolved
 
@@ -228,36 +255,15 @@ def prepare_market(
     if listings is None or resolved_states is None:
         facts = facts if facts is not None else cmes_facts(release)
     daily = daily if daily is not None else owner.prices(ids, cal[0], days[-1])
+    daily = {**daily, "rows": [dict(row) for row in daily["rows"]]}
     bykey = {(r["security"], r["date"]): dict(r) for r in daily["rows"]}
     for sid in ids:
-        sid_rows = sorted(
-            [r for r in daily["rows"] if r["security"] == sid], key=lambda r: r["date"]
-        )
-        if not sid_rows:
-            continue
-        last_row = sid_rows[0]
+        last_row = None
         for day in cal[:-1]:
             if (sid, day) in bykey:
                 last_row = bykey[sid, day]
-            else:
-                cl = last_row["close"]
-                synth = {
-                    "security": sid,
-                    "date": day,
-                    "open": cl,
-                    "high": cl,
-                    "low": cl,
-                    "close": cl,
-                    "preclose": cl,
-                    "volume": "0",
-                    "amount": "0",
-                    "tradestatus": "0",
-                    "is_st": last_row.get("is_st")
-                    if last_row.get("is_st") in {"0", "1"}
-                    else "0",
-                    "source": last_row.get("source", "synthesized_suspended"),
-                    "observed_at": last_row.get("observed_at", day + "T15:00:00+08:00"),
-                }
+            elif last_row is not None:
+                synth = carry_daily(last_row, day)
                 bykey[sid, day] = synth
                 daily["rows"].append(synth)
     missing = [
@@ -345,6 +351,7 @@ def prepare_market(
             "5%/10% daily-preclose model is not certified exchange limits",
             "Source-scoped gross cash dividends, no investor tax or all-type action completeness claim",
             "Frozen original universe, no selection or tuning on returns",
+            "Missing daily sessions use a prior observed close for valuation and cannot trade; this does not prove suspension",
         ],
         state_replay=dict(
             model="dated-daily-state-0900.v1",
@@ -354,6 +361,11 @@ def prepare_market(
         ),
         source_refs={"evidence": refs},
         gap_policy="explicit_unavailable",
+        daily_gap_policy="previous_observed_close_untradable",
+        daily_assumptions=[
+            {"security": r["security"], "date": r["date"], **r["assumption"]}
+            for r in daily["rows"] if r.get("assumption")
+        ],
         states=[],
         actions=[],
         research=dict(
@@ -413,11 +425,18 @@ def prepare_market(
                 previous_close=prev["close"],
                 first_listing_date=listings[sid]["ipo"],
             )
+            provenance = {
+                "listed": "assumed",
+                "first_listing_date": listings[sid].get("status", "source_observed"),
+                "previous_close": "assumed" if prev.get("assumption") else "source_observed",
+                **resolved_states.get((sid, day), {}).get("state_provenance", {}),
+            }
             metadata["states"].append(
                 dict(
                     security=sid,
                     date=day,
                     **facts,
+                    first_observed_date=listings[sid].get("first_observed_date"),
                     reference_price=None,
                     upper_limit=None,
                     lower_limit=None,
@@ -440,7 +459,7 @@ def prepare_market(
                         **{
                             k: dict(
                                 value=v,
-                                status="source_observed",
+                                status=provenance.get(k, "source_observed"),
                                 source_refs=[
                                     "listing" if k in {"listed", "first_listing_date"} else "daily"
                                 ],
@@ -458,6 +477,7 @@ def prepare_market(
                         close=prev["close"],
                         price_basis="raw",
                         source_refs=["daily"],
+                        **({"assumption": prev["assumption"]} if prev.get("assumption") else {}),
                     ),
                     daily_limit_model=dict(
                         schema=LIMIT_MODEL,
@@ -478,6 +498,7 @@ def prepare(
     history_factors=None,
     *,
     owner=None,
+    daily=None,
     corporate=None,
     facts=None,
     listings=None,
@@ -487,6 +508,7 @@ def prepare(
         pin,
         request,
         owner=owner,
+        daily=daily,
         corporate=corporate,
         facts=facts,
         listings=listings,
@@ -548,7 +570,7 @@ def prepare(
                         }
                     )
                     continue
-                if bykey.get((sid, r["trade_date"]), {}).get("suspended"):
+                if bykey.get((sid, r["trade_date"]), {}).get("tradestatus") == "0":
                     excluded.append(
                         {
                             "security": sid,
@@ -618,7 +640,10 @@ def prepare(
             )
             print(json.dumps(reads[-1]), flush=True)
     metadata["bar_annotations"] = annotations
-    snapshot = IndexedQueries(release.receipt(), bundles)
+    snapshot = IndexedQueries(
+        release.receipt(), bundles,
+        suspended_sessions={(r["security"], r["date"]) for r in metadata["states"] if r["suspended"]},
+    )
     document = export_minute_research(snapshot, metadata)
     atomic(root / "input.json", document)
     report = {
