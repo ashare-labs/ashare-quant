@@ -8,13 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.identity import package_root, source_sha256
-from ashare_quant.runtime import runtime_fingerprint
-from ashare_quant.storage.artifacts import lock, regular, require
+from ashare_quant.identity import package_root
+from ashare_quant.storage.artifacts import lock, regular
 from ashare_quant.strategies.python.supervision import ProcessOutput
 from ashare_quant.tasks.policy import ServicePolicy
 from ashare_quant.tasks.process import stop
-from ashare_quant.tasks.release import EXECUTION_SOURCE_SHA256
 
 
 @dataclass(frozen=True)

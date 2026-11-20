@@ -1,12 +1,10 @@
 """Pure offline computation in a shared-queue supervised child."""
 
 import json
-import sys
 import threading
 from pathlib import Path
 
-from ashare_quant.identity import source_sha256
-from ashare_quant.storage.artifacts import atomic, digest, regular, require, sha
+from ashare_quant.storage.artifacts import atomic, digest, regular, sha
 
 
 def run(args):

@@ -4,7 +4,6 @@ The market/API process never imports the old execution engine or submits orders.
 Only the two read-only entry commands are available through this bridge.
 """
 
-import hashlib
 import json
 import re
 import subprocess

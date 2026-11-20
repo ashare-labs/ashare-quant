@@ -4,7 +4,6 @@ import json
 import pytest
 from test_reference_configuration import document
 
-from ashare_quant.contracts import DomainError
 from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
 

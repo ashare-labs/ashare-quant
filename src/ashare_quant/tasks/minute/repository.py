@@ -2,7 +2,7 @@
 
 import json
 
-from ashare_quant.storage.artifacts import canonical, digest, require
+from ashare_quant.storage.artifacts import digest, require
 from ashare_quant.tasks.minute.contracts import (
     PythonCreate,
     PythonJobView,

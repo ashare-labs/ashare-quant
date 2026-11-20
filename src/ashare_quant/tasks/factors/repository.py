@@ -1,9 +1,8 @@
 """Factor manifests in the existing task table and lease protocol."""
 
-import json
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.storage.artifacts import canonical, digest, require
+from ashare_quant.storage.artifacts import require
 from ashare_quant.tasks.factors.contracts import FactorJobView, FactorManifest
 from ashare_quant.tasks.repository import Repository as Base
 

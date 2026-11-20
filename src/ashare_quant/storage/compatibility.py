@@ -1,11 +1,7 @@
 """Validate a disposable SQLite snapshot before admitting any original connection."""
 
-import json
 import re
-import shutil
 import sqlite3
-import tempfile
-import time
 from contextlib import closing, contextmanager
 from functools import lru_cache
 from pathlib import Path

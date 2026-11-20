@@ -2,11 +2,9 @@
 
 import argparse
 import csv
-import hashlib
 import json
 import os
 import runpy
-import subprocess
 from datetime import date
 from pathlib import Path
 

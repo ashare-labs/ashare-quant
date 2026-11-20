@@ -2,8 +2,6 @@
 
 import pytest
 
-from ashare_data.product.released_references import ReleasedReferences
-from ashare_quant.contracts import DomainError
 from ashare_quant.tasks.minute.contracts import PythonCreate
 from ashare_quant.tasks.minute.demand import DemandInputs
 from tests.support.daily_release import daily_jobs as daily_jobs

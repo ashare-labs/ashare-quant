@@ -5,8 +5,6 @@ import platform
 from importlib import metadata
 from importlib.resources import files
 
-from ashare_quant.contracts import DomainError
-
 
 def runtime_fingerprint(*, native=False) -> dict[str, str]:
     expected = json.loads(

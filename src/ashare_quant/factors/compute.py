@@ -3,7 +3,7 @@
 import json
 import math
 from collections import Counter
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError
 from importlib.util import find_spec
 
 import pandas as pd

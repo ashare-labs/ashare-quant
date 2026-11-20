@@ -1,9 +1,7 @@
 """Check project snapshot evidence without importing any strategy modules."""
 
-import unicodedata
 
-from ashare_quant.storage.artifacts import digest, require, sha
-from ashare_quant.tasks.evidence import evidence_hash
+from ashare_quant.storage.artifacts import require
 
 
 def verify_project(root, manifest):

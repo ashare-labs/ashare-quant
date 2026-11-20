@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.factors.evaluation_inputs import market_labels, snapshot_labels, source_basis
-from ashare_quant.storage.artifacts import digest, regular, require, sha
+from ashare_quant.storage.artifacts import digest, regular, require
 
 SCHEMAS = {
     "alpha191.panel.v1": "alpha191",

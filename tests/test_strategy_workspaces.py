@@ -1,6 +1,5 @@
 """Opaque edge-selected storage scopes; these are not Python sandboxes."""
 
-import os
 
 import pytest
 

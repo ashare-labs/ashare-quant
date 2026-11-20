@@ -3,7 +3,6 @@
 import json
 
 from ashare_quant.storage.artifacts import regular, require
-from ashare_quant.storage.streams import file_hash, reading
 
 
 def verify_demand(root):

@@ -1,8 +1,6 @@
 """Small publication/layout regression check; no services or account writes."""
 
 import ast
-import hashlib
-import json
 import re
 import subprocess
 import tomllib

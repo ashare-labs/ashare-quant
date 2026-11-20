@@ -4,13 +4,11 @@ import copy
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event, current_thread
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ashare_quant.api import create_app
-from ashare_quant.contracts import DomainError
 from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
 

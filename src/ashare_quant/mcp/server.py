@@ -18,7 +18,6 @@ from ashare_quant.mcp.contracts import (
     MinuteSelection,
     PageSize,
     Section,
-    Sha,
     SourceID,
     StrategySubmission,
 )

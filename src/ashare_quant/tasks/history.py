@@ -9,13 +9,11 @@ import json
 from contextlib import contextmanager
 
 from ashare_quant.contracts import DomainError
-from ashare_quant.storage.artifacts import canonical, digest, require, sha
+from ashare_quant.storage.artifacts import require
 from ashare_quant.tasks.base import TaskService
 from ashare_quant.tasks.contracts import execution_presentation
 from ashare_quant.tasks.evidence import (
     CHUNK_BYTES,
-    evidence_file,
-    evidence_hash,
     project_json,
     verified_copy,
 )

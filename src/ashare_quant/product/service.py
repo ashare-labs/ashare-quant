@@ -1,6 +1,5 @@
 """Use the installed AD public API; never query or modify its source database."""
 
-import json
 import sqlite3
 from copy import deepcopy
 from pathlib import Path

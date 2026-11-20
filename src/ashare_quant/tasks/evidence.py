@@ -6,13 +6,11 @@ import mmap
 import os
 import re
 import stat
-import tempfile
 from contextlib import contextmanager
 from pathlib import PurePosixPath
 
 from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import require
-from ashare_quant.tasks.storage_budget import require_free_space
 
 CHUNK_BYTES = 65536
 

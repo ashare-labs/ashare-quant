@@ -1,12 +1,11 @@
 """One supervised process prepares data and invokes the existing native engine."""
 
 import json
-import sys
 import threading
 import traceback
 from pathlib import Path
 
-from ashare_quant.storage.artifacts import atomic, digest, regular, require, sha
+from ashare_quant.storage.artifacts import atomic, digest, regular, sha
 from ashare_quant.storage.streams import atomic_json, file_hash
 
 

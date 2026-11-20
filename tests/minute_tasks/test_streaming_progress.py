@@ -9,7 +9,6 @@ import weakref
 import pytest
 from fastapi.testclient import TestClient
 
-from ashare_quant.contracts import DomainError
 from ashare_quant.storage.artifacts import canonical
 from ashare_quant.storage.streams import Journal, atomic_json, file_hash, reading
 from ashare_quant.tasks.minute.contracts import PythonCreate
