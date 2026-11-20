@@ -6,7 +6,7 @@ import traceback
 from pathlib import Path
 
 from ashare_quant.storage.artifacts import atomic, digest, regular, sha
-from ashare_quant.storage.streams import atomic_json, file_hash
+from ashare_quant.storage.streams import atomic_json, file_hash, reading
 
 
 def run(args):
@@ -115,6 +115,25 @@ def source_location(exc, root):
     return None, None
 
 
+def recent_strategy_logs(root, limit=50):
+    from collections import deque
+
+    events = deque(maxlen=limit)
+    for name in ("events.jsonl.gz", "events.jsonl"):
+        path = Path(root) / name
+        if path.exists():
+            try:
+                with reading(path, text=True) as stream:
+                    for line in stream:
+                        event = json.loads(line)
+                        if event.get("event", event.get("kind")) in {"log", "record"}:
+                            events.append(event)
+            except Exception:
+                pass
+            break
+    return list(events)
+
+
 if __name__ == "__main__":
     try:
         run(TASK_ARGUMENTS)  # noqa: F821
@@ -144,6 +163,7 @@ if __name__ == "__main__":
                 "source_line": source_line,
                 "type": type(exc).__name__,
                 "traceback": traceback.format_exc()[-6000:],
+                "strategy_logs": recent_strategy_logs(args["root"]),
             },
         )
         raise

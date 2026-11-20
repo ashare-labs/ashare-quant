@@ -1,6 +1,6 @@
-# Agent 研究 MCP
+# Agent 研究 MCP（v2）
 
-A宽在 HTTP 研究后端之上提供可选的 Model Context Protocol（MCP）薄适配层（`ashare-quant-mcp`，版本 `research-mcp.v1.1`），复用已发布的 A数达数据、输入冻结、共享异步队列、原生回测与因子评价能力。工具 schema 快照位于 [`contracts/research-mcp.tools.json`](contracts/research-mcp.tools.json)。
+A宽在 HTTP 研究后端之上提供面向 AI Agent 研究工作流的 Model Context Protocol（MCP）v2 适配层（`ashare-quant-mcp`，版本 `research-mcp.v2.0`），复用已发布的 A数达数据、输入冻结、共享异步队列、原生回测、`returns-v2` 收益归因分析与因子评价能力。完整契约快照（含 Tools、Resources、Templates 与 Prompts）位于 [`contracts/research-mcp.tools.json`](contracts/research-mcp.tools.json)。
 
 ## 安装与启动
 
@@ -25,32 +25,42 @@ uv sync --locked --extra native --extra factor-evaluation --extra mcp
 
 ---
 
-## 13 个 MCP 工具一览
+## 12 个面向任务的 MCP 工具
 
 | 领域 | 工具名称 | 功能说明 |
 | --- | --- | --- |
-| 环境发现 | `research_capabilities` | 核对产品配置、Python/因子目录、数据源与 OpenAPI 契约，返回 `configuration_id`、`environment_id` 与扩展可用状态 |
-| 行情数据 | `discover_data` | 按关键词分页检索已发布证券与分钟数据源 |
-| 行情数据 | `inspect_data` | 查询指定证券与日期区间的覆盖就绪状态及日线价格分页（单次上限 8 只股票 / 31 日） |
-| 行情数据 | `read_minute_prices` | 单证券、有界时间窗（上限 3 日）的分钟行情分页读取，保留缺失槽与数据源标记 |
-| 策略回测 | `submit_strategy` | 提交自定义日频（`1d`）或分钟（`1m`）Python 单文件源码或完整多文件 `project`，立即返回 `job_id` |
-| 因子研究 | `discover_factors` | 按命名空间（`joinquant`、`alpha191`、`qlib_alpha158`）或名称分页检索 368 项因子定义與依赖 |
-| 因子研究 | `factor_sources` | 查询已登记因子数据源的就绪状态、价格口径，并按 `source_id` 分页列出证券 |
-| 因子研究 | `submit_factor` | 提交因子计算与可选 Alphalens 评价任务（无独立证券数或日历跨度硬上限，共用任务产物预算） |
-| 任务管理 | `find_research_job` | 按原始 `idempotency_key` 找回已提交任务（支持适配进程重启后恢复查询） |
-| 任务管理 | `research_job` / `cancel_research_job` | 查询 `python_daily`、`python_minute`、`factors`（及只读历史 `daily`、`portfolio`）状态 / 请求取消活动任务 |
-| 日志与结果 | `research_logs` / `research_result` | 分页读取任务日志与结果（策略支持 `summary`、`trades`、`positions`、`equity`、`orders`、`strategy_logs`；因子支持 `factor_values`、`evaluation_summary`、`ic`、`rank_ic`、`quantile_returns`、`spread`、`turnover` 等分区） |
+| 环境发现 | `get_environment` | 获取精简的就绪状态、可用交易日历区间、支持频率（`1m`、`1d`）、默认基准、分钟源、因子源及限额（传 `detail=True` 展开完整目录元数据） |
+| 行情数据 | `search_securities` | 按股票代码或名称分页检索已发布证券（自动兼容 `.SZ`/`.SH`/`sz`/`sh`/6 位数字写法）并列出分钟数据源 |
+| 行情数据 | `get_prices` | 统一日线（`1d`，单次 ≤8 只 / ≤31 日）与分钟（`1m`，单证券 / ≤3 日）行情读取；自动归一化代码、自动补全分钟 `+08:00` 时区，支持 `fields` 列裁剪与游标分页 |
+| 因子研究 | `discover_factors` | 按命名空间（`joinquant`、`alpha191`、`qlib_alpha158`）或关键词检索 368 项因子定义并附带已注册因子数据源列表；传入 `source_id` 时分页列出该源下的证券 |
+| 策略预检 | `check_strategy` | **不入队**，秒级完成 Python 语法、`initialize(context)` 入口、`aquant` 符号白名单与禁用聚宽函数、股票代码字面量及日期区间预检 |
+| 策略回测 | `run_backtest` | 扁平参数提交日频（`1d`）或分钟（`1m`）回测（支持内联 `source`、`project` 或工作台 `strategy_ref` 及 `workspace`），缺省自动生成确定性幂等键，默认等待完成（`wait_seconds=30`）并直接返回含 20 项 `returns-v2` 指标的运行视图 |
+| 因子研究 | `run_factor` | 扁平参数提交因子计算与可选 Alphalens 评价（自动匹配因子简名、默认定义、就绪 `source_id` 与全证券池 `"all"`），默认等待完成并返回评价摘要 |
+| 结果与诊断 | `get_run` | 按 `run_id` 或 `idempotency_key` 查询统一运行状态、进度、成功后的 `returns-v2` 20 项核心指标/因子摘要，或失败后的脱敏用户栈帧与最后 50 条策略日志（无需 `family` 参数） |
+| 明细分页 | `get_run_details` | 按 `run_id` 分页读取 `trades`、`positions`、`equity`、`orders`、`strategy_logs`（失败任务亦可读取）、`analysis_series`、`drawdowns`、`monthly`、`rolling`、`factor_values`、`ic`、`rank_ic`、`quantile_returns`、`system_logs` 等分区 |
+| 实验管理 | `list_runs` | 列出近期回测或因子实验（支持按 `kind`、`strategy_id`、`state` 筛选） |
+| 实验管理 | `compare_runs` | 横向对比 2–10 个实验的参数差异（`varying_parameters`）与核心绩效指标 / 因子 IC 指标 |
+| 任务控制 | `cancel_run` | 按 `run_id` 请求取消排队或运行中的回测/因子任务 |
 
 ---
 
-## 标准调用闭环与分页规则
+## 内置 MCP Resources 与 Prompts
 
-1. **环境确认**：首次调用 `research_capabilities` 获取当前 `configuration_id` 与对应 `environment_id`。
-2. **提交与幂等重试**：
-   - `submit_strategy` 必须由调用方显式传入 `trusted_local_code: true` 与 `accept_research_model: true`（适配器不会默认代填）。
-   - 若提交遇到网络超时或 `SUBMISSION_UNCERTAIN`，先调用 `find_research_job` 或使用**完全相同的请求与 `idempotency_key`** 重试，避免重复创建任务。
-3. **有界分页读取**：
-   - 单页最多返回 200 行（行数据 ≤64 KiB，单次工具响应 ≤128 KiB），后端结果读取上限为 32 MiB；通过传回 `next_cursor` 顺序翻页，游标绑定内容指纹以防漏行。
+| 类型 | 标识 / URI | 说明 |
+| --- | --- | --- |
+| Resource | `aquant://api-reference` | `aquant` 全部可用函数签名、`context`/`portfolio`/`Position` 属性速查表及不支持的聚宽函数替代说明 |
+| Resource | `aquant://model-notes` | 日频/分钟撮合规则、`fq` 复权说明、A 股 T+1 与整手限制、数据来源边界说明 |
+| Resource | `aquant://templates/{name}` | 开箱即用的标准策略模板：`daily_rebalance`（日频调仓）、`minute_timing`（分钟择时）、`multi_file_project`（多文件项目） |
+| Prompt | `research_loop` | 标准量化研究闭环引导（查环境/标的 → `check_strategy` 预检 → `run_backtest` 运行并等待 → `compare_runs` 横向对比） |
+| Prompt | `port_joinquant_strategy` | 将聚宽 `jqdata` 策略迁移为 `aquant` 并通过 `check_strategy` 校验的提示模板 |
+
+---
+
+## 标准调用闭环
+
+1. **查阅规范与预检**：读取 `aquant://api-reference` 或模板，调用 `check_strategy(source=..., start_date=..., end_date=...)` 在入队前排除语法与 API 错误。
+2. **一键提交并获取指标**：调用 `run_backtest(source=..., start_date=..., end_date=..., securities=['000001.SZ'], wait_seconds=30)`，无需传递环境哈希或确认标志；任务完成后直接在响应的 `metrics` 字段拿到夏普比率、最大回撤、年化收益、超额收益等 20 项 `returns-v2` 指标。
+3. **参数迭代与横向对比**：修改 `parameters={...}` 再次调用 `run_backtest`（自动按参数内容生成新幂等键），随后调用 `compare_runs(run_ids=[id1, id2])` 对比不同参数下的指标表现。
 4. **契约导出与联调验证**：
    ```sh
    python scripts/export_mcp.py

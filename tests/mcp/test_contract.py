@@ -1,15 +1,21 @@
-"""Protocol and closed-input tests; no mock claims of factor integration."""
+"""Protocol, normalization, static preflight, and closed-input tests for MCP v2."""
 
 import asyncio
+import json
 
 import httpx
 import pytest
 from mcp import Client
-from pydantic import ValidationError
 
 from ashare_quant.mcp.client import Backend, ResearchError, Settings
-from ashare_quant.mcp.contracts import DailySelection, MinuteSelection, StrategySubmission
-from ashare_quant.mcp.projection import digest, job_view, page
+from ashare_quant.mcp.contracts import (
+    auto_idempotency_key,
+    normalize_daily_window,
+    normalize_minute_window,
+    normalize_securities,
+    normalize_security,
+)
+from ashare_quant.mcp.projection import clean_traceback, compact, digest, page, run_view
 from ashare_quant.mcp.server import create_server
 from tests.mcp.fixture import submission
 
@@ -32,51 +38,94 @@ def test_backend_origin_is_operator_configured_loopback_only(url):
         Settings(url)
 
 
-def test_bounded_inputs_and_required_consent():
-    body = submission("a" * 64)
-    for key in ("accept_research_model", "trusted_local_code"):
-        for value in (None, False):
-            invalid = dict(body)
-            if value is None:
-                invalid.pop(key)
-            else:
-                invalid[key] = value
-            with pytest.raises(ValidationError):
-                StrategySubmission.model_validate(invalid)
-    for change in (
-        {"path": "/etc/passwd"},
-        {"shell": "ls"},
-        {"source_path": "/tmp/a.py"},
-        {"idempotency_key": "../bad"},
-        {"environment_id": "other"},
-    ):
-        with pytest.raises(ValidationError):
-            StrategySubmission.model_validate(body | change)
-    with pytest.raises(ValidationError):
-        DailySelection(securities=["000001.XSHE"], start="2024-01-01", end="2024-03-01")
-    with pytest.raises(ValidationError):
-        MinuteSelection(
-            security="000001.XSHE",
-            start="2024-01-01T00:00:00+08:00",
-            end="2024-01-05T00:00:00+08:00",
-        )
+def test_security_and_window_normalization_and_bounds():
+    assert normalize_security("000001.SZ") == "000001.XSHE"
+    assert normalize_security("sz000001") == "000001.XSHE"
+    assert normalize_security("000001") == "000001.XSHE"
+    assert normalize_security("600000.SH") == "600000.XSHG"
+    assert normalize_security("sh600000") == "600000.XSHG"
+    assert normalize_security("600000") == "600000.XSHG"
+    assert normalize_security("830799.BJ") == "BJ.830799"
+    assert normalize_securities("000001.SZ, 600000.SH, 000001.XSHE") == [
+        "000001.XSHE",
+        "600000.XSHG",
+    ]
+    with pytest.raises(ResearchError, match="INVALID_SECURITY_CODE"):
+        normalize_security("AAPL")
+
+    assert normalize_daily_window("2024-03-01", "2024-03-06") == ("2024-03-01", "2024-03-06")
+    with pytest.raises(ResearchError, match="DATE_WINDOW_TOO_WIDE"):
+        normalize_daily_window("2024-01-01", "2024-03-01")
+
+    assert normalize_minute_window("2024-03-04", "2024-03-04") == (
+        "2024-03-04T09:30:00+08:00",
+        "2024-03-04T15:00:00+08:00",
+    )
+    assert normalize_minute_window("2024-03-04T09:31:00", "2024-03-04T10:00") == (
+        "2024-03-04T09:31:00+08:00",
+        "2024-03-04T10:00:00+08:00",
+    )
+    with pytest.raises(ResearchError, match="MINUTE_WINDOW_TOO_WIDE"):
+        normalize_minute_window("2024-01-01T00:00:00+08:00", "2024-01-05T00:00:00+08:00")
+
+    k1 = auto_idempotency_key("bt", {"a": 1, "b": 2})
+    k2 = auto_idempotency_key("bt", {"b": 2, "a": 1})
+    k3 = auto_idempotency_key("bt", {"a": 1, "b": 3})
+    assert k1 == k2 and k1 != k3
 
 
 def test_project_submission_and_projection_bind_the_complete_source_map():
-    body = submission("a" * 64)
-    body.pop("source")
     identity = "aqproj-" + "1" * 32
-    project = {"project_id": identity, "entrypoint": "main.py",
-               "files": {"main.py": "from .helper import value\n", "helper.py": "value = 1\n"}}
-    body.update(strategy_id=identity, project=project)
-    frozen = StrategySubmission.model_validate(body).model_dump(mode="json")
-    assert "source" not in frozen and frozen["project"] == project
-    view = job_view({"request": frozen})["submission"]
+    project = {
+        "project_id": identity,
+        "entrypoint": "main.py",
+        "files": {"main.py": "from .helper import value\n", "helper.py": "value = 1\n"},
+    }
+    frozen = dict(
+        job_id="m2job-" + "2" * 32,
+        status="queued",
+        request=dict(
+            name="Project test",
+            idempotency_key="proj-1",
+            strategy_id=identity,
+            project=project,
+            start_date="2024-03-04",
+            end_date="2024-03-05",
+            frequency="1m",
+        ),
+    )
+    view = run_view(frozen)["submission"]
+    assert "environment_id" not in view
     assert view["strategy_id"] == identity
-    assert view["project"] == {"project_id": identity, "entrypoint": "main.py",
-                               "file_count": 2, "source_sha256": digest(project)}
+    assert view["project"] == {
+        "project_id": identity,
+        "entrypoint": "main.py",
+        "file_count": 2,
+        "source_sha256": digest(project),
+    }
     changed = project | {"files": project["files"] | {"helper.py": "value = 2\n"}}
-    assert job_view({"request": frozen | {"project": changed}})["submission"]["project"] != view["project"]
+    changed_frozen = frozen | {"request": frozen["request"] | {"project": changed}}
+    assert run_view(changed_frozen)["submission"]["project"] != view["project"]
+
+
+def test_path_sanitization_and_clean_traceback():
+    user_home = "/" + "Users/alice"
+    tb = (
+        'Traceback (most recent call last):\n'
+        f'  File "{user_home}/ashare-quant/src/ashare_quant/backtests/minute/native.py", line 505, in invoke\n'
+        '    result = callback(self.api.context)\n'
+        '  File "/private/var/folders/xx/tmp123/strategy.py", line 5, in trade\n'
+        '    x = 1 / 0\n'
+        'ZeroDivisionError: division by zero\n'
+    )
+    frames = clean_traceback(tb)
+    assert frames == [
+        "strategy.py:5 in trade -> x = 1 / 0",
+        "ZeroDivisionError: division by zero",
+    ]
+    cleaned = compact({"root": "/secret", "note": f"stored in {user_home}/secret/db.sqlite"})
+    assert "root" not in cleaned
+    assert user_home not in json.dumps(cleaned)
 
 
 def test_pages_are_complete_and_tied_to_snapshot_and_query():
@@ -98,7 +147,7 @@ def test_pages_are_complete_and_tied_to_snapshot_and_query():
             page(rows, [], 1, cursor)
 
 
-def test_sdk_schema_and_missing_air_contracts_are_honest():
+def test_no_confirmation_or_hash_fields_and_honest_discovery():
     async def scenario():
         def response(request):
             if request.url.path == "/api/v1/openapi.json":
@@ -119,35 +168,68 @@ def test_sdk_schema_and_missing_air_contracts_are_honest():
         server = create_server(
             Backend(Settings("http://127.0.0.1:8000"), transport=httpx.MockTransport(response))
         )
+        banned_fields = {
+            "trusted_local_code",
+            "accept_research_model",
+            "configuration_id",
+            "environment_id",
+            "family",
+        }
         for mode in ("auto", "legacy"):
             async with Client(server, mode=mode) as c:
                 tools = {t.name: t for t in (await c.list_tools()).tools}
-                assert len(tools) == 13
-                schema = tools["submit_strategy"].input_schema
-                fields = schema["$defs"]["StrategySubmission"]
+                assert len(tools) == 12
+                for t in tools.values():
+                    props = set(t.input_schema.get("properties", {}).keys())
+                    assert not (props & banned_fields), (t.name, props & banned_fields)
+                assert tools["run_backtest"].annotations.read_only_hint is False
+                env_info = (await c.call_tool("get_environment", {"detail": True})).structured_content
+                assert not env_info["ready"]
+                assert not env_info["extensions"]["factors"]["available"]
+                assert all(env_info["extensions"]["factors"]["discovered_paths"].values())
+                assert not env_info["extensions"]["python_daily"]["available"]
+
+                # Resources and prompts work without a live backend
+                resources = (await c.list_resources()).resources
+                assert any(str(r.uri) == "aquant://api-reference" for r in resources)
+                api_doc = await c.read_resource("aquant://api-reference")
+                assert "attribute_history" in api_doc.contents[0].text
+                tmpl = await c.read_resource("aquant://templates/daily_rebalance")
+                assert "def initialize(context):" in tmpl.contents[0].text
+                prompt = await c.get_prompt("research_loop", {"goal": "momentum"})
+                assert "run_backtest" in prompt.messages[0].content.text
+
+                # Static check_strategy catches syntax, jqdata, unsupported calls, missing initialize
+                bad_check = (
+                    await c.call_tool(
+                        "check_strategy",
+                        {
+                            "source": "from jqdata import *\ndef foo(context):\n    get_fundamentals(query())\n    log.set_level('order', 'error')\n    s = '000001.SZ'\n"
+                        },
+                    )
+                ).structured_content
+                assert not bad_check["valid"]
+                codes = {i["code"] for i in bad_check["issues"]}
                 assert {
-                    "trusted_local_code",
-                    "accept_research_model",
-                    "environment_id",
-                } <= set(fields["required"])
-                assert {"source", "project", "strategy_id"} <= fields["properties"].keys()
-                assert not {"source", "project"}.intersection(fields["required"])
-                assert fields["additionalProperties"] is False
-                assert tools["submit_strategy"].annotations.read_only_hint is False
-                caps = (await c.call_tool("research_capabilities")).structured_content
-                assert not caps["extensions"]["factors"]["available"]
-                assert all(caps["extensions"]["factors"]["discovered_paths"].values())
-                assert not caps["extensions"]["python_daily"]["available"]
+                    "AQUANT_LEGACY_IMPORT",
+                    "AQUANT_UNSUPPORTED_CALL",
+                    "AQUANT_INITIALIZE_REQUIRED",
+                    "NON_CANONICAL_SECURITY_LITERAL",
+                } <= codes
+
+                good_check = (
+                    await c.call_tool(
+                        "check_strategy",
+                        {"source": tmpl.contents[0].text, "securities": ["000001.SZ"]},
+                    )
+                ).structured_content
+                assert good_check["valid"]
+                assert good_check["normalized_securities"] == ["000001.XSHE"]
+
                 for name, args in [
-                    ("research_job", {"family": "python_minute", "job_id": "../../etc/passwd"}),
-                    (
-                        "read_minute_prices",
-                        {"configuration_id": "a" * 64, "selection": {"path": "/tmp/a"}},
-                    ),
-                    (
-                        "research_logs",
-                        {"family": "daily", "job_id": "m2job-" + "a" * 32, "limit": 201},
-                    ),
+                    ("get_run", {"run_id": "../../etc/passwd"}),
+                    ("get_prices", {"securities": ["INVALID"], "start": "2024-01-01", "end": "2024-01-02"}),
+                    ("get_run_details", {"run_id": "m2job-" + "a" * 32, "limit": 201}),
                 ]:
                     assert (await c.call_tool(name, args)).is_error
 
@@ -186,7 +268,7 @@ def test_ambiguous_submission_never_posts_again_and_reports_key():
         )
         async with Client(server) as c:
             result = await c.call_tool(
-                "submit_strategy", {"submission": submission("a" * 64, "preserve-this-key")}
+                "run_backtest", submission("preserve-this-key")
             )
             assert result.is_error and len(posts) == 1
             assert "SUBMISSION_UNCERTAIN" in str(result.content)
@@ -218,7 +300,6 @@ def test_response_byte_limit_and_variable_row_pages(monkeypatch):
 
 
 def test_checked_in_tool_contract_matches_sdk():
-    import json
     from pathlib import Path
 
     from scripts.export_mcp import document
@@ -246,7 +327,12 @@ def test_unavailable_coverage_preserves_error_without_hiding_readable_prices():
                 )
             if request.url.path.endswith("/prices"):
                 return httpx.Response(
-                    200, json={"rows": [{"close": "10", "security": "000001.XSHE"}]}
+                    200,
+                    json={
+                        "rows": [
+                            {"date": "2024-01-02", "close": "10", "open": "9.5", "security": "000001.XSHE"}
+                        ]
+                    },
                 )
             return httpx.Response(200, json=["malformed backend response"])
 
@@ -255,22 +341,69 @@ def test_unavailable_coverage_preserves_error_without_hiding_readable_prices():
         )
         async with Client(create_server(backend)) as c:
             result = await c.call_tool(
-                "inspect_data",
+                "get_prices",
                 {
-                    "configuration_id": "a" * 64,
-                    "selection": {
-                        "securities": ["000001.XSHE"],
-                        "start": "2024-01-01",
-                        "end": "2024-01-02",
-                    },
+                    "securities": "000001.SZ",
+                    "start": "2024-01-01",
+                    "end": "2024-01-02",
+                    "fields": ["close"],
                 },
             )
             assert not result.is_error
             value = result.structured_content
             assert not value["coverage"]["ready"]
             assert value["coverage"]["error"]["code"] == "REFERENCE_UNAVAILABLE"
-            assert value["page"]["items"][0]["close"] == "10"
+            assert value["page"]["items"][0] == {
+                "date": "2024-01-02",
+                "close": "10",
+                "security": "000001.XSHE",
+            }
         with pytest.raises(ResearchError, match="BACKEND_PROTOCOL"):
             await backend.request("GET", "/api/v1/unknown")
+
+    asyncio.run(scenario())
+
+
+def test_wait_seconds_polls_until_terminal_state():
+    async def scenario():
+        job_id = "m2job-" + "c" * 32
+        polls = 0
+
+        def response(request):
+            nonlocal polls
+            if request.url.path == f"/api/v1/history/jobs/{job_id}":
+                polls += 1
+                status = "running" if polls < 3 else "succeeded"
+                return httpx.Response(
+                    200,
+                    json={
+                        "job_id": job_id,
+                        "family": "python",
+                        "status": status,
+                        "display_status": status,
+                        "request": {"frequency": "1d", "idempotency_key": "poll-key"},
+                    },
+                )
+            if request.url.path == f"/api/v1/python/jobs/{job_id}":
+                status = "running" if polls < 3 else "succeeded"
+                return httpx.Response(
+                    200,
+                    json={
+                        "job_id": job_id,
+                        "status": status,
+                        "display_status": status,
+                        "request": {"frequency": "1d", "idempotency_key": "poll-key"},
+                    },
+                )
+            return httpx.Response(404, json={"error": {"code": "NOT_FOUND", "message": "not found"}})
+
+        backend = Backend(
+            Settings("http://127.0.0.1:8000"), transport=httpx.MockTransport(response)
+        )
+        async with Client(create_server(backend)) as c:
+            res = await c.call_tool("get_run", {"run_id": job_id, "wait_seconds": 5})
+            assert not res.is_error
+            assert res.structured_content["state"] == "succeeded"
+            assert polls >= 3
 
     asyncio.run(scenario())

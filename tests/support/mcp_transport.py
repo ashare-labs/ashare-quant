@@ -27,16 +27,17 @@ def serving(app):
         sock.close()
         assert not thread.is_alive()
 
-async def call(client, name, **args):
-    result = await client.call_tool(name, args)
+async def call(client, tool_name, **args):
+    result = await client.call_tool(tool_name, args)
     assert not result.is_error, result
     assert result.structured_content is not None, result
     return result.structured_content
 
-async def collect(client, name, **args):
+
+async def collect(client, tool_name, **args):
     rows, cursor = [], None
     while True:
-        result = await call(client, name, **args, limit=1, cursor=cursor)
+        result = await call(client, tool_name, **args, limit=1, cursor=cursor)
         value = result.get("page", result)
         rows.extend(value["items"])
         cursor = value["next_cursor"]

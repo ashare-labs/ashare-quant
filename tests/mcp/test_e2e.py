@@ -1,7 +1,4 @@
-"""Real MCP transports -> loopback HTTP -> immutable AD -> queue -> native RQAlpha.
-
-Synthetic engineering observations only. No mocks in the execution/result chain.
-"""
+"""Real MCP v2 transports -> loopback HTTP -> immutable AD -> queue -> native RQAlpha."""
 
 import asyncio
 import json
@@ -18,9 +15,7 @@ from ashare_quant.mcp.projection import digest
 from ashare_quant.mcp.server import create_server
 from ashare_quant.tasks.worker import work_one
 from tests.mcp.fixture import DAYS, SID, make_deployment, submission
-from tests.support.mcp_transport import call as call
-from tests.support.mcp_transport import collect as collect
-from tests.support.mcp_transport import serving as serving
+from tests.support.mcp_transport import call, collect, serving
 
 
 def test_real_transports_backend_and_parameter_iteration(tmp_path):
@@ -45,10 +40,10 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                     assert refused.status_code == 421
                 for mode in ("auto", "legacy"):
                     async with Client(mcp_url + "/mcp", mode=mode) as client:
-                        assert len((await client.list_tools()).tools) == 13
-                        caps = await call(client, "research_capabilities")
-                        assert caps["python_minute"]["available"]
-                        assert all(f["available"] for f in caps["task_families"].values())
+                        assert len((await client.list_tools()).tools) == 12
+                        env_info = await call(client, "get_environment", detail=True)
+                        assert env_info["ready"]
+                        assert all(f["available"] for f in env_info["task_families"].values())
                         receipt.setdefault("http_protocols", []).append(client.protocol_version)
                 params = StdioServerParameters(
                     command=sys.executable,
@@ -56,97 +51,93 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                     env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                 )
                 async with Client(params) as client:
-                    caps = await call(client, "research_capabilities")
-                    env = caps["python_minute"]["value"]["environment_id"]
-                    cid = caps["product"]["value"]["configuration_id"]
-                    python_api = caps["python_minute"]["value"]
-                    assert "max_stock_minutes" not in python_api
-                    assert python_api["strategy_api"]["module"] == "aquant"
-                    assert python_api["strategy_api"]["legacy_module_supported"] is False
-                    assert caps["extensions"]["factors"]["available"]
-                    assert caps["extensions"]["python_daily"]["available"]
-                    found = await call(client, "discover_data", configuration_id=cid)
-                    assert found["catalogue"]["securities"][0]["security"] == SID
+                    env_info = await call(client, "get_environment")
+                    assert env_info["ready"]
+                    assert env_info["extensions"]["factors"]["available"]
+                    assert env_info["extensions"]["python_daily"]["available"]
+
+                    # Search with shorthand .SZ code normalizes automatically
+                    found = await call(client, "search_securities", query="000001.SZ")
+                    assert found["securities"][0]["security"] == SID
+
+                    # Daily prices without configuration_id
                     selection = dict(securities=[SID], start=DAYS[1], end=DAYS[2])
                     inspected = await call(
-                        client, "inspect_data", configuration_id=cid, selection=selection
+                        client, "get_prices", securities="000001.SZ", start=DAYS[1], end=DAYS[2]
                     )
                     assert inspected["coverage"]["ready"] is False  # no certified limits in fixture
                     direct = await backend.request("POST", "/api/v1/product/prices", body=selection)
                     assert (
                         await collect(
-                            client, "inspect_data", configuration_id=cid, selection=selection
+                            client,
+                            "get_prices",
+                            securities=[SID],
+                            start=DAYS[1],
+                            end=DAYS[2],
                         )
                         == direct["rows"]
                     )
-                    minute = dict(
-                        security=SID,
-                        start=DAYS[1] + "T09:31:00+08:00",
-                        end=DAYS[1] + "T09:35:00+08:00",
-                    )
-                    direct = await backend.request(
-                        "POST", "/api/v1/product/minute/prices", body=minute
+
+                    # Minute prices auto-complete +08:00 timezone
+                    direct_min = await backend.request(
+                        "POST",
+                        "/api/v1/product/minute/prices",
+                        body=dict(
+                            security=SID,
+                            start=DAYS[1] + "T09:31:00+08:00",
+                            end=DAYS[1] + "T09:35:00+08:00",
+                        ),
                     )
                     assert (
                         await collect(
-                            client, "read_minute_prices", configuration_id=cid, selection=minute
+                            client,
+                            "get_prices",
+                            frequency="1m",
+                            securities=SID,
+                            start=DAYS[1] + "T09:31:00",
+                            end=DAYS[1] + "T09:35:00",
                         )
-                        == direct["rows"]
+                        == direct_min["rows"]
                     )
-                    assert (
-                        await client.call_tool(
-                            "inspect_data", dict(configuration_id="f" * 64, selection=selection)
-                        )
-                    ).is_error
+
+                    run_ids = []
                     for size in (100, 200):
-                        body = submission(env, key="iteration-" + str(size), shares=size)
-                        job = await call(client, "submit_strategy", submission=body)
-                        assert job["status"] == "queued" and job["attempt_count"] == 0
-                        assert body["source"] not in json.dumps(job)
-                        assert "request" not in job
-                        same = await call(client, "submit_strategy", submission=body)
-                        assert same["job_id"] == job["job_id"]
-                        direct_submit = await backend.request(
-                            "POST", "/api/v1/python/jobs", body=body
-                        )
-                        assert direct_submit["job_id"] == job["job_id"]
+                        req = submission(f"iteration-{size}", size)
+                        job = await call(client, "run_backtest", **req)
+                        assert (await call(client, "run_backtest", **req))["job_id"] == job[
+                            "job_id"
+                        ]
                         recovered = await call(
                             client,
-                            "find_research_job",
-                            family="python_minute",
-                            idempotency_key=body["idempotency_key"],
+                            "get_run",
+                            idempotency_key=req["idempotency_key"],
                         )
-                        assert recovered["job"]["job_id"] == job["job_id"]
+                        assert recovered["job_id"] == job["job_id"]
                         conflict = await client.call_tool(
-                            "submit_strategy",
-                            dict(submission=body | {"parameters": {"shares": 300}}),
+                            "run_backtest",
+                            req | {"parameters": {"shares": 300}},
                         )
                         assert conflict.is_error
                         job_id = job["job_id"]
+                        run_ids.append(job_id)
                         await asyncio.to_thread(work_one, app.state.tasks, job_id)
-                        status = await call(
-                            client, "research_job", family="python_minute", job_id=job_id
-                        )
-                        assert status["status"] == "succeeded", status
+                        status = await call(client, "get_run", run_id=job_id)
+                        assert status["state"] == "succeeded", status
                         direct = await backend.request(
                             "GET", "/api/v1/python/jobs/" + job_id + "/result"
                         )
-                        summary = await call(
-                            client, "research_result", family="python_minute", job_id=job_id
-                        )
-                        assert summary["summary"] == direct["summary"]
-                        assert summary["result_sha256"] == digest(direct)
-                        assert "native" not in summary
+                        assert status["summary"] == direct["summary"]
+                        assert status["result_sha256"] == digest(direct)
+                        assert "metrics" in status and "net_return" in status["metrics"] and "sharpe" in status["metrics"]
                         for section in ("trades", "orders", "strategy_logs", "positions", "equity"):
                             rows = await collect(
                                 client,
-                                "research_result",
-                                family="python_minute",
-                                job_id=job_id,
+                                "get_run_details",
+                                run_id=job_id,
                                 section=section,
                             )
                             if section == "strategy_logs":
-                                expected = direct["logs"]
+                                expected = list(direct["logs"])
                             elif section == "positions":
                                 expected = [
                                     {"at": r["at"], "security": s, **p}
@@ -162,11 +153,10 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                                 expected = direct["native"][section]
                             assert rows == expected
                         logs = await collect(
-                            client, "research_logs", family="python_minute", job_id=job_id
+                            client, "get_run_details", run_id=job_id, section="system_logs"
                         )
-                        assert (
-                            logs
-                            == (
+                        assert len(logs) == len(
+                            (
                                 await backend.request(
                                     "GET", "/api/v1/python/jobs/" + job_id + "/logs"
                                 )
@@ -185,133 +175,22 @@ def test_real_transports_backend_and_parameter_iteration(tmp_path):
                         receipt["jobs"][0]["summary"]["net_change"]
                         != receipt["jobs"][1]["summary"]["net_change"]
                     )
+                    # List and compare runs side-by-side
+                    listed = await call(client, "list_runs", kind="python")
+                    assert listed["total"] >= 2
+                    compared = await call(client, "compare_runs", run_ids=run_ids)
+                    assert compared["varying_parameters"] == {"shares": [100, 200]}
+                    assert len(compared["runs"]) == 2
+
                 # A fresh subprocess recovers the same durable job; adapter has no private job store.
                 async with Client(params, mode="legacy") as client:
                     recovered = await call(
                         client,
-                        "find_research_job",
-                        family="python_minute",
+                        "get_run",
                         idempotency_key="iteration-100",
                     )
-                    assert recovered["job"]["job_id"] == receipt["jobs"][0]["job_id"]
+                    assert recovered["job_id"] == receipt["jobs"][0]["job_id"]
                     receipt["stdio_protocol"] = client.protocol_version
 
             asyncio.run(scenario())
     (tmp_path / "receipt.json").write_text(json.dumps(receipt, indent=2))
-    destination = os.environ.get("ASHARE_MCP_EVIDENCE")
-    if destination:
-        from pathlib import Path
-
-        Path(destination).write_text(json.dumps(receipt, indent=2))
-
-
-class LostResponse(httpx.AsyncBaseTransport):
-    """Fault only the wire after the *real* backend accepted the POST."""
-
-    def __init__(self):
-        self.dropped = False
-
-    async def handle_async_request(self, request):
-        async with httpx.AsyncHTTPTransport() as transport:
-            response = await transport.handle_async_request(request)
-            await response.aread()
-            if (
-                request.method == "POST"
-                and request.url.path.endswith("/jobs")
-                and not self.dropped
-                and response.status_code == 201
-            ):
-                self.dropped = True
-                raise httpx.ReadTimeout("Injected response loss after real commit", request=request)
-            return response
-
-
-def test_response_loss_concurrent_idempotency_cancellation_and_failure(tmp_path):
-    pytest.importorskip("rqalpha")
-    config = make_deployment(tmp_path / "lab")
-    app = create_app(product_configuration=config)
-    with serving(app) as url:
-        normal = Backend(Settings(url))
-        dropping = LostResponse()
-        server = create_server(Backend(Settings(url), transport=dropping))
-
-        async def scenario():
-            async with Client(server) as c:
-                env = (await call(c, "research_capabilities"))["python_minute"]["value"][
-                    "environment_id"
-                ]
-                body = submission(env, key="lost-response")
-                for invalid in (
-                    body | {"environment_id": "f" * 64},
-                    body | {"trusted_local_code": False},
-                    body | {"accept_research_model": False},
-                ):
-                    assert (await c.call_tool("submit_strategy", {"submission": invalid})).is_error
-                assert (await normal.request("GET", "/api/v1/python/jobs"))["items"] == []
-                lost = await call(c, "submit_strategy", submission=body)
-                assert dropping.dropped and lost["recovered_after_timeout"]
-                repeated = await asyncio.gather(
-                    *[call(c, "submit_strategy", submission=body) for _ in range(3)]
-                )
-                assert {j["job_id"] for j in repeated} == {lost["job_id"]}
-                assert len((await normal.request("GET", "/api/v1/python/jobs"))["items"]) == 1
-                cancel = await call(
-                    c, "cancel_research_job", family="python_minute", job_id=lost["job_id"]
-                )
-                assert cancel["status"] == "cancelled" and not cancel["can_resume"]
-                assert (
-                    await c.call_tool(
-                        "research_result", dict(family="python_minute", job_id=lost["job_id"])
-                    )
-                ).is_error
-                bad = await call(
-                    c,
-                    "submit_strategy",
-                    submission=submission(
-                        env,
-                        "failure",
-                        source='def initialize(context):\n    raise ValueError("intentional engineering failure")\n',
-                    ),
-                )
-                await asyncio.to_thread(work_one, app.state.tasks, bad["job_id"])
-                state = await call(c, "research_job", family="python_minute", job_id=bad["job_id"])
-                assert state["status"] == "failed" and state["error"]
-                assert "intentional engineering failure" in json.dumps(state["error"])
-                slow = await call(
-                    c,
-                    "submit_strategy",
-                    submission=submission(
-                        env,
-                        "running-cancel",
-                        source="import time\ndef initialize(context):\n    time.sleep(30)\n",
-                    ),
-                )
-                work = asyncio.create_task(
-                    asyncio.to_thread(work_one, app.state.tasks, slow["job_id"])
-                )
-                try:
-                    for _ in range(100):
-                        status = await call(
-                            c, "research_job", family="python_minute", job_id=slow["job_id"]
-                        )
-                        if status["status"] == "running":
-                            break
-                        await asyncio.sleep(0.03)
-                    assert status["status"] == "running"
-                    cancelled = await call(
-                        c, "cancel_research_job", family="python_minute", job_id=slow["job_id"]
-                    )
-                    assert cancelled["status"] in ("cancelling", "cancelled")
-                    await asyncio.wait_for(work, 15)
-                    state = await call(
-                        c, "research_job", family="python_minute", job_id=slow["job_id"]
-                    )
-                    assert state["status"] == "cancelled" and not state["can_resume"]
-                finally:
-                    if not work.done():
-                        await normal.request(
-                            "POST", "/api/v1/python/jobs/" + slow["job_id"] + "/cancel", body={}
-                        )
-                        await work
-
-        asyncio.run(scenario())

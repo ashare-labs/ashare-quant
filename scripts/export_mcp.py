@@ -1,4 +1,4 @@
-"""Export the optional MCP tool contract without connecting to a backend."""
+"""Export the optional MCP v2 contract (tools, resources, templates, prompts) without a live backend."""
 
 import argparse
 import asyncio
@@ -14,11 +14,26 @@ from ashare_quant.mcp.server import create_server
 async def document():
     server = create_server(Backend(Settings("http://127.0.0.1:1")))
     async with Client(server) as client:
-        result = await client.list_tools()
+        tools = await client.list_tools()
+        resources = await client.list_resources()
+        templates = await client.list_resource_templates()
+        prompts = await client.list_prompts()
         return dict(
-            schema="research-mcp.tools.v1",
+            schema="research-mcp.tools.v2",
             tools=[
-                t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in result.tools
+                t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in tools.tools
+            ],
+            resources=[
+                r.model_dump(mode="json", by_alias=True, exclude_none=True)
+                for r in resources.resources
+            ],
+            resource_templates=[
+                rt.model_dump(mode="json", by_alias=True, exclude_none=True)
+                for rt in templates.resource_templates
+            ],
+            prompts=[
+                p.model_dump(mode="json", by_alias=True, exclude_none=True)
+                for p in prompts.prompts
             ],
         )
 

@@ -1,5 +1,75 @@
 {
-  "schema": "research-mcp.tools.v1",
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "name": "goal",
+          "required": false
+        }
+      ],
+      "description": "Standard workflow: inspect environment & securities -> preflight with check_strategy -> run_backtest -> compare_runs.",
+      "name": "research_loop",
+      "title": "Quantitative Research Loop"
+    },
+    {
+      "arguments": [
+        {
+          "name": "code",
+          "required": false
+        }
+      ],
+      "description": "Convert legacy jqdata strategy code to aquant and verify via check_strategy.",
+      "name": "port_joinquant_strategy",
+      "title": "Port JoinQuant Strategy to aquant"
+    }
+  ],
+  "resource_templates": [
+    {
+      "description": "Ready-to-run strategy templates: daily_rebalance, minute_timing, multi_file_project.",
+      "mimeType": "text/x-python",
+      "name": "aquant_strategy_template",
+      "title": "aquant Strategy Template",
+      "uriTemplate": "aquant://templates/{name}"
+    }
+  ],
+  "resources": [
+    {
+      "description": "Complete function signatures, context/portfolio fields, and unsupported JQ functions for aquant strategies.",
+      "mimeType": "text/markdown",
+      "name": "aquant_api_reference",
+      "title": "aquant Strategy API Reference",
+      "uri": "aquant://api-reference"
+    },
+    {
+      "description": "Matching rules (1d vs 1m), price adjustment (fq), A-share T+1/lot rules, and data provenance notes.",
+      "mimeType": "text/markdown",
+      "name": "aquant_model_notes",
+      "title": "A宽 Backtest & Data Model Notes",
+      "uri": "aquant://model-notes"
+    },
+    {
+      "description": "Ready-to-run aquant template (daily_rebalance)",
+      "mimeType": "text/x-python",
+      "name": "template_daily_rebalance",
+      "title": "Template: daily_rebalance",
+      "uri": "aquant://templates/daily_rebalance"
+    },
+    {
+      "description": "Ready-to-run aquant template (minute_timing)",
+      "mimeType": "text/x-python",
+      "name": "template_minute_timing",
+      "title": "Template: minute_timing",
+      "uri": "aquant://templates/minute_timing"
+    },
+    {
+      "description": "Ready-to-run aquant template (multi_file_project)",
+      "mimeType": "text/x-python",
+      "name": "template_multi_file_project",
+      "title": "Template: multi_file_project",
+      "uri": "aquant://templates/multi_file_project"
+    }
+  ],
+  "schema": "research-mcp.tools.v2",
   "tools": [
     {
       "annotations": {
@@ -8,16 +78,23 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover real backend availability, environment identities and research limits.",
+      "description": "Get concise environment readiness, available calendar range, frequencies, factor sources, and limits.",
       "inputSchema": {
-        "properties": {},
-        "title": "research_capabilitiesArguments",
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "default": false,
+            "title": "Detail",
+            "type": "boolean"
+          }
+        },
+        "title": "get_environmentArguments",
         "type": "object"
       },
-      "name": "research_capabilities",
+      "name": "get_environment",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "research_capabilitiesDictOutput",
+        "title": "get_environmentDictOutput",
         "type": "object"
       }
     },
@@ -28,14 +105,10 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Search the configured published instrument catalogue and list minute data sources.",
+      "description": "Search published A-share securities by code or name (auto-normalizes .SZ/.SH/sz/sh/6-digit codes).",
       "inputSchema": {
+        "additionalProperties": false,
         "properties": {
-          "configuration_id": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Configuration Id",
-            "type": "string"
-          },
           "limit": {
             "default": 50,
             "maximum": 200,
@@ -56,16 +129,13 @@
             "type": "string"
           }
         },
-        "required": [
-          "configuration_id"
-        ],
-        "title": "discover_dataArguments",
+        "title": "search_securitiesArguments",
         "type": "object"
       },
-      "name": "discover_data",
+      "name": "search_securities",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "discover_dataDictOutput",
+        "title": "search_securitiesDictOutput",
         "type": "object"
       }
     },
@@ -76,81 +146,50 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Check coverage and fetch a bounded daily price page; gaps never become invented prices.",
+      "description": "Read bounded daily ('1d', <=8 securities, <=31 days) or minute ('1m', 1 security, <=3 days) prices.\n\n        Auto-normalizes .SZ/.SH codes and completes +08:00 timezone on minute timestamps.\n        ",
       "inputSchema": {
-        "$defs": {
-          "DailySelection": {
-            "additionalProperties": false,
-            "properties": {
-              "end": {
-                "format": "date",
-                "title": "End",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
                 "type": "string"
               },
-              "reference_set": {
-                "anyOf": [
-                  {
-                    "maxLength": 80,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Reference Set"
-              },
-              "securities": {
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "fields": {
+            "anyOf": [
+              {
                 "items": {
-                  "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
                   "type": "string"
                 },
-                "minItems": 1,
-                "title": "Securities",
                 "type": "array"
               },
-              "source": {
-                "default": "auto",
-                "maxLength": 64,
-                "minLength": 1,
-                "pattern": "^[a-zA-Z0-9_.-]+$",
-                "title": "Source",
-                "type": "string"
-              },
-              "start": {
-                "format": "date",
-                "title": "Start",
-                "type": "string"
-              }
-            },
-            "required": [
-              "securities",
-              "start",
-              "end"
-            ],
-            "title": "DailySelection",
-            "type": "object"
-          }
-        },
-        "properties": {
-          "configuration_id": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Configuration Id",
-            "type": "string"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "maxLength": 1024,
-                "type": "string"
-              },
               {
                 "type": "null"
               }
             ],
             "default": null,
-            "title": "Cursor"
+            "title": "Fields"
+          },
+          "frequency": {
+            "default": "1d",
+            "enum": [
+              "1d",
+              "1m"
+            ],
+            "title": "Frequency",
+            "type": "string"
           },
           "limit": {
             "default": 50,
@@ -159,21 +198,59 @@
             "title": "Limit",
             "type": "integer"
           },
-          "selection": {
-            "$ref": "#/$defs/DailySelection"
+          "reference_set": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Set"
+          },
+          "securities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Securities"
+          },
+          "source": {
+            "default": "auto",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.-]+$",
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
           }
         },
         "required": [
-          "configuration_id",
-          "selection"
+          "securities",
+          "start",
+          "end"
         ],
-        "title": "inspect_dataArguments",
+        "title": "get_pricesArguments",
         "type": "object"
       },
-      "name": "inspect_data",
+      "name": "get_prices",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "inspect_dataDictOutput",
+        "title": "get_pricesDictOutput",
         "type": "object"
       }
     },
@@ -184,98 +261,9 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Read published minute observations in pages; at most one security and three days.",
+      "description": "Search the 368 registered factors (joinquant, alpha191, qlib_alpha158) and list factor sources.\n\n        Pass source_id to page the securities registered in a specific factor data source.\n        ",
       "inputSchema": {
-        "$defs": {
-          "MinuteSelection": {
-            "additionalProperties": false,
-            "properties": {
-              "end": {
-                "format": "date-time",
-                "title": "End",
-                "type": "string"
-              },
-              "security": {
-                "pattern": "^(?:[0-9]{6}\\.(?:XSHG|XSHE)|BJ\\.[0-9]{6})$",
-                "title": "Security",
-                "type": "string"
-              },
-              "source": {
-                "default": "auto",
-                "maxLength": 64,
-                "minLength": 1,
-                "pattern": "^[a-zA-Z0-9_.-]+$",
-                "title": "Source",
-                "type": "string"
-              },
-              "start": {
-                "format": "date-time",
-                "title": "Start",
-                "type": "string"
-              }
-            },
-            "required": [
-              "security",
-              "start",
-              "end"
-            ],
-            "title": "MinuteSelection",
-            "type": "object"
-          }
-        },
-        "properties": {
-          "configuration_id": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Configuration Id",
-            "type": "string"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "maxLength": 1024,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          },
-          "limit": {
-            "default": 50,
-            "maximum": 200,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "selection": {
-            "$ref": "#/$defs/MinuteSelection"
-          }
-        },
-        "required": [
-          "configuration_id",
-          "selection"
-        ],
-        "title": "read_minute_pricesArguments",
-        "type": "object"
-      },
-      "name": "read_minute_prices",
-      "outputSchema": {
-        "additionalProperties": true,
-        "title": "read_minute_pricesDictOutput",
-        "type": "object"
-      }
-    },
-    {
-      "annotations": {
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "Page the live factor catalogue, including exact IDs, definitions and input dependencies.\n\n        qlib_alpha158 features and GTJA alpha191:alpha158 are separate namespaces.\n        ",
-      "inputSchema": {
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "anyOf": [
@@ -289,11 +277,6 @@
             ],
             "default": null,
             "title": "Cursor"
-          },
-          "environment_id": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Environment Id",
-            "type": "string"
           },
           "library": {
             "anyOf": [
@@ -325,19 +308,27 @@
             "title": "Query",
             "type": "string"
           },
+          "source_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,80}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Id"
+          },
           "version": {
             "default": "gtja191.explicit.v1",
-            "enum": [
-              "gtja191.explicit.v1",
-              "gtja191.public.v1"
-            ],
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Version",
             "type": "string"
           }
         },
-        "required": [
-          "environment_id"
-        ],
         "title": "discover_factorsArguments",
         "type": "object"
       },
@@ -355,72 +346,9 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List registered sources and their real readiness/bases; select an ID to page its securities.\n\n        Only server-registered IDs are accepted. Source locators are never agent inputs.\n        The owner catalogue may itself report fewer securities than total_securities.\n        ",
-      "inputSchema": {
-        "properties": {
-          "cursor": {
-            "anyOf": [
-              {
-                "maxLength": 1024,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          },
-          "environment_id": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Environment Id",
-            "type": "string"
-          },
-          "limit": {
-            "default": 50,
-            "maximum": 200,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "source_id": {
-            "anyOf": [
-              {
-                "pattern": "^[A-Za-z0-9_-]{1,80}$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Source Id"
-          }
-        },
-        "required": [
-          "environment_id"
-        ],
-        "title": "factor_sourcesArguments",
-        "type": "object"
-      },
-      "name": "factor_sources",
-      "outputSchema": {
-        "additionalProperties": true,
-        "title": "factor_sourcesDictOutput",
-        "type": "object"
-      }
-    },
-    {
-      "annotations": {
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": true,
-        "readOnlyHint": false
-      },
-      "description": "Submit explicitly trusted minute (default 1m) or daily (1d) Python to the shared queue.\n\n        User must explicitly accept trusted_local_code and accept_research_model; never infer them.\n        Securities and history are requested by strategy APIs against the frozen release.\n        Use actual data coverage and the published resource policy; initial cash is at most 100亿元 CNY.\n        Reuse the exact body/key after uncertain outcomes; no Python checkpoint resume.\n        ",
+      "description": "Preflight a Python strategy (syntax, initialize callback, aquant symbols, security codes, and dates) without queuing.",
       "inputSchema": {
         "$defs": {
-          "JsonValue": {},
           "PythonProject": {
             "additionalProperties": false,
             "properties": {
@@ -450,154 +378,308 @@
             ],
             "title": "PythonProject",
             "type": "object"
-          },
-          "StrategySubmission": {
-            "additionalProperties": false,
-            "description": "Consent fields remain required Literal[True]; never inferred by this adapter.",
-            "properties": {
-              "accept_research_model": {
-                "const": true,
-                "title": "Accept Research Model",
-                "type": "boolean"
-              },
-              "end_date": {
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "anyOf": [
+              {
                 "format": "date",
-                "title": "End Date",
                 "type": "string"
               },
-              "environment_id": {
-                "pattern": "^[0-9a-f]{64}$",
-                "title": "Environment Id",
-                "type": "string"
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End Date"
+          },
+          "frequency": {
+            "default": "1m",
+            "enum": [
+              "1m",
+              "1d"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PythonProject"
               },
-              "frequency": {
-                "default": "1m",
-                "enum": [
-                  "1m",
-                  "1d"
-                ],
-                "title": "Frequency",
-                "type": "string"
-              },
-              "idempotency_key": {
-                "maxLength": 96,
-                "minLength": 1,
-                "pattern": "^[A-Za-z0-9_-]+$",
-                "title": "Idempotency Key",
-                "type": "string"
-              },
-              "initial_cash": {
-                "default": 100000,
-                "exclusiveMinimum": 0,
-                "maximum": 10000000000,
-                "title": "Initial Cash",
-                "type": "number"
-              },
-              "name": {
-                "maxLength": 80,
-                "minLength": 1,
-                "title": "Name",
-                "type": "string"
-              },
-              "parameters": {
-                "additionalProperties": {
-                  "$ref": "#/$defs/JsonValue"
-                },
-                "title": "Parameters",
-                "type": "object"
-              },
-              "project": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/PythonProject"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "securities": {
-                "default": [],
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "securities": {
+            "anyOf": [
+              {
                 "items": {
-                  "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$",
                   "type": "string"
                 },
-                "title": "Securities",
                 "type": "array"
               },
-              "source": {
-                "anyOf": [
-                  {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Source"
-              },
-              "start_date": {
-                "format": "date",
-                "title": "Start Date",
+              {
+                "type": "string"
+              }
+            ],
+            "default": [],
+            "title": "Securities"
+          },
+          "source": {
+            "anyOf": [
+              {
                 "type": "string"
               },
-              "strategy_id": {
-                "anyOf": [
-                  {
-                    "maxLength": 1024,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Strategy Id"
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
               },
-              "trusted_local_code": {
-                "const": true,
-                "title": "Trusted Local Code",
-                "type": "boolean"
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start Date"
+          },
+          "strategy_ref": {
+            "anyOf": [
+              {
+                "type": "string"
               },
-              "warmup_sessions": {
-                "default": 20,
-                "minimum": 0,
-                "title": "Warmup Sessions",
-                "type": "integer"
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Ref"
+          },
+          "workspace": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Workspace"
+          }
+        },
+        "title": "check_strategyArguments",
+        "type": "object"
+      },
+      "name": "check_strategy",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "check_strategyDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Submit a daily ('1d') or minute ('1m') Python strategy backtest and optionally wait for results.\n\n        Automatically normalizes security codes, generates an idempotency key when omitted,\n        and returns the unified run view with 20 returns-v2 performance metrics on completion.\n        ",
+      "inputSchema": {
+        "$defs": {
+          "PythonProject": {
+            "additionalProperties": false,
+            "properties": {
+              "entrypoint": {
+                "minLength": 1,
+                "title": "Entrypoint",
+                "type": "string"
+              },
+              "files": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "minProperties": 1,
+                "title": "Files",
+                "type": "object"
+              },
+              "project_id": {
+                "pattern": "^aqproj-[0-9a-f]{32}$",
+                "title": "Project Id",
+                "type": "string"
               }
             },
             "required": [
-              "environment_id",
-              "name",
-              "idempotency_key",
-              "start_date",
-              "end_date",
-              "accept_research_model",
-              "trusted_local_code"
+              "project_id",
+              "entrypoint",
+              "files"
             ],
-            "title": "StrategySubmission",
+            "title": "PythonProject",
             "type": "object"
           }
         },
+        "additionalProperties": false,
         "properties": {
-          "submission": {
-            "$ref": "#/$defs/StrategySubmission"
+          "benchmark": {
+            "default": "frozen",
+            "title": "Benchmark",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "frequency": {
+            "default": "1m",
+            "enum": [
+              "1m",
+              "1d"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          },
+          "initial_cash": {
+            "default": 100000,
+            "exclusiveMinimum": 0,
+            "maximum": 10000000000,
+            "title": "Initial Cash",
+            "type": "number"
+          },
+          "name": {
+            "default": "Backtest",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PythonProject"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "securities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": [],
+            "title": "Securities"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "strategy_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Ref"
+          },
+          "wait_seconds": {
+            "default": 30.0,
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Wait Seconds",
+            "type": "number"
+          },
+          "warmup_sessions": {
+            "default": 20,
+            "minimum": 0,
+            "title": "Warmup Sessions",
+            "type": "integer"
+          },
+          "workspace": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Workspace"
           }
         },
         "required": [
-          "submission"
+          "start_date",
+          "end_date"
         ],
-        "title": "submit_strategyArguments",
+        "title": "run_backtestArguments",
         "type": "object"
       },
-      "name": "submit_strategy",
+      "name": "run_backtest",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "submit_strategyDictOutput",
+        "title": "run_backtestDictOutput",
         "type": "object"
       }
     },
@@ -608,7 +690,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Freeze a registered factor input and submit calculation with optional Alphalens evaluation.\n\n        Numerical definitions and evaluation are owned by the existing backend. No expressions,\n        paths or source edits are accepted. Use the catalogue definition/environment exactly.\n        Evaluation labels need observed prices through label_end; missing data stays missing.\n        ",
+      "description": "Submit a factor computation and optional Alphalens evaluation, waiting up to wait_seconds.\n\n        Resolves short factor names (e.g. 'alpha014' or 'MA5'), default definition, default ready source_id,\n        and 'all' securities automatically when omitted.\n        ",
       "inputSchema": {
         "$defs": {
           "EvaluationOptions": {
@@ -678,141 +760,172 @@
             },
             "title": "EvaluationOptions",
             "type": "object"
-          },
-          "FactorSubmission": {
-            "additionalProperties": false,
-            "description": "Use the backend's bounded, closed request without accepting source paths.",
-            "properties": {
-              "definition": {
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "anyOf": [
+              {
                 "maxLength": 100,
                 "minLength": 1,
-                "title": "Definition",
                 "type": "string"
               },
-              "end_date": {
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Definition"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "evaluation": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EvaluationOptions"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": true,
+            "title": "Evaluation"
+          },
+          "factor_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Factor Id",
+            "type": "string"
+          },
+          "history_start": {
+            "anyOf": [
+              {
                 "format": "date",
-                "title": "End Date",
                 "type": "string"
               },
-              "environment_id": {
-                "pattern": "^[0-9a-f]{64}$",
-                "title": "Environment Id",
-                "type": "string"
-              },
-              "evaluation": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/EvaluationOptions"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "factor_id": {
-                "pattern": "^(joinquant|alpha191|qlib_alpha158):[A-Za-z0-9_]+$",
-                "title": "Factor Id",
-                "type": "string"
-              },
-              "history_start": {
-                "format": "date",
-                "title": "History Start",
-                "type": "string"
-              },
-              "idempotency_key": {
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "History Start"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
                 "maxLength": 96,
                 "minLength": 1,
                 "pattern": "^[A-Za-z0-9_-]+$",
-                "title": "Idempotency Key",
                 "type": "string"
               },
-              "label_end": {
-                "anyOf": [
-                  {
-                    "format": "date",
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Label End"
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          },
+          "label_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
               },
-              "name": {
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label End"
+          },
+          "name": {
+            "anyOf": [
+              {
                 "maxLength": 80,
                 "minLength": 1,
-                "title": "Name",
                 "type": "string"
               },
-              "parameters": {
-                "additionalProperties": {
-                  "$ref": "#/$defs/JsonValue"
-                },
-                "title": "Parameters",
-                "type": "object"
-              },
-              "rank_policy": {
-                "default": "strict",
-                "enum": [
-                  "strict",
-                  "available"
-                ],
-                "title": "Rank Policy",
-                "type": "string"
-              },
-              "securities": {
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "rank_policy": {
+            "default": "strict",
+            "enum": [
+              "strict",
+              "available"
+            ],
+            "title": "Rank Policy",
+            "type": "string"
+          },
+          "securities": {
+            "anyOf": [
+              {
                 "items": {
                   "type": "string"
                 },
-                "minItems": 1,
-                "title": "Securities",
                 "type": "array"
               },
-              "source_id": {
-                "pattern": "^[A-Za-z0-9_-]{1,80}$",
-                "title": "Source Id",
-                "type": "string"
-              },
-              "start_date": {
-                "format": "date",
-                "title": "Start Date",
+              {
                 "type": "string"
               }
-            },
-            "required": [
-              "environment_id",
-              "idempotency_key",
-              "name",
-              "factor_id",
-              "definition",
-              "source_id",
-              "securities",
-              "history_start",
-              "start_date",
-              "end_date"
             ],
-            "title": "FactorSubmission",
-            "type": "object"
+            "default": "all",
+            "title": "Securities"
           },
-          "JsonValue": {}
-        },
-        "properties": {
-          "submission": {
-            "$ref": "#/$defs/FactorSubmission"
+          "source_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,80}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Id"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "wait_seconds": {
+            "default": 30.0,
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Wait Seconds",
+            "type": "number"
           }
         },
         "required": [
-          "submission"
+          "factor_id",
+          "start_date",
+          "end_date"
         ],
-        "title": "submit_factorArguments",
+        "title": "run_factorArguments",
         "type": "object"
       },
-      "name": "submit_factor",
+      "name": "run_factor",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "submit_factorDictOutput",
+        "title": "run_factorDictOutput",
         "type": "object"
       }
     },
@@ -823,39 +936,58 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Recover a lost submission response using its original idempotency key.",
+      "description": "Get unified run state, progress, 20 returns-v2 metrics (or factor summary), or failure diagnostics + strategy logs.\n\n        Look up by run_id or idempotency_key without needing a family parameter.\n        ",
       "inputSchema": {
+        "additionalProperties": false,
         "properties": {
-          "family": {
-            "enum": [
-              "python_minute",
-              "python_daily",
-              "factors",
-              "portfolio",
-              "daily"
-            ],
-            "title": "Family",
+          "benchmark": {
+            "default": "frozen",
+            "title": "Benchmark",
             "type": "string"
           },
           "idempotency_key": {
-            "maxLength": 96,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Idempotency Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "pattern": "^m2job-[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "wait_seconds": {
+            "default": 0.0,
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Wait Seconds",
+            "type": "number"
           }
         },
-        "required": [
-          "family",
-          "idempotency_key"
-        ],
-        "title": "find_research_jobArguments",
+        "title": "get_runArguments",
         "type": "object"
       },
-      "name": "find_research_job",
+      "name": "get_run",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "find_research_jobDictOutput",
+        "title": "get_runDictOutput",
         "type": "object"
       }
     },
@@ -866,91 +998,15 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Read authoritative queue/worker status, cancellation state and actionable failure.",
+      "description": "Page detailed run records (trades, positions, equity, orders, strategy_logs, analysis_series, factor_values, ic, system_logs).\n\n        Works without a family parameter, and supports strategy_logs even when a Python strategy run failed.\n        ",
       "inputSchema": {
+        "additionalProperties": false,
         "properties": {
-          "family": {
-            "enum": [
-              "python_minute",
-              "python_daily",
-              "factors",
-              "portfolio",
-              "daily"
-            ],
-            "title": "Family",
+          "benchmark": {
+            "default": "frozen",
+            "title": "Benchmark",
             "type": "string"
           },
-          "job_id": {
-            "pattern": "^m2job-[0-9a-f]{32}$",
-            "title": "Job Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "family",
-          "job_id"
-        ],
-        "title": "research_jobArguments",
-        "type": "object"
-      },
-      "name": "research_job",
-      "outputSchema": {
-        "additionalProperties": true,
-        "title": "research_jobDictOutput",
-        "type": "object"
-      }
-    },
-    {
-      "annotations": {
-        "destructiveHint": true,
-        "idempotentHint": true,
-        "openWorldHint": false,
-        "readOnlyHint": false
-      },
-      "description": "Request backend cancellation; running jobs may remain cancelling until acknowledged.",
-      "inputSchema": {
-        "properties": {
-          "family": {
-            "enum": [
-              "python_minute",
-              "python_daily",
-              "factors",
-              "portfolio",
-              "daily"
-            ],
-            "title": "Family",
-            "type": "string"
-          },
-          "job_id": {
-            "pattern": "^m2job-[0-9a-f]{32}$",
-            "title": "Job Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "family",
-          "job_id"
-        ],
-        "title": "cancel_research_jobArguments",
-        "type": "object"
-      },
-      "name": "cancel_research_job",
-      "outputSchema": {
-        "additionalProperties": true,
-        "title": "cancel_research_jobDictOutput",
-        "type": "object"
-      }
-    },
-    {
-      "annotations": {
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "Read a bounded log page. If logs changed, restart pagination from the first page.",
-      "inputSchema": {
-        "properties": {
           "cursor": {
             "anyOf": [
               {
@@ -964,99 +1020,30 @@
             "default": null,
             "title": "Cursor"
           },
-          "family": {
-            "enum": [
-              "python_minute",
-              "python_daily",
-              "factors",
-              "portfolio",
-              "daily"
-            ],
-            "title": "Family",
-            "type": "string"
-          },
-          "job_id": {
-            "pattern": "^m2job-[0-9a-f]{32}$",
-            "title": "Job Id",
-            "type": "string"
-          },
           "limit": {
             "default": 50,
             "maximum": 200,
             "minimum": 1,
             "title": "Limit",
             "type": "integer"
-          }
-        },
-        "required": [
-          "family",
-          "job_id"
-        ],
-        "title": "research_logsArguments",
-        "type": "object"
-      },
-      "name": "research_logs",
-      "outputSchema": {
-        "additionalProperties": true,
-        "title": "research_logsDictOutput",
-        "type": "object"
-      }
-    },
-    {
-      "annotations": {
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "Read summary first, then complete bounded trades/positions/equity/orders pages.\n\n        Detailed sections support Python and factor jobs. Native values are projected,\n        never recalculated. evaluation is a lossless page of JSON-pointer/value leaves. Cursors bind the exact result and section.\n        ",
-      "inputSchema": {
-        "properties": {
-          "cursor": {
-            "anyOf": [
-              {
-                "maxLength": 1024,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
           },
-          "family": {
-            "enum": [
-              "python_minute",
-              "python_daily",
-              "factors",
-              "portfolio",
-              "daily"
-            ],
-            "title": "Family",
-            "type": "string"
-          },
-          "job_id": {
+          "run_id": {
             "pattern": "^m2job-[0-9a-f]{32}$",
-            "title": "Job Id",
+            "title": "Run Id",
             "type": "string"
-          },
-          "limit": {
-            "default": 50,
-            "maximum": 200,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
           },
           "section": {
-            "default": "summary",
+            "default": "trades",
             "enum": [
-              "summary",
               "trades",
               "positions",
               "equity",
               "orders",
               "strategy_logs",
+              "analysis_series",
+              "drawdowns",
+              "monthly",
+              "rolling",
               "factor_values",
               "evaluation",
               "evaluation_summary",
@@ -1067,23 +1054,162 @@
               "spread",
               "stability",
               "turnover",
-              "cost_sensitivity"
+              "cost_sensitivity",
+              "system_logs"
             ],
             "title": "Section",
             "type": "string"
           }
         },
         "required": [
-          "family",
-          "job_id"
+          "run_id"
         ],
-        "title": "research_resultArguments",
+        "title": "get_run_detailsArguments",
         "type": "object"
       },
-      "name": "research_result",
+      "name": "get_run_details",
       "outputSchema": {
         "additionalProperties": true,
-        "title": "research_resultDictOutput",
+        "title": "get_run_detailsDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List recent backtest and factor runs with their status, parameters, and headline metrics.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "default": "all",
+            "enum": [
+              "all",
+              "python",
+              "factors"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "State"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          }
+        },
+        "title": "list_runsArguments",
+        "type": "object"
+      },
+      "name": "list_runs",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "list_runsDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Compare 2-10 runs side-by-side across parameters, returns-v2 performance metrics, or factor IC summaries.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark": {
+            "default": "frozen",
+            "title": "Benchmark",
+            "type": "string"
+          },
+          "run_ids": {
+            "items": {
+              "pattern": "^m2job-[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 2,
+            "title": "Run Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_ids"
+        ],
+        "title": "compare_runsArguments",
+        "type": "object"
+      },
+      "name": "compare_runs",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "compare_runsDictOutput",
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Request cancellation of a queued or running Python backtest or factor job by run_id.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "pattern": "^m2job-[0-9a-f]{32}$",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "cancel_runArguments",
+        "type": "object"
+      },
+      "name": "cancel_run",
+      "outputSchema": {
+        "additionalProperties": true,
+        "title": "cancel_runDictOutput",
         "type": "object"
       }
     }

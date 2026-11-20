@@ -16,5 +16,5 @@
 | [factors.md](factors.md) | 368 项因子目录（聚宽 19 + Alpha191 + Qlib Alpha158）、数据源配置、异步计算与 Alphalens 评价 |
 | [result-analysis.md](result-analysis.md) | 冻结结果派生分析（`returns-v1` / `returns-v2`）、20 项绩效指标定义、基准比较与交易盈亏归因 |
 | [paper.md](paper.md) | `/api/v1/paper` 只读账户历史、已结算 v3 账本运行时升级授权与持仓续接 |
-| [research-mcp.md](research-mcp.md) | Agent Research MCP 适配层、13 个研究与因子工具、幂等提交与分页协议 |
+| [research-mcp.md](research-mcp.md) | Agent Research MCP v2 适配层、12 个面向任务的工具、内置 `aquant://` 知识资源与提示模板 |
 | [development.md](development.md) | 依赖锁定、运行时快照、契约生成、wheel 验证、软件许可及历史退役路由对照表 |

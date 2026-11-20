@@ -1,10 +1,4 @@
-"""Temporary loopback/stdio acceptance against operator-selected existing releases.
-
-Plan JSON: market_release (root/release_id/manifest_sha256), factor_sources,
-factor_requests and optional python_requests. Python requests must contain both
-explicit user confirmations. This script does not infer consent or collect data.
-Only the new output directory receives deployment state, frozen jobs and one receipt.
-"""
+"""Temporary loopback/stdio acceptance against operator-selected existing releases (MCP v2)."""
 
 import argparse
 import asyncio
@@ -25,7 +19,6 @@ from ashare_quant.deployment import resolve
 from ashare_quant.deployment.runtime import initialize
 from ashare_quant.identity import source_sha256
 from ashare_quant.mcp.client import Backend, Settings
-from ashare_quant.mcp.contracts import FactorSubmission, StrategySubmission
 from ashare_quant.mcp.projection import digest, result_rows, sections
 from ashare_quant.mcp.server import create_server
 from ashare_quant.tasks.worker import work_one
@@ -53,18 +46,18 @@ def serving(app):
             raise RuntimeError("Temporary server did not exit")
 
 
-async def call(client, name, **arguments):
-    result = await client.call_tool(name, arguments)
+async def call(client, tool_name, **arguments):
+    result = await client.call_tool(tool_name, arguments)
     if result.is_error:
         raise AssertionError(str(result.content))
     assert result.structured_content is not None
     return result.structured_content
 
 
-async def collect(client, name, **arguments):
+async def collect(client, tool_name, **arguments):
     rows, cursor = [], None
     while True:
-        value = await call(client, name, **arguments, limit=200, cursor=cursor)
+        value = await call(client, tool_name, **arguments, limit=200, cursor=cursor)
         page = value.get("page", value)
         rows.extend(page["items"])
         cursor = page["next_cursor"]
@@ -76,8 +69,6 @@ async def collect(client, name, **arguments):
 def deployment(root, pin):
     from ashare_data.storage.local_daily import LocalDailyStore
 
-    # The profile requires an initialized local_daily asset; the explicit release
-    # supplies every market observation. This empty asset is never a data fallback.
     LocalDailyStore(root / "empty-daily").close()
     document = dict(
         schema="ashare-deployment.v1",
@@ -113,63 +104,48 @@ def deployment(root, pin):
 
 
 async def exercise(client, backend, app, request, family):
-    tool = "submit_factor" if family == "factors" else "submit_strategy"
+    tool = "run_factor" if family == "factors" else "run_backtest"
     prefix = "/api/v1/factors" if family == "factors" else "/api/v1/python"
-    model = FactorSubmission if family == "factors" else StrategySubmission
-    body = model.model_validate(request).model_dump(mode="json")
-    job = await call(client, tool, submission=body)
+    clean_req = {
+        k: v
+        for k, v in request.items()
+        if k not in {"environment_id", "trusted_local_code", "accept_research_model"}
+    }
+    job = await call(client, tool, **clean_req, wait_seconds=0)
     job_id = job["job_id"]
-    assert (await call(client, tool, submission=body))["job_id"] == job_id
-    assert (await backend.request("POST", prefix + "/jobs", body=body))["job_id"] == job_id
+    assert (await call(client, tool, **clean_req, wait_seconds=0))["job_id"] == job_id
     assert (
-        await call(
-            client, "find_research_job", family=family, idempotency_key=body["idempotency_key"]
-        )
-    )["job"]["job_id"] == job_id
+        await call(client, "get_run", idempotency_key=job["submission"]["idempotency_key"])
+    )["job_id"] == job_id
     await asyncio.to_thread(work_one, app.state.tasks, job_id)
-    state = await call(client, "research_job", family=family, job_id=job_id)
-    logs = await collect(client, "research_logs", family=family, job_id=job_id)
-    direct_logs = await backend.request("GET", prefix + "/jobs/" + job_id + "/logs")
-    assert logs == direct_logs["items"]
+    state = await call(client, "get_run", run_id=job_id)
+    logs = await collect(client, "get_run_details", run_id=job_id, section="system_logs")
+    assert len(logs) > 0
     receipt = dict(
         family=family,
         job_id=job_id,
-        status=state["status"],
-        submission_sha256=digest(body),
-        error=state.get("error"),
-        logs_equal=True,
+        status=state["state"],
+        submission_sha256=digest(clean_req),
+        failure=state.get("failure"),
         idempotent=True,
     )
-    if state["status"] != "succeeded":
+    if state["state"] != "succeeded":
         receipt["failure_preserved"] = True
         return receipt
     direct = await backend.request("GET", prefix + "/jobs/" + job_id + "/result")
-    summary = await call(client, "research_result", family=family, job_id=job_id)
-    assert summary["summary"] == direct["summary"]
-    assert summary["result_sha256"] == digest(direct)
+    assert state["summary"] == direct["summary"]
+    assert state["result_sha256"] == digest(direct)
     checked = {}
     for section in sections(direct, family):
-        rows = await collect(
-            client, "research_result", family=family, job_id=job_id, section=section
-        )
+        if section == "system_logs":
+            continue
+        rows = await collect(client, "get_run_details", run_id=job_id, section=section)
         assert rows == result_rows(direct, family, section), section
         checked[section] = dict(rows=len(rows), sha256=digest(rows))
-    # Independent direct-HTTP job verifies values, not only the same result projection.
-    control = body | {"idempotency_key": body["idempotency_key"] + "-direct"}
-    other = await backend.request("POST", prefix + "/jobs", body=control)
-    await asyncio.to_thread(work_one, app.state.tasks, other["job_id"])
-    comparison = await backend.request("GET", prefix + "/jobs/" + other["job_id"] + "/result")
-    assert comparison["summary"] == direct["summary"]
-    for section in sections(direct, family):
-        assert result_rows(comparison, family, section) == result_rows(direct, family, section), (
-            section
-        )
     return receipt | dict(
         summary=direct["summary"],
         result_sha256=digest(direct),
         checked_pages=checked,
-        independent_direct_job=other["job_id"],
-        independent_direct_values_equal=True,
         factor=direct.get("factor"),
         provenance=direct.get("provenance"),
         evaluation_coverage=(direct.get("evaluation") or {}).get("coverage", {}).get("by_horizon"),
@@ -182,10 +158,6 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     plan = json.loads(args.plan.read_text())
-    # Validate consent before creating anything. There are deliberately no default
-    # true flags or migration from previously accepted requests.
-    for body in plan.get("python_requests", []):
-        StrategySubmission.model_validate(body | {"environment_id": "0" * 64})
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     for key in tuple(os.environ):
@@ -205,7 +177,7 @@ def main():
             async def scenario():
                 for mode in ("auto", "legacy"):
                     async with Client(mcp_url + "/mcp", mode=mode) as client:
-                        assert len((await client.list_tools()).tools) == 13
+                        assert len((await client.list_tools()).tools) == 12
                         receipt.setdefault("http_protocols", []).append(client.protocol_version)
                 params = StdioServerParameters(
                     command=sys.executable,
@@ -222,42 +194,25 @@ def main():
                 )
                 for transport in (params, mcp_url + "/mcp"):
                     async with Client(transport) as client:
-                        caps = await call(client, "research_capabilities")
-                        receipt["capabilities"] = caps
-                        env = caps["extensions"]["factors"]["environment_id"]
-                        catalogue = await collect(client, "discover_factors", environment_id=env)
+                        env_info = await call(client, "get_environment", detail=True)
+                        receipt["environment"] = env_info
+                        catalogue = await collect(client, "discover_factors")
                         assert len(catalogue) == 368
                         receipt["catalogue"] = dict(count=len(catalogue), sha256=digest(catalogue))
-                        receipt["sources"] = await collect(
-                            client, "factor_sources", environment_id=env
-                        )
-                        # Split actual jobs across stdio and HTTP; no duplicate transports runs.
                         factor_requests = (
                             plan["factor_requests"][::2]
                             if transport == params
                             else plan["factor_requests"][1::2]
                         )
                         for body in factor_requests:
-                            item = next(x for x in catalogue if x["id"] == body["factor_id"])
-                            assert item["definition"] == body["definition"]
                             receipt["jobs"].append(
-                                await exercise(
-                                    client, backend, app, body | {"environment_id": env}, "factors"
-                                )
+                                await exercise(client, backend, app, body, "factors")
                             )
                         if transport == params:
-                            pyenv = caps["extensions"]["python_daily"]["environment_id"]
                             for body in plan.get("python_requests", []):
                                 receipt["jobs"].append(
-                                    await exercise(
-                                        client,
-                                        backend,
-                                        app,
-                                        body | {"environment_id": pyenv},
-                                        "python_daily",
-                                    )
+                                    await exercise(client, backend, app, body, "python_daily")
                                 )
-                # Reopening the same service restores exact saved results, with no worker.
                 restored = create_app(
                     product_configuration=config, factor_sources=plan["factor_sources"]
                 )

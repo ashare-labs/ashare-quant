@@ -264,9 +264,8 @@ def make_deployment(root, *, minute_readers=None):
     return config
 
 
-def submission(environment_id, key="synthetic-100", shares=100, source=SOURCE):
+def submission(key="synthetic-100", shares=100, source=SOURCE, wait_seconds=0):
     return dict(
-        environment_id=environment_id,
         name="Synthetic MCP engineering experiment",
         idempotency_key=key,
         source=source,
@@ -275,6 +274,5 @@ def submission(environment_id, key="synthetic-100", shares=100, source=SOURCE):
         start_date=DAYS[1],
         end_date=DAYS[2],
         initial_cash=100000,
-        accept_research_model=True,
-        trusted_local_code=True,
+        wait_seconds=wait_seconds,
     )

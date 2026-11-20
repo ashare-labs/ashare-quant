@@ -1,6 +1,7 @@
 """Fixed-origin, bounded HTTP client. No filesystem, SQL, shell or arbitrary routes."""
 
 import json
+from collections import OrderedDict
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -14,6 +15,21 @@ PREFIXES = {
     "daily": "/api/v1/history",
 }
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+CACHE_CAPACITY = 4
+
+
+def _error_hint(code: str, status: int, method: str) -> str:
+    if code == "M2_JOB_RESULT_NOT_READY":
+        return "Run has not produced a published result yet; call get_run with wait_seconds>0 or inspect failure diagnostics."
+    if code in {"PYTHON_SYNTAX_ERROR", "AQUANT_LEGACY_IMPORT", "AQUANT_INITIALIZE_REQUIRED"}:
+        return "Call check_strategy first to validate syntax, aquant imports, and lifecycle functions."
+    if code in {"M2_JOB_NOT_FOUND", "HISTORY_NOT_FOUND"} or status == 404:
+        return "Verify run_id via list_runs() or pass idempotency_key to get_run()."
+    if status in {429, 503}:
+        return "Backend is temporarily busy or unavailable; wait briefly and retry."
+    if method == "POST":
+        return "Inspect the message/details; if retrying an identical submission after a timeout, reuse the same idempotency_key."
+    return "Inspect error code and message, or call get_environment() to verify available capabilities."
 
 
 class ResearchError(Exception):
@@ -47,8 +63,9 @@ class Settings:
 class Backend:
     def __init__(self, settings, *, transport=None):
         self.settings, self.transport = settings, transport
+        self._cache: OrderedDict[tuple, dict] = OrderedDict()
 
-    async def request(self, method, path, *, body=None, params=None):
+    async def request(self, method, path, *, body=None, params=None, headers=None):
         # All callers build these paths from constants and validated identifiers.
         async with httpx.AsyncClient(
             base_url=self.settings.backend_url,
@@ -58,14 +75,16 @@ class Backend:
             transport=self.transport,
         ) as client:
             try:
-                async with client.stream(method, path, json=body, params=params) as response:
+                async with client.stream(
+                    method, path, json=body, params=params, headers=headers
+                ) as response:
                     raw = bytearray()
                     async for chunk in response.aiter_bytes():
                         raw.extend(chunk)
                         if len(raw) > MAX_RESPONSE_BYTES:
                             raise ResearchError(
                                 "BACKEND_RESPONSE_LIMIT",
-                                "Response exceeded 32 MiB; narrow the query or use backend export",
+                                "Response exceeded 32 MiB; narrow the query or use smaller date windows",
                             )
                     try:
                         value = json.loads(raw)
@@ -83,24 +102,38 @@ class Backend:
                         error = value.get("error")
                         if not isinstance(error, dict):
                             error = {}
+                        code = str(error.get("code", "BACKEND_HTTP_ERROR"))[:120]
+                        message = str(error.get("message", "Backend rejected the request"))[:2000]
                         raise ResearchError(
-                            str(error.get("code", "BACKEND_HTTP_ERROR"))[:120],
-                            str(error.get("message", "Backend rejected the request"))[:2000],
+                            code,
+                            message,
                             status=response.status_code,
+                            retryable=response.status_code in {429, 502, 503, 504},
                             retry_after=response.headers.get("retry-after"),
-                            remedy="Check capabilities, request fields and backend task logs; "
-                            "keep the same idempotency key when retrying a submission",
+                            hint=_error_hint(code, response.status_code, method),
                         )
                     return value
             except httpx.TransportError as exc:
                 raise ResearchError(
                     "BACKEND_UNREACHABLE",
-                    "Backend connection failed; a submitted task may already exist",
+                    "Backend connection failed; if a submission was in flight, check get_run(idempotency_key=...) before retrying",
                     failure=type(exc).__name__,
+                    retryable=True,
                 ) from exc
 
-    async def optional(self, path):
+    async def cached_get(self, cache_key: tuple, path: str, *, params=None):
+        if cache_key and cache_key in self._cache:
+            self._cache.move_to_end(cache_key)
+            return self._cache[cache_key]
+        value = await self.request("GET", path, params=params)
+        if cache_key:
+            self._cache[cache_key] = value
+            while len(self._cache) > CACHE_CAPACITY:
+                self._cache.popitem(last=False)
+        return value
+
+    async def optional(self, path, *, params=None):
         try:
-            return {"available": True, "value": await self.request("GET", path)}
+            return {"available": True, "value": await self.request("GET", path, params=params)}
         except ResearchError as exc:
             return {"available": False, "error": exc.payload}

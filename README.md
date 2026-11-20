@@ -44,13 +44,13 @@ python -m ashare_quant.deployment paper
 - [因子看板与离线评价](docs/factors.md)：368 项统一因子目录（聚宽 19 + Alpha191 + Qlib Alpha158）、数据源登记与 Alphalens 评价。
 - [结果分析与收益归因](docs/result-analysis.md)：`returns-v1` / `returns-v2` 相对净值超额口径、20 项核心指标定义、比较基准切换与交易盈亏归因。
 - [账户历史与运行时迁移](docs/paper.md)：`/api/v1/paper` 只读历史查询、已结算 v3 账本运行时升级授权与持仓续接。
-- [Agent 研究 MCP](docs/research-mcp.md)：面向 AI Agent 的 13 个研究与因子工具（`stdio` / `streamable-http`）、分页与幂等提交协议。
+- [Agent 研究 MCP](docs/research-mcp.md)：面向 AI Agent 的 12 个研究与因子工具、`aquant://` 知识资源与提示模板（`stdio` / `streamable-http`）。
 - [开发、依赖与许可](docs/development.md)：依赖锁定、运行时快照、OpenAPI/MCP 契约生成、wheel 隔离验证、软件许可与历史接口退役对照表。
 
 ## 限制与说明
 
 以下全局边界适用于本仓库所有模块，各分册不再重复赘述：
 
-1. **受信任本地执行环境**：自定义 Python 策略在本地 worker 子进程中以当前用户权限执行，并非面向不受信任多租户的恶意代码隔离沙箱；提交任务需显式确认 `trusted_local_code=True` 与 `accept_research_model=True`。
+1. **受信任本地执行环境**：自定义 Python 策略在本地 worker 子进程中以当前用户权限执行，并非面向不受信任多租户的恶意代码隔离沙箱。
 2. **数据与证据继承**：A宽不自行抓取、修补或伪造行情数据；知识时点（PIT）、停牌、涨跌停限价（如 5%/10% 前收研究模型）与公司行动的覆盖范围均继承自所绑定 A数达发布的回执声明。
 3. **代码包与运行产物分离**：源码树与发行 wheel 不包含真实行情库、个人凭据、模拟账户账本或历史回测产物；冻结任务输入与已发布结果保持只读，不随源码升级而静默重写。

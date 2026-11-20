@@ -1,4 +1,4 @@
-"""Real factor worker/evaluation through MCP using explicitly synthetic observations."""
+"""Real factor worker/evaluation through MCP v2 using explicitly synthetic observations."""
 
 import asyncio
 from pathlib import Path
@@ -36,61 +36,51 @@ def test_factor_discovery_compute_evaluate_and_frozen_recovery(tmp_path, source)
                 args=["-B", "-m", "ashare_quant.mcp.server", "--backend-url", url],
                 env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
             )
-            for transport, factor_id, definition in (
-                (create_server(backend), "alpha191:alpha014", "gtja191.explicit.v1"),
-                (params, "qlib_alpha158:MA5", "qlib.alpha158.v0.9.7"),
+            for transport, short_query, factor_id, definition in (
+                (create_server(backend), "alpha014", "alpha191:alpha014", "gtja191.explicit.v1"),
+                (params, "qlib_alpha158:MA5", "qlib_alpha158:MA5", "qlib.alpha158.v0.9.7"),
             ):
                 async with Client(transport) as c:
-                    caps = await call(c, "research_capabilities")
-                    factor = caps["extensions"]["factors"]
+                    env_info = await call(c, "get_environment")
+                    factor = env_info["extensions"]["factors"]
                     assert factor["available"] and factor["evaluation_available"]
-                    # Retired sample/size ceilings must not return through MCP discovery.
                     assert factor["limits"] == {}
-                    assert not caps["extensions"]["python_daily"]["available"]
-                    env = factor["environment_id"]
-                    listing = await call(c, "discover_factors", environment_id=env, query=factor_id)
+                    assert not env_info["extensions"]["python_daily"]["available"]
+
+                    listing = await call(c, "discover_factors", query=factor_id)
                     assert listing["limits"] == factor["limits"]
+                    assert listing["sources"][0]["ready"]
+                    assert "path" not in str(listing["sources"])
                     item = listing["page"]["items"][0]
                     assert item["id"] == factor_id and item["definition"] == definition
-                    sources = await call(c, "factor_sources", environment_id=env)
-                    assert sources["page"]["items"][0]["ready"]
-                    assert "path" not in str(sources)
-                    stocks = await collect(
-                        c, "factor_sources", environment_id=env, source_id="fixture"
-                    )
+
+                    stocks = await collect(c, "discover_factors", source_id="fixture")
                     assert [r["security"] for r in stocks] == payload["securities"]
+
                     body = dict(
-                        environment_id=env,
                         idempotency_key=item["field"],
                         name="Synthetic factor",
-                        factor_id=factor_id,
-                        definition=definition,
-                        source_id="fixture",
-                        securities=payload["securities"],
+                        factor_id=short_query,  # Also tests short factor_id resolution
                         history_start=payload["sessions"][0],
                         start_date="2024-01-09",
                         end_date="2024-01-12",
                         label_end="2024-01-17",
                         evaluation=dict(horizons=[1], quantiles=2, min_assets=2, rolling_window=2),
+                        wait_seconds=0,
                     )
                     for change in ({"path": "/etc/passwd"}, {"definition": "made-up"}):
-                        assert (
-                            await c.call_tool("submit_factor", {"submission": body | change})
-                        ).is_error
-                    job = await call(c, "submit_factor", submission=body)
+                        assert (await c.call_tool("run_factor", body | change)).is_error
+
+                    job = await call(c, "run_factor", **body)
                     job_id = job["job_id"]
-                    assert (await call(c, "submit_factor", submission=body))["job_id"] == job_id
+                    assert (await call(c, "run_factor", **body))["job_id"] == job_id
                     assert (
-                        await c.call_tool("submit_factor", {"submission": body | {"name": "other"}})
+                        await c.call_tool("run_factor", body | {"name": "other"})
                     ).is_error
                     assert (
-                        await call(
-                            c,
-                            "find_research_job",
-                            family="factors",
-                            idempotency_key=body["idempotency_key"],
-                        )
-                    )["job"]["job_id"] == job_id
+                        await call(c, "get_run", idempotency_key=body["idempotency_key"])
+                    )["job_id"] == job_id
+
                     # The accepted job executes the frozen bytes, even if the input changes.
                     original = path.read_bytes()
                     path.write_text("{}")
@@ -98,28 +88,27 @@ def test_factor_discovery_compute_evaluate_and_frozen_recovery(tmp_path, source)
                         await asyncio.to_thread(work_one, app.state.factor_jobs, job_id)
                     finally:
                         path.write_bytes(original)
-                    status = await call(c, "research_job", family="factors", job_id=job_id)
-                    assert status["status"] == "succeeded", status
+
+                    status = await call(c, "get_run", run_id=job_id)
+                    assert status["state"] == "succeeded", status
                     direct = await backend.request(
                         "GET", "/api/v1/factors/jobs/" + job_id + "/result"
                     )
-                    summary = await call(c, "research_result", family="factors", job_id=job_id)
-                    assert summary["result_sha256"] == digest(direct)
+                    assert status["result_sha256"] == digest(direct)
                     assert (
                         await collect(
                             c,
-                            "research_result",
-                            family="factors",
-                            job_id=job_id,
+                            "get_run_details",
+                            run_id=job_id,
                             section="factor_values",
                         )
                         == direct["rows"]
                     )
                     assert await collect(
-                        c, "research_result", family="factors", job_id=job_id, section="evaluation"
+                        c, "get_run_details", run_id=job_id, section="evaluation"
                     ) == list(leaves(direct["evaluation"]))
-                    for section in summary["sections"]:
-                        if section in {"evaluation", "factor_values"}:
+                    for section in status["sections"]:
+                        if section in {"evaluation", "factor_values", "system_logs"}:
                             continue
                         expected = direct["evaluation"][
                             "summary" if section == "evaluation_summary" else section
@@ -127,26 +116,23 @@ def test_factor_discovery_compute_evaluate_and_frozen_recovery(tmp_path, source)
                         assert (
                             await collect(
                                 c,
-                                "research_result",
-                                family="factors",
-                                job_id=job_id,
+                                "get_run_details",
+                                run_id=job_id,
                                 section=section,
                             )
                             == expected
                         )
                     cancelled = await call(
                         c,
-                        "submit_factor",
-                        submission=body | {"idempotency_key": item["field"] + "-cancel"},
+                        "run_factor",
+                        **(body | {"idempotency_key": item["field"] + "-cancel"}),
                     )
                     assert (
-                        await call(
-                            c, "cancel_research_job", family="factors", job_id=cancelled["job_id"]
-                        )
-                    )["status"] == "cancelled"
+                        await call(c, "cancel_run", run_id=cancelled["job_id"])
+                    )["state"] == "cancelled"
                     assert (
                         await c.call_tool(
-                            "research_result", {"family": "factors", "job_id": cancelled["job_id"]}
+                            "get_run_details", {"run_id": cancelled["job_id"], "section": "factor_values"}
                         )
                     ).is_error
 
