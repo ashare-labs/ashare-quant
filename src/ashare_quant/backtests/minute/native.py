@@ -467,8 +467,15 @@ class Mod(AbstractMod):
         if runtime.get("events") is not None:
             runtime["events"].append(value)
         else:
-            with (runtime["root"] / "events.jsonl").open("a") as stream:
-                stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False, default=str) + "\n")
+            stream = runtime.get("event_stream")
+            if stream is None:
+                stream = runtime["event_stream"] = (runtime["root"] / "events.jsonl").open("a")
+            stream.write(
+                json.dumps(value, ensure_ascii=False, allow_nan=False, default=str) + "\n"
+            )
+            # Preserve visibility of every completed event, including when the next
+            # callback fails or the worker is killed. Only the append handle is reused.
+            stream.flush()
 
     def initialize(self):
         from rqalpha.api import subscribe
@@ -886,17 +893,25 @@ def after_trading(context): runtime["mod"].dispatch("after")
         require(result and result.get("pythonminute"), "MINUTE_NATIVE_COMPLETION_MISSING")
         return result["pythonminute"]
     finally:
-        if runtime.get("events") is not None:
-            runtime["events"].close()
-        runtime["project_loader"] = None
-        if previous_aquant is None:
-            sys.modules.pop("aquant", None)
-        else:
-            sys.modules["aquant"] = previous_aquant
-        if previous_jqdata is None:
-            sys.modules.pop("jqdata", None)
-        else:
-            sys.modules["jqdata"] = previous_jqdata
-        if Environment._env is not None:
-            native.cleanup_resources(Environment._env)
-        atomic_json(root / "teardown.json", {"native_singleton_cleared": Environment._env is None})
+        try:
+            runtime["project_loader"] = None
+            if previous_aquant is None:
+                sys.modules.pop("aquant", None)
+            else:
+                sys.modules["aquant"] = previous_aquant
+            if previous_jqdata is None:
+                sys.modules.pop("jqdata", None)
+            else:
+                sys.modules["jqdata"] = previous_jqdata
+            if Environment._env is not None:
+                native.cleanup_resources(Environment._env)
+            atomic_json(
+                root / "teardown.json", {"native_singleton_cleared": Environment._env is None}
+            )
+        finally:
+            events_journal = runtime.pop("events", None)
+            if events_journal is not None:
+                events_journal.close()
+            stream = runtime.pop("event_stream", None)
+            if stream is not None:
+                stream.close()

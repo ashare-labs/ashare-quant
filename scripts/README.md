@@ -11,6 +11,7 @@
 | `generate_contracts.py` / `export_mcp.py` | 基于临时空库导出 `api`、`tasks`、`paper` OpenAPI 契约、`identity.json` 与 `research-mcp.tools.json` |
 | `verify_wheel.py` | 在无 `src/` 源码树的新虚拟环境中按锁定哈希安装依赖与 wheel，验证运行身份与核心回归测试 |
 | `package_runtime.py` / `rebuild_runtime.py` | 打包配对的 AD/AQ wheel 与锁定依赖清单 / 在新空目录离线重建运行环境 |
+| `benchmark_minute.py` | 生成确定性合成分钟输入，测量加载/原生引擎/端到端耗时并校验事件流一致性 |
 | `validate_research_mcp.py` | 使用显式计划对 `stdio` 与 `streamable-http` MCP 传输执行端到端集成校验 |
 
 完整更新顺序与参数说明见 [开发、依赖与许可](../docs/development.md)。
