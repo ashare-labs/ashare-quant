@@ -89,6 +89,7 @@ class Configuration:
     document: dict
     reference_sets: tuple[ReferenceSet, ...] = ()
     default_reference_set: str | None = None
+    cmes_factors: dict | None = None
 
     def asset(self, name):
         return next(item for item in self.assets if item.name == name)
@@ -273,6 +274,26 @@ def resolve(deployment=None, profile="product") -> Configuration:
             except DataError as exc:
                 raise ValueError(exc.message) from exc
             market_assets.append(asset.name)
+        factor_assets = []
+        cmes_factors = None
+        if (factor_spec := entry.get("cmes_factors")) is not None:
+            if not isinstance(factor_spec, dict) or set(factor_spec) not in (
+                {"asset", "dataset_id"},
+                {"root", "dataset_id"},
+            ):
+                raise ValueError(
+                    "cmes_factors requires dataset_id and either asset (Store) or root"
+                )
+            factor_dataset_id = _sha(factor_spec["dataset_id"])
+            if "asset" in factor_spec:
+                factor_asset = by_name[factor_spec["asset"]]
+                if factor_asset.kind != "store":
+                    raise ValueError("cmes_factors asset must have kind store")
+                factor_root = factor_asset.path
+                factor_assets.append(factor_asset.name)
+            else:
+                factor_root = _path(factor_spec["root"], root)
+            cmes_factors = {"root": str(factor_root), "dataset_id": factor_dataset_id}
         references, default_reference = _references(entry, by_name, market_pins)
         reference_assets = [
             getattr(ref, role).asset_name
@@ -288,6 +309,7 @@ def resolve(deployment=None, profile="product") -> Configuration:
                     owner.name,
                     *reference_assets,
                     *market_assets,
+                    *factor_assets,
                     *entry.get("required_assets", []),
                 ]
             )
@@ -337,6 +359,7 @@ def resolve(deployment=None, profile="product") -> Configuration:
             document,
             references,
             default_reference,
+            cmes_factors,
         )
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise DomainError("DEPLOYMENT_INVALID", f"Invalid deployment: {exc}", 503) from exc

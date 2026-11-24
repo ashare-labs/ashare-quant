@@ -36,6 +36,15 @@ class PythonJobs(TaskService):
         self.product = product
         self.history_factors = configured_factors()
 
+    def active_history_factors(self, *, config=None):
+        if self.history_factors is not None:
+            return self.history_factors
+        from ashare_quant.providers.daily.history import configured_factors, deployment_factors
+
+        if config is not None:
+            return deployment_factors(config)
+        return configured_factors(self.product)
+
     def for_job(self, row):
         if json.loads(row["manifest"]).get("schema_version") in {"python-minute-job.v1", "python-demand-job.v2", "python-project-job.v3"}:
             return self
@@ -157,7 +166,7 @@ class PythonJobs(TaskService):
                 "data_access": "demand.v2",
                 "data_budget": self.repo.policy.model_dump(mode="json"),
                 "resource_policy": self.repo.policy.model_dump(mode="json"),
-                "history_factors": freeze_factors(self.history_factors, root),
+                "history_factors": freeze_factors(self.active_history_factors(), root),
             }
             if benchmark is not None:
                 session["benchmark_release"] = benchmark

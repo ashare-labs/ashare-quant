@@ -40,7 +40,6 @@ def mount(app, store, configuration=None):
     @app.get(prefix + "/catalogue")
     def catalogue(request: Request) -> dict:
         closed(request)
-        factors = jobs.history_factors
         environment = jobs.environment(local=True)
         from ashare_quant.tasks.minute.benchmark import configured_release
 
@@ -61,14 +60,16 @@ def mount(app, store, configuration=None):
             }
 
         def metadata():
-            benchmark = configured_release(jobs.product.configured())
-            return jobs.product.call(availability), benchmark
+            cfg = jobs.product.configured()
+            benchmark = configured_release(cfg)
+            factors = jobs.active_history_factors(config=cfg)
+            return jobs.product.call(availability), benchmark, factors
 
         try:
-            data_availability, benchmark = app.state.python_catalogue_read.run(metadata)
+            data_availability, benchmark, factors = app.state.python_catalogue_read.run(metadata)
             data_status = discovery_status()
         except DomainError as exc:
-            data_availability, benchmark = None, None
+            data_availability, benchmark, factors = None, None, jobs.history_factors
             data_status = discovery_status(exc)
 
         return {

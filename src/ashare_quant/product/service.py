@@ -256,6 +256,9 @@ class Product:
                 "market_release": config.document["profiles"][config.profile].get("market_release")
                 if config
                 else None,
+                "cmes_factors": config.document["profiles"][config.profile].get("cmes_factors")
+                if config
+                else None,
             },
             limitations=LIMITATIONS,
             reference_sets=tuple(

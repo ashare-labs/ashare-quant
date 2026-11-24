@@ -9,6 +9,7 @@ from ashare_quant.backtests.minute.api import (
     validate_callback,
     validate_reference_calendar,
 )
+from ashare_quant.contracts import DomainError
 from ashare_quant.core.validation import number, require, stamp
 
 
@@ -171,34 +172,74 @@ class DailyAPI(API):
         require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
         require(type(df) is bool and type(skip_paused) is bool, "AQUANT_HISTORY_BOOLEAN_REQUIRED")
         ids = self.securities(self.universe if security_list is None else security_list)
-        if not demand:
+        if demand:
+            require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
+        if not demand or skip_paused:
             import pandas as pd
 
-            frames = {
-                s: self._history(s, count, unit, [field], skip_paused=skip_paused, adjustment=fq)
-                for s in ids
-            }
+            warm_days = []
+            if demand and ids:
+                eligible = [
+                    d
+                    for d in self.host.data.calendar
+                    if stamp(d + "T15:00:00+08:00") <= self.host.at
+                ]
+                if len(eligible) >= count:
+                    warm_days = eligible[-count:]
+            frames = {}
+            chunk_size = (
+                max(1, getattr(self.host.data, "MAX_HISTORY_SECURITIES", len(ids)))
+                if warm_days
+                else max(1, len(ids))
+            )
+            for index in range(0, len(ids), chunk_size):
+                chunk = ids[index : index + chunk_size]
+                if warm_days and len(chunk) > 1:
+                    self.host.data.daily_batch(chunk, warm_days, history=True)
+                for s in chunk:
+                    if s not in frames:
+                        frames[s] = self._history(
+                            s, count, unit, [field], skip_paused=skip_paused, adjustment=fq
+                        )
             indexes = [f.index for f in frames.values()]
             require(
-                all(indexes[0].equals(i) for i in indexes), "AQUANT_HISTORY_UNALIGNED_SECURITIES"
+                not indexes or all(indexes[0].equals(i) for i in indexes),
+                "AQUANT_HISTORY_UNALIGNED_SECURITIES",
             )
-            frame = pd.DataFrame({s: f[field] for s, f in frames.items()})
+            frame = (
+                pd.DataFrame({s: f[field] for s, f in frames.items()})
+                if ids
+                else pd.DataFrame()
+            )
             frame.attrs["receipts"] = {s: f.attrs["receipt"] for s, f in frames.items()}
             return frame if df else {s: frame[s].to_numpy() for s in ids}
 
         require(unit in {"daily", "1d"}, f"AQUANT_FREQUENCY_UNSUPPORTED:{unit}")
-        require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
         require(
             isinstance(field, str)
             and field in {"open", "high", "low", "close", "volume", "money"},
             "AQUANT_HISTORY_FIELDS_UNSUPPORTED",
         )
         require(fq in {None, "pre", "post"}, "AQUANT_ADJUSTMENT_UNSUPPORTED")
+        if fq is not None and self.host.data.factors is None:
+            raise DomainError(
+                "AQUANT_ADJUSTMENT_UNAVAILABLE",
+                "Configure cmes_factors in deployment.json (or ASHARE_QUANT_PYTHON_HISTORY_FACTORS), or use fq=None",
+                422,
+            )
         eligible = [
             d for d in self.host.data.calendar if stamp(d + "T15:00:00+08:00") <= self.host.at
         ]
         require(len(eligible) >= count, "AQUANT_INSUFFICIENT_VISIBLE_HISTORY")
         window = eligible[-count:]
+        basis_date = window[-1]
+        if fq is not None and basis_date > self.host.data.factors.through:
+            raise DomainError(
+                "CMES_FACTOR_SCOPE",
+                "Basis exceeds the fixed cutoff",
+                422,
+                origin="ashare-data",
+            )
         import pandas as pd
 
         index = pd.DatetimeIndex(window)
@@ -206,32 +247,35 @@ class DailyAPI(API):
             empty = pd.DataFrame(index=index)
             empty.attrs["receipts"] = {}
             return empty if df else {}
-        if len(ids) == 1 and skip_paused:
-            single = self._history(ids[0], count, unit, [field], skip_paused=True, adjustment=fq)
-            frame = pd.DataFrame({ids[0]: single[field]}, index=single.index)
-            frame.attrs["receipts"] = {ids[0]: single.attrs["receipt"]}
-            return frame if df else {ids[0]: frame[ids[0]].to_numpy()}
 
-        self.host.data.prefetch_daily(ids, window, history=True)
+        batch = self.host.data.daily_batch(ids, window, history=True)
+        listings = self.host.data.listing_info(ids)
         actual = "amount" if field == "money" else field
-        basis_date = window[-1]
         columns, receipts = {}, {}
         for sid in ids:
-            raw_window = [self.host.data.history_rows.get((sid, d)) for d in window]
-            self.host.data._update_history_window(sid, window)
+            ipo = listings[sid]["ipo"]
+            raw_window = batch[sid]
             observed = []
             for d, row in zip(window, raw_window):
-                if row is None:
-                    continue
-                if skip_paused and self.host.data.is_paused(sid, d, row=row):
-                    continue
-                val = row.get(actual)
-                if val is None:
+                kind = self.host.data.classify_history_day(sid, d, row, ipo=ipo)
+                if kind == "missing":
+                    raise DomainError(
+                        "PYTHON_DAILY_GAP",
+                        f"Requested daily observation is missing: {sid} on {d}",
+                        422,
+                        details={"security": sid, "date": d},
+                    )
+                if kind in {"pre_listing", "paused"}:
                     continue
                 try:
-                    number(val, zero=actual in {"volume", "amount"})
-                except (ValueError, ArithmeticError):
-                    continue
+                    number(row.get(actual), zero=actual in {"volume", "amount"})
+                except (ValueError, ArithmeticError) as exc:
+                    raise DomainError(
+                        "PYTHON_HISTORY_FIELD_GAP",
+                        "Requested field is unavailable",
+                        422,
+                        details={"security": sid, "date": d, "field": field},
+                    ) from exc
                 observed.append(row)
             self.host.data.queries.append(
                 {
@@ -250,6 +294,15 @@ class DailyAPI(API):
                 by_date = {r["date"]: float(r[actual]) for r in response["rows"]}
                 receipts[sid] = response["receipt"]
             else:
+                if fq is not None and (ipo is None or ipo <= basis_date):
+                    from ashare_data import DataError
+
+                    try:
+                        self.host.data.factors.factor_at(sid, basis_date)
+                    except DataError as exc:
+                        raise DomainError(
+                            exc.code, exc.message, 422, details=exc.details, origin="ashare-data"
+                        ) from exc
                 by_date = {}
                 receipts[sid] = {"release": self.host.data.pin}
             columns[sid] = [by_date.get(d, float("nan")) for d in window]
@@ -344,110 +397,49 @@ class DailyAPI(API):
         wanted_fields = fields or ["open", "high", "low", "close", "volume", "money"]
         wanted_fields = [wanted_fields] if isinstance(wanted_fields, str) else list(wanted_fields)
         demand = getattr(self.host.data, "demand", False)
-        if isinstance(security, str) or not demand:
-            frames = {
-                s: self._history(
-                    s,
-                    count,
-                    frequency,
-                    wanted_fields,
-                    end=end,
-                    start=start,
-                    skip_paused=skip_paused,
-                    adjustment=fq,
+        warm_days = []
+        if demand and not isinstance(security, str) and len(ids) > 1:
+            cutoff = end or self.host.at
+            if cutoff <= self.host.at and (start is None or start >= self.host.data.calendar[0]):
+                eligible = [
+                    d
+                    for d in self.host.data.calendar
+                    if stamp(d + "T15:00:00+08:00") <= cutoff
+                ]
+                warm_days = (
+                    eligible[-count:]
+                    if (type(count) is int and 0 < count <= len(eligible))
+                    else ([d for d in eligible if start is None or d >= start] if count is None else [])
                 )
-                for s in ids
-            }
-            if isinstance(security, str):
-                return frames[security]
-            import pandas as pd
-
-            return pd.concat(
-                [f.rename_axis("time").reset_index().assign(code=s) for s, f in frames.items()],
-                ignore_index=True,
-            ).sort_values(["time", "code"])
-
-        require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
-        require(frequency in {"daily", "1d"}, f"AQUANT_FREQUENCY_UNSUPPORTED:{frequency}")
-        require(count is None or (type(count) is int and 0 < count), "AQUANT_HISTORY_COUNT")
-        require(
-            wanted_fields
-            and len(set(wanted_fields)) == len(wanted_fields)
-            and set(wanted_fields) <= {"open", "high", "low", "close", "volume", "money"},
-            "AQUANT_HISTORY_FIELDS_UNSUPPORTED",
+        frames = {}
+        chunk_size = (
+            max(1, getattr(self.host.data, "MAX_HISTORY_SECURITIES", len(ids)))
+            if warm_days
+            else max(1, len(ids))
         )
-        require(fq in {None, "pre", "post"}, "AQUANT_ADJUSTMENT_UNSUPPORTED")
-        cutoff = end or self.host.at
-        require(cutoff <= self.host.at, "AQUANT_FUTURE_DATA_REQUEST")
-        require(start is None or start >= self.host.data.calendar[0], "PYTHON_CALENDAR_GAP")
-        eligible = [
-            d for d in self.host.data.calendar if stamp(d + "T15:00:00+08:00") <= cutoff
-        ]
-        if count is not None:
-            require(len(eligible) >= count, "AQUANT_INSUFFICIENT_VISIBLE_HISTORY")
-            window = eligible[-count:]
-        else:
-            window = [d for d in eligible if start is None or d >= start]
-            require(window, "AQUANT_INSUFFICIENT_VISIBLE_HISTORY")
-        self.host.data.prefetch_daily(ids, window, history=True)
-        basis_date = window[-1]
+        for index in range(0, len(ids), chunk_size):
+            chunk = ids[index : index + chunk_size]
+            if warm_days and len(chunk) > 1:
+                self.host.data.daily_batch(chunk, warm_days, history=True)
+            for s in chunk:
+                if s not in frames:
+                    frames[s] = self._history(
+                        s,
+                        count,
+                        frequency,
+                        wanted_fields,
+                        end=end,
+                        start=start,
+                        skip_paused=skip_paused,
+                        adjustment=fq,
+                    )
+        if isinstance(security, str):
+            return frames[security]
         import pandas as pd
 
-        frames = []
-        for sid in ids:
-            raw_window = [self.host.data.history_rows.get((sid, d)) for d in window]
-            self.host.data._update_history_window(sid, window)
-            observed = []
-            for d, row in zip(window, raw_window):
-                if row is None or (skip_paused and self.host.data.is_paused(sid, d, row=row)):
-                    continue
-                ok = True
-                for f in wanted_fields:
-                    actual = "amount" if f == "money" else f
-                    try:
-                        number(row.get(actual), zero=actual in {"volume", "amount"})
-                    except (ValueError, ArithmeticError):
-                        ok = False
-                        break
-                if ok:
-                    observed.append(row)
-            self.host.data.queries.append(
-                {
-                    "api": "daily_history",
-                    "security": sid,
-                    "count": count,
-                    "start": start,
-                    "end": cutoff.isoformat(),
-                    "knowledge_at": self.host.at.isoformat(),
-                    "fields": list(wanted_fields),
-                    "dates": [r["date"] for r in observed],
-                }
-            )
-            adjusted = (
-                {r["date"]: r for r in self.host.data.history_prices(observed, fq, basis_date)["rows"]}
-                if observed
-                else {}
-            )
-            dates_for_sid = [r["date"] for r in observed] if skip_paused else window
-            rows_out = [
-                {
-                    "time": pd.Timestamp(d),
-                    "code": sid,
-                    **{
-                        f: (
-                            float(adjusted[d]["amount" if f == "money" else f])
-                            if d in adjusted
-                            else float("nan")
-                        )
-                        for f in wanted_fields
-                    },
-                }
-                for d in dates_for_sid
-            ]
-            if rows_out:
-                frames.append(pd.DataFrame(rows_out))
         if not frames:
             return pd.DataFrame(columns=["time", "code", *wanted_fields])
-        return pd.concat(frames, ignore_index=True).sort_values(["time", "code"]).reset_index(
-            drop=True
-        )
+        return pd.concat(
+            [f.rename_axis("time").reset_index().assign(code=s) for s, f in frames.items()],
+            ignore_index=True,
+        ).sort_values(["time", "code"])

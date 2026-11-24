@@ -75,12 +75,20 @@ class Sources:
         result = deepcopy(self.specifications)
         if self.product is not None:
             try:
-
                 selected = self.product.release_selection()
                 if selected:
-                    result["market-release"] = dict(
+                    entry = dict(
                         label="当前正式日线快照", kind="market_release", market_release=selected
                     )
+                    from ashare_quant.providers.daily.history import configured_factors
+
+                    factors = configured_factors(self.product)
+                    if factors is not None:
+                        entry["cmes_factors"] = {
+                            "root": factors["root"],
+                            "dataset_id": factors["dataset_id"],
+                        }
+                    result["market-release"] = entry
             except DomainError:
                 # Independent frozen samples still work without a product deployment.
                 if self.product.configuration is not None and not self.specifications:

@@ -43,6 +43,7 @@
 ```
 
 - **参考数据组（`reference_sets`）**：推荐使用 `"kind": "market_release"` 直接复用 `market_release` 中的逐日状态、涨跌停限价与公司行动；也支持登记独立的 `daily_execution` 或 `historical_market` 绑定资产。
+- **可选复权因子绑定（`cmes_factors`）**：在 profile 中配置 `"cmes_factors": {"asset": "releases", "dataset_id": "<64位SHA256>"}`（或 `{"root": "...", "dataset_id": "..."}`），即可供 Python 策略工作台（`fq="pre"/"post"`，每次回测冻结所用因子副本）与因子看板 Alphalens 评价全局共用。
 - **可选比较基准发布（`benchmark_release`）**：若主交易发布不含指数行情，可在 profile 中附加 `benchmark_release: {"asset": "...", "release_id": 1, "manifest_sha256": "..."}` 供回测收益比较只读查询。
 
 ---

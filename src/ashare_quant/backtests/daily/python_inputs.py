@@ -228,24 +228,8 @@ class DailyPythonInputs:
 
     def history_prices(self, rows, adjustment, basis_date):
         raw = [self.rows[r["security"], r["date"]] for r in rows]
-        series = None
-        if self.factors is None and adjustment is not None:
-            sids = {r["security"] for r in raw}
-            series = {
-                sid: [
-                    self.rows[sid, d]
-                    for d in self.calendar
-                    if d <= basis_date and (sid, d) in self.rows
-                ]
-                for sid in sids
-            }
         return history_prices(
-            raw,
-            self.document["daily_receipt"],
-            self.factors,
-            adjustment,
-            basis_date,
-            series_by_security=series,
+            raw, self.document["daily_receipt"], self.factors, adjustment, basis_date
         )
 
     def is_paused(self, sid, day):
