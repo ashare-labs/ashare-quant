@@ -7,11 +7,20 @@ and return contribution while leaving the unsplit price spreads None. Any mismat
 against account cash or ending equity fails closed without a plug/residual item.
 """
 
+import math
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, localcontext
 
 from .policy import AnalysisInputError, number, session
+
+
+def _float_noise_tolerance(*amounts: Decimal) -> Decimal:
+    scale = max((abs(v) for v in amounts), default=Decimal(1))
+    ulp = Decimal(str(math.ulp(float(max(scale, Decimal(1))))))
+    # Absorb IEEE-754 float64 representation noise only (~64 ULPs, floor 1e-5 CNY),
+    # capped at 0.0005 CNY (0.05 cent) so any displayable cent gap fails closed.
+    return min(Decimal("0.0005"), max(Decimal("0.00001"), ulp * 64))
 
 
 def _decimal(value, code="invalid_trade_record"):
@@ -315,7 +324,6 @@ def analyze_securities(result, *, daily=None, initial_equity=None, security_name
         final_equity_dec = _decimal(daily[-1]["equity"], "invalid_equity")
         days = [row["date"] for row in daily]
         day_set = set(days)
-        tol = max(Decimal("0.0001"), abs(initial_dec) * Decimal("1e-11"))
         external_cf_dec = Decimal(0)
         try:
             has_cf, external_cf_dec, cf_by_day, cf_dated = _parse_external_cash_flows(
@@ -328,6 +336,7 @@ def analyze_securities(result, *, daily=None, initial_equity=None, security_name
             corp = _parse_corporate(native, days, day_set)
         except AnalysisInputError as exc:
             return _error_payload(exc.code, initial_dec, final_equity_dec, external_cf_dec)
+        tol = _float_noise_tolerance(initial_dec, final_equity_dec, external_cf_dec)
 
         names = _collect_names(result, trades, daily, security_names)
         trades_by_day = defaultdict(list)

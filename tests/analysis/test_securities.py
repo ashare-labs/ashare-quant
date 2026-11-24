@@ -501,6 +501,104 @@ def test_ledger_mismatch_fails_closed_without_residual_plug(mutate, expected_rea
     assert sec["account_items"] == []
 
 
+@pytest.mark.parametrize("drift", [0.05, -0.05, 0.01, -0.01, 0.005])
+def test_10b_large_capital_rejects_cent_level_unexplained_drift(drift):
+    days = ["2025-08-01", "2025-08-04"]
+    initial = 10_000_000_000.0
+    ending = initial + drift
+    source = {
+        "job_id": "m2job-" + "9" * 32,
+        "summary": {"initial_cash": initial, "net_return": drift / initial},
+        "preparation": {"trading_dates": days},
+        "native": {
+            "preflight": {"frequency": "1d"},
+            "trades": [],
+            "accounts": [
+                {
+                    "at": "2025-08-01T15:30:00+08:00",
+                    "available_cash": initial,
+                    "positions_value": 0.0,
+                    "total_value": initial,
+                    "positions": {},
+                },
+                {
+                    "at": "2025-08-04T15:30:00+08:00",
+                    "available_cash": ending,
+                    "positions_value": 0.0,
+                    "total_value": ending,
+                    "positions": {},
+                },
+            ],
+        },
+    }
+    out = analyze_result(source, source_sha256=SHA, policy=POLICY, calculation_version="returns-v2")
+    sec = out["securities"]
+    assert sec["status"] == "reconciliation_error"
+    assert sec["reason"] == "cash_ledger_mismatch"
+    assert sec["items"] == []
+    assert sec["account_items"] == []
+
+
+def test_10b_large_capital_absorbs_pure_float64_rounding_on_valid_trades():
+    days = ["2025-08-01", "2025-08-04"]
+    initial = 10_000_000_000.0
+    # Valid Changjiang Power trade on a 10B account serialized through IEEE-754 float64
+    cash_day1 = float(initial - 28505.0)
+    total_day1 = float(cash_day1 + 28600.0)
+    cash_day2 = float(cash_day1 + 29370.0 - 7.97)
+    source = {
+        "job_id": "m2job-" + "a" * 32,
+        "summary": {"initial_cash": initial},
+        "preparation": {"trading_dates": days},
+        "native": {
+            "preflight": {"frequency": "1d"},
+            "trades": [
+                {
+                    "trade_id": "t1",
+                    "order_id": "o1",
+                    "security": "600900.XSHG",
+                    "at": "2025-08-01T09:35:00+08:00",
+                    "side": "BUY",
+                    "amount": 1000,
+                    "price": 28.50,
+                    "commission": 5.00,
+                    "tax": 0.00,
+                },
+                {
+                    "trade_id": "t2",
+                    "order_id": "o2",
+                    "security": "600900.XSHG",
+                    "at": "2025-08-04T14:50:00+08:00",
+                    "side": "SELL",
+                    "amount": 1000,
+                    "price": 29.37,
+                    "commission": 5.00,
+                    "tax": 2.97,
+                },
+            ],
+            "accounts": [
+                {
+                    "at": "2025-08-01T15:30:00+08:00",
+                    "available_cash": cash_day1,
+                    "positions_value": 28600.0,
+                    "total_value": total_day1,
+                    "positions": {"600900.XSHG": {"total_amount": 1000, "value": 28600.0, "price": 28.60}},
+                },
+                {
+                    "at": "2025-08-04T15:30:00+08:00",
+                    "available_cash": cash_day2,
+                    "positions_value": 0.0,
+                    "total_value": cash_day2,
+                    "positions": {},
+                },
+            ],
+        },
+    }
+    sec = analyze_securities(source)
+    assert sec["status"] == "ok"
+    assert sec["items"][0]["net_pnl"] == pytest.approx(857.03, abs=1e-4)
+
+
 def test_http_analysis_resolves_security_name_from_pinned_release(tmp_path, fixed_release, monkeypatch):
     market, calendar = fixed_release
     sid = "600000.XSHG"
