@@ -969,11 +969,14 @@ class DemandInputs:
         )
 
     def preflight(self):
+        from ashare_quant.tasks.benchmark_comparison import release_security_names
+
         return {
             "ready": True,
             "data_access": "demand.v2",
             "frequency": self.frequency,
             "securities": list(self.ids),
+            "security_names": release_security_names(self.owner.release, self.ids),
             "trading_dates": self.days,
             "daily_rows": self.daily_read_rows,
             "assumed_daily_rows": len(self.daily_assumptions),

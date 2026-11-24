@@ -1,8 +1,8 @@
 {
   "backend_version": "0.12.0.dev35",
   "contracts": {
-    "api.openapi.json": "ba6ef1a406d6e39b843475278efbe6a92cf074864e06af0df47be68daff18299",
-    "tasks.openapi.json": "13b73d0fefa630d12f6691c61d172166a55813f2126dc6cc79b42e29198be7e6",
+    "api.openapi.json": "5ffd400765e1aa7de9801bc8d13ddb17578d673b4e68e735a92c4f467433ce8e",
+    "tasks.openapi.json": "22619e7a081b231c175576cca17c078a460f1531a9d1d90c2c21d806ee9b902f",
     "paper.openapi.json": "ac137208e7d9b8e141c8aae3b8f94bee9f789dc91d6ee0ee0a737dd2b68abdf9"
   },
   "independent_review_status": "not_reviewed"

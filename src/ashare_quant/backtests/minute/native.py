@@ -591,7 +591,7 @@ class Mod(AbstractMod):
         for sid in ids:
             pos = p.get_position(sid, POSITION_DIRECTION.LONG)
             corporate = self.data.corporate_actions is not None
-            if pos.quantity or (corporate and pos.dividend_receivable):
+            if pos.quantity or (corporate and (pos.dividend_receivable or getattr(pos, "pending_stock", 0))):
                 positions[sid] = SimpleNamespace(
                     security=sid,
                     total_amount=int(pos.quantity),
@@ -600,7 +600,19 @@ class Mod(AbstractMod):
                     price=float(pos.last_price),
                     value=float(pos.market_value),
                     **(
-                        {"dividend_receivable": float(pos.dividend_receivable)} if corporate else {}
+                        {
+                            "dividend_receivable": float(pos.dividend_receivable),
+                            **(
+                                {
+                                    "pending_shares": int(pos.pending_stock),
+                                    "pending_share_value": float(pos.pending_stock * pos.last_price),
+                                }
+                                if getattr(pos, "pending_stock", 0)
+                                else {}
+                            ),
+                        }
+                        if corporate
+                        else {}
                     ),
                     **(
                         {"valuation": self.data.valuation_mark(sid, self.at)}

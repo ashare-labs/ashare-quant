@@ -33,7 +33,8 @@ def benchmark_input(result, *, evidence=None):
         raise DomainError("RESULT_BENCHMARK_UNSUPPORTED", "Invalid frozen benchmark prices", 409) from exc
 
 
-def analyze(result, snapshot_sha256, *, calculation_version="returns-v1", comparison=None):
+def analyze(result, snapshot_sha256, *, calculation_version="returns-v1", comparison=None,
+            security_names=None):
     frozen = result.get("native", {}).get("benchmark")
     metadata = None
     if comparison is not None:
@@ -45,7 +46,8 @@ def analyze(result, snapshot_sha256, *, calculation_version="returns-v1", compar
         projected["name"] = name(frozen.get("security"), frozen.get("name"))
     try:
         analysis = analyze_result(result, source_sha256=snapshot_sha256, policy=POLICY,
-                                  benchmark=projected, calculation_version=calculation_version)
+                                  benchmark=projected, calculation_version=calculation_version,
+                                  security_names=security_names)
     except AnalysisInputError as exc:
         raise DomainError("RESULT_ANALYSIS_UNAVAILABLE", "Frozen result cannot support this analysis", 409,
                           details={"reason": exc.code}) from exc

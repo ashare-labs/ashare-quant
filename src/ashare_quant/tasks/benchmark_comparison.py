@@ -14,13 +14,77 @@ def name(security, supplied=None):
     return NAMES.get(security) or supplied or security
 
 
-def comparison(result, session, selection):
-    """Return new benchmark evidence and metadata; never mutate frozen inputs.
+def _referenced_securities(result):
+    wanted = set()
+    native = result.get("native", {}) if isinstance(result.get("native"), dict) else {}
+    for row in native.get("trades") or []:
+        if isinstance(row, dict) and isinstance(row.get("security"), str):
+            wanted.add(row["security"])
+    for account in native.get("accounts") or []:
+        if isinstance(account, dict) and isinstance(account.get("positions"), dict):
+            wanted.update(k for k in account["positions"] if isinstance(k, str))
+    if isinstance(native.get("corporate_entitlements"), dict):
+        wanted.update(k for k in native["corporate_entitlements"] if isinstance(k, str))
+    return wanted
 
-    The market publication supplies the evaluation calendar. A supplemental
-    publication supplies indices absent from that market, as at execution time.
-    A missing publication is reported, not replaced with a current release.
-    """
+
+def release_security_names(release, wanted):
+    wanted = [sid for sid in dict.fromkeys(wanted) if isinstance(sid, str) and sid]
+    if not wanted:
+        return {}
+    found = {}
+    instruments = getattr(release, "instruments", {})
+    for sid in wanted:
+        raw = instruments.get(sid, {}).get("name")
+        if isinstance(raw, str) and raw.strip() and raw.strip() != sid:
+            found[sid] = raw.strip()
+    missing = [sid for sid in wanted if sid not in found]
+    if missing and hasattr(release, "metadata"):
+        import sqlite3
+
+        placeholders = ",".join("?" for _ in missing)
+        try:
+            with release.metadata() as db:
+                rows = db.execute(
+                    f"SELECT r.security, i.name FROM release_identifiers r "
+                    f"JOIN release_instruments i USING(instrument_id) "
+                    f"WHERE r.security IN ({placeholders})",
+                    missing,
+                ).fetchall()
+            for sec_code, sec_name in rows:
+                if isinstance(sec_name, str) and sec_name.strip() and sec_name.strip() != sec_code:
+                    found[sec_code] = sec_name.strip()
+        except sqlite3.Error:
+            pass
+    return found
+
+
+def _extract_security_names(owners, result):
+    wanted = _referenced_securities(result)
+    if not wanted:
+        return {}
+    found = {}
+    for _, owner in owners:
+        remaining = [sid for sid in wanted if sid not in found]
+        if not remaining:
+            break
+        found.update(release_security_names(owner.release, remaining))
+    return found
+
+
+def session_security_names(result, session):
+    pin = session.get("release") if isinstance(session, dict) else None
+    if not pin:
+        return {}
+    try:
+        owner = ReleasedDailyProduct({"market_release": pin})
+    except (FileNotFoundError, DataError, KeyError, TypeError):
+        return {}
+    return _extract_security_names([(pin, owner)], result)
+
+
+def comparison_and_names(result, session, selection):
+    """Return new benchmark evidence, metadata, and pinned security names."""
     original = result.get("native", {}).get("benchmark")
     metadata = {
         "selection": selection, "source": "frozen" if selection == "frozen" else "derived",
@@ -41,6 +105,7 @@ def comparison(result, session, selection):
         metadata.update(reference_status="unavailable", reference_reason="BENCHMARK_SOURCE_INVALID")
     if not owners and metadata["reference_reason"] is None:
         metadata.update(reference_status="unavailable", reference_reason="BENCHMARK_RELEASE_UNAVAILABLE")
+    security_names = _extract_security_names(owners, result)
     choices = {}
     for _, owner in owners:
         for security, instrument in owner.release.instruments.items():
@@ -48,24 +113,24 @@ def comparison(result, session, selection):
                 choices.setdefault(security, {"value": security, "label": name(security, instrument.get("name"))})
     metadata["options"].extend(choices[key] for key in sorted(choices))
     if selection == "frozen":
-        return original, metadata
+        return (original, metadata), security_names
     value = empty_observations(None if selection == "none" else selection, "comparison")
     if selection == "none":
-        return value, metadata
+        return (value, metadata), security_names
     # Use the first publication (the task's original market) for the preceding
     # session. Taking the previous observed index row would hide a missing base.
     market = next((owner for pin, owner in owners if pin == session.get("release")), None)
     if market is None:
-        return {**value, "reason": metadata["reference_reason"] or "BENCHMARK_CALENDAR_UNAVAILABLE"}, metadata
+        return ({**value, "reason": metadata["reference_reason"] or "BENCHMARK_CALENDAR_UNAVAILABLE"}, metadata), security_names
     days = result.get("preparation", {}).get("trading_dates")
     if not isinstance(days, list) or not days or any(not isinstance(day, str) for day in days):
-        return {**value, "reason": "BENCHMARK_CALENDAR_UNAVAILABLE"}, metadata
+        return ({**value, "reason": "BENCHMARK_CALENDAR_UNAVAILABLE"}, metadata), security_names
     try:
         with market.release.metadata() as db:
             prior = db.execute("SELECT date FROM calendar WHERE date < ? ORDER BY date DESC LIMIT 1",
                                [days[0]]).fetchone()
         if prior is None:
-            return {**value, "reason": "BENCHMARK_BASE_MISSING", "missing_dates": []}, metadata
+            return ({**value, "reason": "BENCHMARK_BASE_MISSING", "missing_dates": []}, metadata), security_names
         value, _ = published_observations(market, selection, days, prior[0],
                                           supplemental_pin=session.get("benchmark_release"))
     except FileNotFoundError:
@@ -73,7 +138,13 @@ def comparison(result, session, selection):
     except DataError:
         value.update(reason="BENCHMARK_SOURCE_INVALID")
     value["name"] = name(selection, value.get("name"))
-    return value, metadata
+    return (value, metadata), security_names
+
+
+def comparison(result, session, selection):
+    """Return new benchmark evidence and metadata; never mutate frozen inputs."""
+    selected, _ = comparison_and_names(result, session, selection)
+    return selected
 
 
 def check_query(request, analysis_version, benchmark):

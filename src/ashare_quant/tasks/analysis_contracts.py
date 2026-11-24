@@ -38,6 +38,7 @@ class ResultAnalysis(Contract):
     rolling: list[JSONObject]
     costs: JSONObject
     trading: JSONObject
+    securities: JSONObject
     quality: JSONObject
     comparison: JSONObject | None = None
     return_difference: AnalysisMetric | None = None

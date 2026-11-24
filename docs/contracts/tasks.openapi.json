@@ -1551,6 +1551,13 @@
             "title": "Schema Version",
             "type": "string"
           },
+          "securities": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Securities",
+            "type": "object"
+          },
           "series": {
             "items": {
               "additionalProperties": {
@@ -1592,6 +1599,7 @@
           "rolling",
           "costs",
           "trading",
+          "securities",
           "quality"
         ],
         "title": "ResultAnalysis",

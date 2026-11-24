@@ -102,12 +102,19 @@ class History(TaskService):
                 raise DomainError("RESULT_ANALYSIS_UNSUPPORTED", "Analysis requires a frozen Python account result", 422)
             result = project_json(stream, {"job_id", "summary", "preparation", "native"})
         selected = None
+        security_names = None
+        manifest = self.check(self.repo.row(job_id))
+        session = manifest.get("session", {})
         if analysis_version == "returns-v2":
-            from ashare_quant.tasks.benchmark_comparison import comparison
+            from ashare_quant.tasks.benchmark_comparison import comparison_and_names
 
-            manifest = self.check(self.repo.row(job_id))
-            selected = comparison(result, manifest["session"], benchmark)
-        return analyze(result, snapshot_sha256, calculation_version=analysis_version, comparison=selected)
+            selected, security_names = comparison_and_names(result, session, benchmark)
+        elif isinstance(session, dict) and session.get("release"):
+            from ashare_quant.tasks.benchmark_comparison import session_security_names
+
+            security_names = session_security_names(result, session)
+        return analyze(result, snapshot_sha256, calculation_version=analysis_version,
+                       comparison=selected, security_names=security_names)
 
     @contextmanager
     def result_stream(self, job_id):

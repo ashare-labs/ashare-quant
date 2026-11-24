@@ -13,6 +13,7 @@ from importlib.metadata import version
 import numpy as np
 
 from .policy import AnalysisInputError, AnalysisPolicy, metric, number, session
+from .securities import analyze_securities
 from .trading import analyze_trading
 
 METRICS = (
@@ -26,7 +27,7 @@ RATIOS = {"alpha", "beta", "sharpe", "sortino", "profit_loss_ratio", "informatio
 
 
 def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchmark=None,
-                   calculation_version="returns-v1"):
+                   calculation_version="returns-v1", security_names=None):
     """Analyze a verified result mapping. Inputs are never mutated; no I/O is performed.
 
     The caller owns verification of source_sha256 and frozen benchmark provenance.
@@ -145,6 +146,8 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
                     metrics["excess_sharpe"] = dict(metrics["information_ratio"])
 
     trading, costs, flows, trade_metrics = analyze_trading(native, daily, initial)
+    securities = analyze_securities(result, daily=daily, initial_equity=initial,
+                                    security_names=security_names)
     metrics.update(trade_metrics)
     series = []
     for index, row in enumerate(daily):
@@ -206,6 +209,7 @@ def analyze_result(result, *, source_sha256: str, policy: AnalysisPolicy, benchm
         "metrics": {key: metrics[key] for key in METRICS}, "series": series,
         "benchmark": benchmark_info, "drawdowns": _drawdowns(daily, values),
         "monthly": monthly, "rolling": rolling, "costs": costs, "trading": trading,
+        "securities": securities,
         **({"return_difference": metric(
                 (total - metrics["benchmark_return"]["value"]) * 100
                 if benchmark_nav is not None else None, unit="percentage_points",
