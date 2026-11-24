@@ -46,6 +46,7 @@ def _boundary_release(tmp_path):
       - 000001.XSHE (IPO 2020-01-01): normal active on all days[0..6]
       - 600036.XSHG (IPO 2024-03-08 = days[4]): no rows before days[4], active on days[4..6]
       - 000002.XSHE (IPO 2020-01-01): Mon days[0]=10.0, Tue days[1] MISSING, Wed days[2] preclose=12.0/close=12.0
+      - 000009.XSHE (IPO 2020-01-01): days[4] has volume=0, amount=0.0, tradestatus=None (unconfirmed zero-volume)
     """
     days = ["2024-03-04", "2024-03-05", "2024-03-06", "2024-03-07",
             "2024-03-08", "2024-03-11", "2024-03-12", "2024-03-13"]
@@ -54,6 +55,7 @@ def _boundary_release(tmp_path):
         ("000001.XSHE", "sz000001", "2020-01-01"),
         ("600036.XSHG", "sh600036", "2024-03-08"),
         ("000002.XSHE", "sz000002", "2020-01-01"),
+        ("000009.XSHE", "sz000009", "2020-01-01"),
     ]
     ids = [s[0] for s in specs]
     root = tmp_path / "boundary-market"
@@ -137,7 +139,21 @@ def _boundary_release(tmp_path):
                        "sz000002", "constructed", f"s4:{d}", None,
                        "2025-01-01T00:00:00+00:00", f"{pre:.2f}", "1", "0"))
 
-        for n, group in ((1, r1), (2, r2), (3, r3), (4, r4)):
+        # 5. 000009.XSHE: days[4] has volume=0, amount=0.0, tradestatus=None (no explicit suspension proof)
+        r5 = []
+        for i, d in enumerate(days[:-1]):
+            cl = 18.0 + i
+            if i == 4:
+                prev_cl = 18.0 + 3
+                r5.append((1, 5, d, prev_cl, prev_cl, prev_cl, prev_cl, 0, 0.0, 1,
+                           "sz000009", "constructed", f"s5:{d}", None,
+                           "2025-01-01T00:00:00+00:00", f"{prev_cl:.2f}", None, "0"))
+            else:
+                r5.append((1, 5, d, cl, cl + 0.1, cl - 0.1, cl, 100000, cl * 100000, 1,
+                           "sz000009", "constructed", f"s5:{d}", None,
+                           "2025-01-01T00:00:00+00:00", f"{18.0 + max(0, i - 1):.2f}", None, "0"))
+
+        for n, group in ((1, r1), (2, r2), (3, r3), (4, r4), (5, r5)):
             c.executemany(
                 "INSERT INTO prices VALUES(" + ",".join("?" for _ in group[0]) + ")", group
             )
@@ -549,3 +565,130 @@ def test_contract_snapshots_exclude_volatile_owner_and_source_hashes():
     assert runtime_owner.commit == ASHARE_COMMIT
     assert runtime_owner.tree == ASHARE_TREE
     assert runtime_owner.wheel_sha256 == ASHARE_WHEEL_SHA256
+
+
+def test_followup_review_basis_anchor_unconfirmed_zero_volume_and_wide_skip_paused(tmp_path):
+    """Reproduce all 3 follow-up review findings:
+    1. Paused on 2024-03-08 + factor effective on 2024-03-08: on 2024-03-11 open, get_price(skip_paused=True, fq='pre'),
+       attribute_history(skip_paused=True, fq='pre'), and history(fq='pre') ALL anchor at 2024-03-08 -> 11.50 (never 23.00).
+    2. tradestatus=None with volume=0 (000009.XSHE on 2024-03-08): fails with PYTHON_DAILY_HISTORY_STATE_GAP
+       in single/multi get_price(skip_paused=True), attribute_history(skip_paused=True), and wide history().
+    3. Wide history(..., skip_paused=True) is explicitly rejected upfront with AQUANT_HISTORY_SKIP_PAUSED_UNSUPPORTED.
+    """
+    release, days = _boundary_release(tmp_path)
+    factor_store_path = tmp_path / "ad-store"
+    store = Store.init(factor_store_path)
+    paths = []
+    for mode, initial, updated in (("hfq", 1, 2), ("qfq", 2, 1)):
+        zpath = tmp_path / f"{mode}.zip"
+        with zipfile.ZipFile(zpath, "w") as archive:
+            # Factor takes effect on 2024-03-08 (days[4]), the exact day 600000.XSHG is suspended!
+            archive.writestr(
+                "SH.600000.csv", f"date,{mode}_factor\n1900-01-01,{initial}\n2024-03-08,{updated}\n"
+            )
+            archive.writestr(
+                "SZ.000001.csv", f"date,{mode}_factor\n1900-01-01,1\n2024-03-08,1\n"
+            )
+        paths.append(zpath)
+    dataset_id = import_cmes_factors(
+        store,
+        hfq_path=paths[0],
+        qfq_path=paths[1],
+        members={"600000.XSHG": "SH.600000.csv", "000001.XSHE": "SZ.000001.csv"},
+        through="2024-03-12",
+    )
+    deploy_doc = {
+        "schema": "ashare-deployment.v1",
+        "data_root": str(tmp_path),
+        "assets": {
+            "releases": {"kind": "store", "path": "ad-store", "role": "publication", "retention": "preserve"},
+            "market": {"kind": "market_release", "path": "boundary-market", "role": "market", "retention": "preserve"},
+        },
+        "profiles": {
+            "product": {
+                "kind": "product",
+                "release_store_asset": "releases",
+                "market_release": {"asset": "market", "release_id": release.release_id, "manifest_sha256": release.sha256},
+                "cmes_factors": {"asset": "releases", "dataset_id": dataset_id},
+                "control_db": "state/control.sqlite3",
+                "paper_root": "state/paper",
+                "reference_sets": {"ref": {"kind": "market_release"}},
+                "default_reference_set": "ref",
+            }
+        },
+    }
+    deploy_file = tmp_path / "deployment.json"
+    deploy_file.write_text(json.dumps(deploy_doc))
+    config = resolve(deploy_file)
+    initialize(config)
+
+    base = {
+        "name": "Followup review checks",
+        "frequency": "1d",
+        "start_date": "2024-03-11",
+        "end_date": "2024-03-11",
+    }
+    with TestClient(create_app(product_configuration=config, diagnostics_configuration={})) as client:
+        jobs = client.app.state.python_jobs
+
+        # 1. Exact Reviewer Finding #1: 2024-03-11 open, 2024-03-08 paused + factor 1->2 on 2024-03-08
+        # Raw close on 2024-03-07 is 23.00 -> pre-adjusted anchored at 2024-03-08 MUST be 11.50 everywhere!
+        anchor_job = execute(client, jobs, {
+            **base, "idempotency_key": "followup-1-anchor",
+            "source": """from aquant import *
+import math
+
+def initialize(context):
+    run_daily(check, time="open")
+
+def check(context):
+    p_single = get_price("600000.XSHG", count=2, fields=["close"], skip_paused=True, fq="pre")
+    p_multi = get_price(["600000.XSHG", "000001.XSHE"], count=2, fields=["close"], skip_paused=True, fq="pre")
+    attr = attribute_history("600000.XSHG", 2, "1d", ["close"], skip_paused=True, fq="pre")
+    wide = history(2, "1d", "close", ["600000.XSHG", "000001.XSHE"], fq="pre")
+
+    assert attr.attrs["adjustment"]["basis_date"] == "2024-03-08"
+    assert round(float(p_single.loc["2024-03-07", "close"]), 4) == 11.50
+    m_row = p_multi[(p_multi["code"] == "600000.XSHG") & (p_multi["time"] == "2024-03-07")]
+    assert round(float(m_row["close"].iloc[0]), 4) == 11.50
+    assert round(float(attr.loc["2024-03-07", "close"]), 4) == 11.50
+    assert round(float(wide.loc["2024-03-07", "600000.XSHG"]), 4) == 11.50
+    assert math.isnan(wide.loc["2024-03-08", "600000.XSHG"])
+
+    # Positive trading activity on 000009.XSHE (days[2..3]) with tradestatus=None still works as active;
+    # and skip_paused=False on 2024-03-08 returns raw rows without guessing suspension:
+    raw_09 = get_price("000009.XSHE", count=2, fields=["close", "volume"], skip_paused=False, fq=None)
+    assert len(raw_09) == 2 and float(raw_09.loc["2024-03-08", "volume"]) == 0.0
+""",
+        })
+        assert anchor_job["status"] == "succeeded", anchor_job.get("error")
+
+        # 2. Exact Reviewer Finding #2: tradestatus=None with volume=0 MUST fail with PYTHON_DAILY_HISTORY_STATE_GAP
+        for key, expr in (
+            ("followup-2-single", "get_price('000009.XSHE', count=2, fields=['close'], skip_paused=True, fq=None)"),
+            ("followup-2-multi", "get_price(['000001.XSHE', '000009.XSHE'], count=2, fields=['close'], skip_paused=True, fq=None)"),
+            ("followup-2-attr", "attribute_history('000009.XSHE', 2, '1d', ['close'], skip_paused=True, fq=None)"),
+            ("followup-2-wide", "history(2, '1d', 'close', ['000001.XSHE', '000009.XSHE'], fq=None)"),
+        ):
+            res = execute(client, jobs, {
+                **base, "idempotency_key": key,
+                "source": f"from aquant import *\ndef initialize(c): pass\ndef handle_data(c, d):\n    {expr}\n",
+            })
+            assert res["status"] == "failed", key
+            msg = res["error"]["message"]
+            assert "PYTHON_DAILY_HISTORY_STATE_GAP" in msg, msg
+            assert "000009.XSHE" in msg and "2024-03-08" in msg, msg
+
+        # 3. Exact Reviewer Finding #3: wide history(..., skip_paused=True) rejected upfront
+        for key, expr in (
+            ("followup-3-multi", "history(2, '1d', 'close', ['600000.XSHG', '000001.XSHE'], skip_paused=True, fq=None)"),
+            ("followup-3-single", "history(2, '1d', 'close', ['000001.XSHE'], skip_paused=True, fq=None)"),
+        ):
+            res = execute(client, jobs, {
+                **base, "idempotency_key": key,
+                "source": f"from aquant import *\ndef initialize(c): pass\ndef handle_data(c, d):\n    {expr}\n",
+            })
+            assert res["status"] == "failed", key
+            msg = res["error"]["message"]
+            assert "AQUANT_HISTORY_SKIP_PAUSED_UNSUPPORTED" in msg, msg
+            assert "AQUANT_HISTORY_UNALIGNED_SECURITIES" not in msg, msg

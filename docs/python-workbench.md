@@ -27,7 +27,7 @@ def rebalance(context):
   - `get_all_securities(['stock'], date=context.previous_date)`：返回冻结发布中在该日期有记录支持的证券表（索引为代码，未知生命周期区间记录在 `DataFrame.attrs['receipt']`）。
   - `set_universe(ids)`：动态更新交易订阅与 `context.securities`；移出订阅不影响已有持仓或挂单。
 - **按需历史与当前行情读取**：
-  - `history`、`attribute_history`、`get_price`、`get_bars` 直接从固定发布按需读取（多标的自动批量预取；多股 `get_price` 与单股口径严格等价，遇已确认停牌向前回溯补足 `count` 根，次新股自上市起不够 `count` 根报上市历史不足，应有行情却缺失的交易日明确报错；宽表 `history()` 保留共同交易日轴，上市前与已确认停牌填 `NaN`，上市后原因不明的缺日明确报错）。
+  - `history`、`attribute_history`、`get_price`、`get_bars` 直接从固定发布按需读取（多标的自动批量预取；多股 `get_price` 与单股口径严格等价，遇明确停牌证据 `tradestatus == '0'` 向前回溯补足 `count` 根，缺少明确停牌证据的零成交行报 `PYTHON_DAILY_HISTORY_STATE_GAP`，次新股自上市起不够 `count` 根报上市历史不足，应有行情却缺失的交易日明确报 `PYTHON_DAILY_GAP`；宽表 `history()` 始终保留共同交易日轴且不支持 `skip_paused=True`，上市前与明确停牌填 `NaN`，上市后原因不明的缺日或停牌状态未知明确报错）。
   - 原价查询使用 `fq=None`；日线 `pre`/`post` 复权只使用经核实的复权因子（在 `deployment.json` 的 profile 中配置一次 `cmes_factors` 或设置 `ASHARE_QUANT_PYTHON_HISTORY_FACTORS`，每次回测冻结因子副本，前复权严格以查询可见时点为锚且不用未来因子；未配置或覆盖不足时明确报错，不退回原价），仅用于计算信号价格，公司行动分红到账仍按原生账户事件结算。
   - 日频与分钟模式均可跨频率查询已可见的 `1d` / `1m` 历史（当日完整日线 OHLCV 在 `15:00` 后可见；`get_current_data()[security].day_open` 在 `09:30` 开盘后可读）。
 - **调度、持仓与基准**：

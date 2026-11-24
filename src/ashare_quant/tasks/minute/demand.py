@@ -322,7 +322,7 @@ class DemandInputs:
 
     @staticmethod
     def classify_history_day(sid, d, row, *, ipo=None):
-        """Classify a calendar session into pre_listing, missing, paused, or active."""
+        """Classify a calendar session into pre_listing, missing, paused, active, or unknown_status."""
         if ipo is not None and d < ipo:
             return "pre_listing"
         if row is None:
@@ -330,18 +330,9 @@ class DemandInputs:
         status = row.get("tradestatus")
         if status == "0":
             return "paused"
-        if status == "1":
+        if status == "1" or _positive_trading_bar(row):
             return "active"
-        vol = row.get("volume")
-        if vol is not None:
-            from decimal import Decimal, InvalidOperation
-
-            try:
-                if Decimal(str(vol)) == 0:
-                    return "paused"
-            except (InvalidOperation, ValueError):
-                pass
-        return "active"
+        return "unknown_status"
 
     def _update_history_window(self, sid, requested_days, *, evict=True):
         if not requested_days:
@@ -517,8 +508,15 @@ class DemandInputs:
                         f"Requested daily observation is missing: {sid} on {d}",
                         {"security": sid, "date": d},
                     )
-                    if skip_paused and kind == "paused":
-                        continue
+                    if skip_paused:
+                        require(
+                            kind != "unknown_status",
+                            "PYTHON_DAILY_HISTORY_STATE_GAP",
+                            f"Trading status is unknown without explicit suspension evidence: {sid} on {d}",
+                            {"security": sid, "date": d, "field": "tradestatus"},
+                        )
+                        if kind == "paused":
+                            continue
                     selected.append(row)
                     if len(selected) == count:
                         break
@@ -536,8 +534,15 @@ class DemandInputs:
                     f"Requested daily observation is missing: {sid} on {d}",
                     {"security": sid, "date": d},
                 )
-                if skip_paused and kind == "paused":
-                    continue
+                if skip_paused:
+                    require(
+                        kind != "unknown_status",
+                        "PYTHON_DAILY_HISTORY_STATE_GAP",
+                        f"Trading status is unknown without explicit suspension evidence: {sid} on {d}",
+                        {"security": sid, "date": d, "field": "tradestatus"},
+                    )
+                    if kind == "paused":
+                        continue
                 selected.append(row)
         if not selected or (count is not None and len(selected) < count):
             msg = (

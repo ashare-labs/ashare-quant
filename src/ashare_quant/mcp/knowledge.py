@@ -91,7 +91,7 @@ API_REFERENCE_MD = """# `aquant` Strategy API Reference
 - **`attribute_history(security, count, unit="1d", fields=["open", "close", "high", "low", "volume", "money"], skip_paused=True, df=True, fq="pre")`**
   Returns trailing history for a single security before current time. Use `fq=None` when `cmes_factors` is not configured in the deployment.
 - **`history(count, unit="1d", field="close", security_list=None, df=True, skip_paused=False, fq="pre")`**
-  Cross-sectional history panel across multiple securities on the shared visible trading-day axis; pre-IPO dates and confirmed suspensions return `NaN`, while unexplained post-listing missing bars fail explicitly.
+  Cross-sectional history panel across multiple securities on the shared visible trading-day axis (`skip_paused=True` is unsupported; use `get_price(..., skip_paused=True)` for per-security backfilled bars). Pre-IPO dates and confirmed suspensions (`tradestatus == '0'`) return `NaN`, while unexplained post-listing missing bars or unconfirmed zero-volume states fail explicitly.
 - **`get_price(security, start_date=None, end_date=None, frequency="1d", fields=None, skip_paused=False, fq="pre", count=None)`**
 - **`get_bars(security, count, unit="1d", fields=("date", "open", "high", "low", "close", "volume", "money"), include_now=False, end_dt=None, fq_ref_date=None)`**
 - **`get_current_data()`**

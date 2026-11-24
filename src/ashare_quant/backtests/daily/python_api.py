@@ -91,9 +91,19 @@ class DailyAPI(API):
             require(start >= self.host.data.calendar[0], "AQUANT_HISTORY_RANGE_OUTSIDE_FROZEN_INPUT")
             rows = [r for r in rows if r["date"] >= start]
         if skip_paused and not demand:
+            from ashare_quant.tasks.minute.demand import DemandInputs
+
             selected = []
             for row in reversed(rows):
-                if not self.host.data.is_paused(sid, row["date"]):
+                kind = DemandInputs.classify_history_day(sid, row["date"], row)
+                if kind == "unknown_status":
+                    raise DomainError(
+                        "PYTHON_DAILY_HISTORY_STATE_GAP",
+                        f"Trading status is unknown without explicit suspension evidence: {sid} on {row['date']}",
+                        422,
+                        details={"security": sid, "date": row["date"], "field": "tradestatus"},
+                    )
+                if kind != "paused":
                     selected.append(row)
                 if count is not None and len(selected) == count:
                     break
@@ -106,7 +116,14 @@ class DailyAPI(API):
         )
         latest = rows[-1]["date"]
         if basis_date is None:
-            basis_date = latest
+            cutoff = self.host.at if end is None else end
+            visible_days = [
+                d
+                for d in self.host.data.calendar
+                if stamp(d + "T15:00:00+08:00") <= cutoff
+                and (include_now or stamp(d + "T15:00:00+08:00") != self.host.at)
+            ]
+            basis_date = visible_days[-1] if visible_days else latest
         require(latest <= basis_date <= str(self.host.at.date()), "AQUANT_FUTURE_DATA_REQUEST")
         response = self.host.data.history_prices(rows, adjustment, basis_date)
         rows = response["rows"]
@@ -171,36 +188,22 @@ class DailyAPI(API):
             )
         require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
         require(type(df) is bool and type(skip_paused) is bool, "AQUANT_HISTORY_BOOLEAN_REQUIRED")
+        if skip_paused:
+            raise DomainError(
+                "AQUANT_HISTORY_SKIP_PAUSED_UNSUPPORTED",
+                "Wide history() preserves a shared trading-day axis and does not support skip_paused=True; use history(..., skip_paused=False) or get_price(..., skip_paused=True)",
+                422,
+            )
         ids = self.securities(self.universe if security_list is None else security_list)
         if demand:
             require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
-        if not demand or skip_paused:
+        if not demand:
             import pandas as pd
 
-            warm_days = []
-            if demand and ids:
-                eligible = [
-                    d
-                    for d in self.host.data.calendar
-                    if stamp(d + "T15:00:00+08:00") <= self.host.at
-                ]
-                if len(eligible) >= count:
-                    warm_days = eligible[-count:]
-            frames = {}
-            chunk_size = (
-                max(1, getattr(self.host.data, "MAX_HISTORY_SECURITIES", len(ids)))
-                if warm_days
-                else max(1, len(ids))
-            )
-            for index in range(0, len(ids), chunk_size):
-                chunk = ids[index : index + chunk_size]
-                if warm_days and len(chunk) > 1:
-                    self.host.data.daily_batch(chunk, warm_days, history=True)
-                for s in chunk:
-                    if s not in frames:
-                        frames[s] = self._history(
-                            s, count, unit, [field], skip_paused=skip_paused, adjustment=fq
-                        )
+            frames = {
+                s: self._history(s, count, unit, [field], skip_paused=False, adjustment=fq)
+                for s in ids
+            }
             indexes = [f.index for f in frames.values()]
             require(
                 not indexes or all(indexes[0].equals(i) for i in indexes),
@@ -264,6 +267,13 @@ class DailyAPI(API):
                         f"Requested daily observation is missing: {sid} on {d}",
                         422,
                         details={"security": sid, "date": d},
+                    )
+                if kind == "unknown_status":
+                    raise DomainError(
+                        "PYTHON_DAILY_HISTORY_STATE_GAP",
+                        f"Trading status is unknown without explicit suspension evidence: {sid} on {d}",
+                        422,
+                        details={"security": sid, "date": d, "field": "tradestatus"},
                     )
                 if kind in {"pre_listing", "paused"}:
                     continue
