@@ -206,10 +206,13 @@ def test_running_daily_python_can_cancel_without_result_or_resume(daily_jobs):
             "attribute_history(context.securities[0], 100, fq=None)",
             "AQUANT_INSUFFICIENT_VISIBLE_HISTORY",
         ),
-        ("attribute_history(context.securities[0], 3)", "AQUANT_ADJUSTMENT_UNAVAILABLE"),
+        (
+            "attribute_history(context.securities[0], 3, fq='unsupported')",
+            "AQUANT_ADJUSTMENT_UNSUPPORTED",
+        ),
     ],
 )
-def test_daily_history_refuses_future_missing_and_unprovided_adjustment(
+def test_daily_history_refuses_future_missing_and_unsupported_adjustment(
     daily_jobs, statement, reason
 ):
     app, jobs, body = daily_jobs

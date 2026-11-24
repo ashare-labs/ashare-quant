@@ -72,10 +72,10 @@ class DailyResearchRow(Contract):
 
 class ResearchOwner(Contract):
     name: Literal["ashare-data"] = "ashare-data"
-    version: str = ASHARE_VERSION
-    commit: str | None = ASHARE_COMMIT
-    tree: str | None = ASHARE_TREE
-    wheel_sha256: str = ASHARE_WHEEL_SHA256
+    version: str = Field(default_factory=lambda: ASHARE_VERSION)
+    commit: str | None = Field(default_factory=lambda: ASHARE_COMMIT)
+    tree: str | None = Field(default_factory=lambda: ASHARE_TREE)
+    wheel_sha256: str = Field(default_factory=lambda: ASHARE_WHEEL_SHA256)
     admission: Literal["not_reviewed"] = "not_reviewed"
 
 

@@ -89,9 +89,9 @@ API_REFERENCE_MD = """# `aquant` Strategy API Reference
 ## 2. Market Data & Universe
 
 - **`attribute_history(security, count, unit="1d", fields=["open", "close", "high", "low", "volume", "money"], skip_paused=True, df=True, fq="pre")`**
-  Returns trailing history for a single security before current time. Use `fq=None` for unadjusted raw prices (recommended when historic adjustment factors are not configured).
+  Returns trailing history for a single security before current time. Supports `fq="pre"` (default), `fq="post"`, and `fq=None` (raw prices).
 - **`history(count, unit="1d", field="close", security_list=None, df=True, skip_paused=False, fq="pre")`**
-  Cross-sectional history panel across multiple securities for a single field.
+  Cross-sectional history panel across multiple securities aligned on the trailing `count` visible trading sessions; newly listed or missing sessions return `NaN` without aborting the run.
 - **`get_price(security, start_date=None, end_date=None, frequency="1d", fields=None, skip_paused=False, fq="pre", count=None)`**
 - **`get_bars(security, count, unit="1d", fields=("date", "open", "high", "low", "close", "volume", "money"), include_now=False, end_dt=None, fq_ref_date=None)`**
 - **`get_current_data()`**
@@ -132,8 +132,7 @@ MODEL_NOTES_MD = """# A宽 Backtest & Data Model Notes
    - `frequency="1d"` (Daily): `run_daily(..., time="open")` submits orders matched at the day's open price; `attribute_history(..., "1d", ...)` at open reads completed sessions up to `context.previous_date`.
    - `frequency="1m"` (Minute): intraday callbacks (`time="09:50"` or `"every_bar"`) match market orders at `next_open` subject to per-minute volume participation limits.
 3. **Price Adjustment (`fq`)**:
-   - Raw unadjusted prices (`fq=None`) are always available.
-   - Adjusted history (`fq="pre"` / `"post"`) requires historical adjustment factors configured in the deployment; if unavailable, pass `fq=None` in `attribute_history` / `history` / `get_price`.
+   - `fq="pre"` (default forward adjustment) and `fq="post"` (backward adjustment) work out of the box from `MarketRelease` daily `preclose` ratios (or use a pinned `ASHARE_QUANT_PYTHON_HISTORY_FACTORS` snapshot when configured); pass `fq=None` for raw unadjusted prices.
 4. **A-Share Trading Rules**:
    - T+1 settlement (shares bought today become `closeable_amount` on the next trading day).
    - 100-share board lots; cash dividends and splits are settled on the native account ledger.

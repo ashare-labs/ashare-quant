@@ -9,7 +9,7 @@ from ashare_quant.backtests.minute.api import (
     validate_callback,
     validate_reference_calendar,
 )
-from ashare_quant.core.validation import require, stamp
+from ashare_quant.core.validation import number, require, stamp
 
 
 class DailyQuote(Quote):
@@ -162,25 +162,121 @@ class DailyAPI(API):
         skip_paused=False,
         fq="pre",
     ):
-        if getattr(self.host.data, "demand", False) and unit in {"minute", "1m"}:
+        demand = getattr(self.host.data, "demand", False)
+        if demand and unit in {"minute", "1m"}:
             return API(self.host).history(
                 count, unit, field, self.universe if security_list is None else security_list,
                 df, skip_paused, fq,
             )
+        require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
         require(type(df) is bool and type(skip_paused) is bool, "AQUANT_HISTORY_BOOLEAN_REQUIRED")
         ids = self.securities(self.universe if security_list is None else security_list)
-        if getattr(self.host.data, "demand", False):
-            require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
+        if not demand:
+            import pandas as pd
+
+            frames = {
+                s: self._history(s, count, unit, [field], skip_paused=skip_paused, adjustment=fq)
+                for s in ids
+            }
+            indexes = [f.index for f in frames.values()]
+            require(
+                all(indexes[0].equals(i) for i in indexes), "AQUANT_HISTORY_UNALIGNED_SECURITIES"
+            )
+            frame = pd.DataFrame({s: f[field] for s, f in frames.items()})
+            frame.attrs["receipts"] = {s: f.attrs["receipt"] for s, f in frames.items()}
+            return frame if df else {s: frame[s].to_numpy() for s in ids}
+
+        require(unit in {"daily", "1d"}, f"AQUANT_FREQUENCY_UNSUPPORTED:{unit}")
+        require(type(count) is int and count > 0, "AQUANT_HISTORY_COUNT")
+        require(
+            isinstance(field, str)
+            and field in {"open", "high", "low", "close", "volume", "money"},
+            "AQUANT_HISTORY_FIELDS_UNSUPPORTED",
+        )
+        require(fq in {None, "pre", "post"}, "AQUANT_ADJUSTMENT_UNSUPPORTED")
+        eligible = [
+            d for d in self.host.data.calendar if stamp(d + "T15:00:00+08:00") <= self.host.at
+        ]
+        require(len(eligible) >= count, "AQUANT_INSUFFICIENT_VISIBLE_HISTORY")
+        window = eligible[-count:]
         import pandas as pd
 
-        frames = {
-            s: self._history(s, count, unit, [field], skip_paused=skip_paused, adjustment=fq)
-            for s in ids
-        }
-        indexes = [f.index for f in frames.values()]
-        require(all(indexes[0].equals(i) for i in indexes), "AQUANT_HISTORY_UNALIGNED_SECURITIES")
-        frame = pd.DataFrame({s: f[field] for s, f in frames.items()})
-        frame.attrs["receipts"] = {s: f.attrs["receipt"] for s, f in frames.items()}
+        index = pd.DatetimeIndex(window)
+        if not ids:
+            empty = pd.DataFrame(index=index)
+            empty.attrs["receipts"] = {}
+            return empty if df else {}
+        if len(ids) == 1 and skip_paused:
+            single = self._history(ids[0], count, unit, [field], skip_paused=True, adjustment=fq)
+            frame = pd.DataFrame({ids[0]: single[field]}, index=single.index)
+            frame.attrs["receipts"] = {ids[0]: single.attrs["receipt"]}
+            return frame if df else {ids[0]: frame[ids[0]].to_numpy()}
+
+        self.host.data.prefetch_daily(ids, window, history=True)
+        actual = "amount" if field == "money" else field
+        basis_date = window[-1]
+        columns, receipts = {}, {}
+        for sid in ids:
+            raw_window = [self.host.data.history_rows.get((sid, d)) for d in window]
+            self.host.data._update_history_window(sid, window)
+            observed = []
+            for d, row in zip(window, raw_window):
+                if row is None:
+                    continue
+                if skip_paused and self.host.data.is_paused(sid, d, row=row):
+                    continue
+                val = row.get(actual)
+                if val is None:
+                    continue
+                try:
+                    number(val, zero=actual in {"volume", "amount"})
+                except (ValueError, ArithmeticError):
+                    continue
+                observed.append(row)
+            self.host.data.queries.append(
+                {
+                    "api": "daily_history",
+                    "security": sid,
+                    "count": count,
+                    "start": None,
+                    "end": self.host.at.isoformat(),
+                    "knowledge_at": self.host.at.isoformat(),
+                    "fields": [field],
+                    "dates": [r["date"] for r in observed],
+                }
+            )
+            if observed:
+                response = self.host.data.history_prices(observed, fq, basis_date)
+                by_date = {r["date"]: float(r[actual]) for r in response["rows"]}
+                receipts[sid] = response["receipt"]
+            else:
+                by_date = {}
+                receipts[sid] = {"release": self.host.data.pin}
+            columns[sid] = [by_date.get(d, float("nan")) for d in window]
+
+        any_receipt = next(
+            (r for r in receipts.values() if r.get("receipt_sha256")),
+            next(iter(receipts.values()), {}),
+        )
+        self.host.emit(
+            "daily_history_read",
+            **(
+                {"security": ids[0]}
+                if len(ids) == 1
+                else {"securities": list(ids)}
+            ),
+            count=count,
+            fields=[field],
+            knowledge_at=self.host.at.isoformat(),
+            dates=window,
+            price_basis=fq or "raw",
+            adjustment={"mode": fq, "basis_date": basis_date} if fq else None,
+            receipt_sha256=any_receipt.get("receipt_sha256"),
+            include_now=True,
+            skip_paused=skip_paused,
+        )
+        frame = pd.DataFrame(columns, index=index)
+        frame.attrs["receipts"] = receipts
         return frame if df else {s: frame[s].to_numpy() for s in ids}
 
     def get_bars(
@@ -245,24 +341,113 @@ class DailyAPI(API):
         end = self.parse_end(end_date) if end_date is not None else None
         require(start is None or start <= str((end or self.host.at).date()), "AQUANT_DAILY_DATE_ORDER")
         ids = self.securities(security)
-        frames = {
-            s: self._history(
-                s,
-                count,
-                frequency,
-                fields or ["open", "high", "low", "close", "volume", "money"],
-                end=end,
-                start=start,
-                skip_paused=skip_paused,
-                adjustment=fq,
-            )
-            for s in ids
-        }
-        if isinstance(security, str):
-            return frames[security]
+        wanted_fields = fields or ["open", "high", "low", "close", "volume", "money"]
+        wanted_fields = [wanted_fields] if isinstance(wanted_fields, str) else list(wanted_fields)
+        demand = getattr(self.host.data, "demand", False)
+        if isinstance(security, str) or not demand:
+            frames = {
+                s: self._history(
+                    s,
+                    count,
+                    frequency,
+                    wanted_fields,
+                    end=end,
+                    start=start,
+                    skip_paused=skip_paused,
+                    adjustment=fq,
+                )
+                for s in ids
+            }
+            if isinstance(security, str):
+                return frames[security]
+            import pandas as pd
+
+            return pd.concat(
+                [f.rename_axis("time").reset_index().assign(code=s) for s, f in frames.items()],
+                ignore_index=True,
+            ).sort_values(["time", "code"])
+
+        require(self.host.phase != "initialize", "AQUANT_DATA_UNAVAILABLE_IN_INITIALIZE")
+        require(frequency in {"daily", "1d"}, f"AQUANT_FREQUENCY_UNSUPPORTED:{frequency}")
+        require(count is None or (type(count) is int and 0 < count), "AQUANT_HISTORY_COUNT")
+        require(
+            wanted_fields
+            and len(set(wanted_fields)) == len(wanted_fields)
+            and set(wanted_fields) <= {"open", "high", "low", "close", "volume", "money"},
+            "AQUANT_HISTORY_FIELDS_UNSUPPORTED",
+        )
+        require(fq in {None, "pre", "post"}, "AQUANT_ADJUSTMENT_UNSUPPORTED")
+        cutoff = end or self.host.at
+        require(cutoff <= self.host.at, "AQUANT_FUTURE_DATA_REQUEST")
+        require(start is None or start >= self.host.data.calendar[0], "PYTHON_CALENDAR_GAP")
+        eligible = [
+            d for d in self.host.data.calendar if stamp(d + "T15:00:00+08:00") <= cutoff
+        ]
+        if count is not None:
+            require(len(eligible) >= count, "AQUANT_INSUFFICIENT_VISIBLE_HISTORY")
+            window = eligible[-count:]
+        else:
+            window = [d for d in eligible if start is None or d >= start]
+            require(window, "AQUANT_INSUFFICIENT_VISIBLE_HISTORY")
+        self.host.data.prefetch_daily(ids, window, history=True)
+        basis_date = window[-1]
         import pandas as pd
 
-        return pd.concat(
-            [f.rename_axis("time").reset_index().assign(code=s) for s, f in frames.items()],
-            ignore_index=True,
-        ).sort_values(["time", "code"])
+        frames = []
+        for sid in ids:
+            raw_window = [self.host.data.history_rows.get((sid, d)) for d in window]
+            self.host.data._update_history_window(sid, window)
+            observed = []
+            for d, row in zip(window, raw_window):
+                if row is None or (skip_paused and self.host.data.is_paused(sid, d, row=row)):
+                    continue
+                ok = True
+                for f in wanted_fields:
+                    actual = "amount" if f == "money" else f
+                    try:
+                        number(row.get(actual), zero=actual in {"volume", "amount"})
+                    except (ValueError, ArithmeticError):
+                        ok = False
+                        break
+                if ok:
+                    observed.append(row)
+            self.host.data.queries.append(
+                {
+                    "api": "daily_history",
+                    "security": sid,
+                    "count": count,
+                    "start": start,
+                    "end": cutoff.isoformat(),
+                    "knowledge_at": self.host.at.isoformat(),
+                    "fields": list(wanted_fields),
+                    "dates": [r["date"] for r in observed],
+                }
+            )
+            adjusted = (
+                {r["date"]: r for r in self.host.data.history_prices(observed, fq, basis_date)["rows"]}
+                if observed
+                else {}
+            )
+            dates_for_sid = [r["date"] for r in observed] if skip_paused else window
+            rows_out = [
+                {
+                    "time": pd.Timestamp(d),
+                    "code": sid,
+                    **{
+                        f: (
+                            float(adjusted[d]["amount" if f == "money" else f])
+                            if d in adjusted
+                            else float("nan")
+                        )
+                        for f in wanted_fields
+                    },
+                }
+                for d in dates_for_sid
+            ]
+            if rows_out:
+                frames.append(pd.DataFrame(rows_out))
+        if not frames:
+            return pd.DataFrame(columns=["time", "code", *wanted_fields])
+        return pd.concat(frames, ignore_index=True).sort_values(["time", "code"]).reset_index(
+            drop=True
+        )

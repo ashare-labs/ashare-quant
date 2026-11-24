@@ -35,7 +35,6 @@ def main():
         sys.path.insert(0, str(src))
     from ashare_quant import __version__
     from ashare_quant.api import create_app
-    from ashare_quant.identity import source_sha256
     from ashare_quant.paper.api import create_app as create_paper_app
     from ashare_quant.tasks.openapi import document
 
@@ -73,7 +72,6 @@ def main():
             hashes[path.name] = hashlib.sha256(raw).hexdigest()
     identity = {
         "backend_version": __version__,
-        "source_sha256": source_sha256(),
         "contracts": hashes,
         "independent_review_status": "not_reviewed",
     }

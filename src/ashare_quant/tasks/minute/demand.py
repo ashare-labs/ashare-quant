@@ -25,6 +25,7 @@ from ashare_quant.tasks.minute.prepare import (
     _positive_trading_bar,
     carry_daily,
     cmes_facts,
+    first_observed_date,
     listing_facts,
     prepare_market,
     query_cmes_fact,
@@ -121,6 +122,8 @@ class DemandInputs:
     session_data = None
     state_visibility = "posthoc_daily_replay"
     state_replay_used = True
+    MAX_HISTORY_SECURITIES = 1024
+    MAX_SECURITY_WINDOW = 520
 
     def __init__(self, pin, request, root, policy=None, factors=None, benchmark=None):
         self.pin, self.request, self.root = pin, request, Path(root)
@@ -136,6 +139,10 @@ class DemandInputs:
         self.ids = []  # Native instruments encountered; distinct from API.universe and read cache.
         self.register(request.securities)
         self.rows, self.history_rows, self.minutes, self.components, self.corporate = {}, {}, {}, {}, {}
+        self._history_windows = OrderedDict()
+        self._history_keys = {}
+        self._journaled_daily = set()
+        self._post_anchor_cache = OrderedDict()
         self.execution_closes, self.daily_assumptions = {}, {}
         self.root.mkdir(parents=True, exist_ok=True)
         self.reads = Journal(self.root / "reads.jsonl.gz")
@@ -296,35 +303,98 @@ class DemandInputs:
         )
         return items, receipt
 
-    def _daily(self, sid, days, *, history=False):
-        cache = self.history_rows if history else self.rows
-        missing = [d for d in days if (sid, d) not in cache]
-        if missing:
-            # Only the requested bounded range, never all published securities.
-            response = self.owner.prices([sid], missing[0], missing[-1])
-            observed = {r["date"]: r for r in response["rows"]}
-            for d in missing:
-                cache[sid, d] = observed.get(d)
-            self._retain(
-                {
-                    "api": "prices",
-                    "security": sid,
-                    "start": missing[0],
-                    "end": missing[-1],
-                    "receipt": response["receipt"],
-                    "gaps": response["gaps"],
-                    "data": response["rows"],
-                },
-                len(response["rows"]),
-            )
-            self.daily_read_rows += len(response["rows"])
-        result = [cache[sid, d] for d in days]
-        # The latest requested window, not the history of every request. Returned
-        # rows remain owned by the caller; eviction never truncates its result.
-        if history:
-            self.history_rows = {(sid, d): row for d, row in zip(days, result)}
+    def _update_history_window(self, sid, requested_days):
+        if not requested_days:
+            return
+        keys = self._history_keys.setdefault(sid, set())
+        prev_range = self._history_windows.get(sid)
+        if prev_range is None or requested_days[-1] > prev_range[1]:
+            lo, hi = requested_days[0], requested_days[-1]
+            for d in [d for d in keys if d < lo or d > hi]:
+                keys.discard(d)
+                self.history_rows.pop((sid, d), None)
+            self._history_windows[sid] = (lo, hi)
         else:
-            self.rows = {(sid, d): row for d, row in zip(days, result)}
+            lo = min(prev_range[0], requested_days[0])
+            hi = prev_range[1]
+            limit = max(len(requested_days), self.MAX_SECURITY_WINDOW)
+            if len(keys) > limit:
+                ordered = sorted(keys)
+                for d in ordered[:-limit]:
+                    keys.discard(d)
+                    self.history_rows.pop((sid, d), None)
+                lo = min(keys) if keys else requested_days[0]
+            self._history_windows[sid] = (lo, hi)
+        self._history_windows.move_to_end(sid)
+        while len(self._history_windows) > self.MAX_HISTORY_SECURITIES:
+            evicted_sid, _ = self._history_windows.popitem(last=False)
+            for d in self._history_keys.pop(evicted_sid, ()):
+                self.history_rows.pop((evicted_sid, d), None)
+
+    def prefetch_daily(self, sids, days, *, history=True):
+        if not sids or not days:
+            return
+        ordered_days = sorted(set(days))
+        cache = self.history_rows if history else self.rows
+        need = [
+            sid
+            for sid in dict.fromkeys(sids)
+            if any((sid, d) not in cache for d in ordered_days)
+        ]
+        if not need:
+            return
+        missing_dates = [d for sid in need for d in ordered_days if (sid, d) not in cache]
+        start, end = min(missing_dates), max(missing_dates)
+        span = [d for d in self.calendar if start <= d <= end]
+        for index in range(0, len(need), 500):
+            chunk = need[index : index + 500]
+            response = self.owner.prices(chunk, start, end)
+            by_pair = {(r["security"], r["date"]): r for r in response["rows"]}
+            for sid in chunk:
+                keys = self._history_keys.setdefault(sid, set()) if history else None
+                for d in span:
+                    if (sid, d) not in cache:
+                        cache[sid, d] = by_pair.get((sid, d))
+                        if keys is not None:
+                            keys.add(d)
+            fresh_rows = [
+                r
+                for r in response["rows"]
+                if (r["security"], r["date"]) not in self._journaled_daily
+            ]
+            for r in fresh_rows:
+                self._journaled_daily.add((r["security"], r["date"]))
+            if fresh_rows or not response["rows"]:
+                raw_receipt = response.get("receipt") or {}
+                self._retain(
+                    {
+                        "api": "prices",
+                        **(
+                            {"security": chunk[0]}
+                            if len(chunk) == 1
+                            else {"securities": chunk}
+                        ),
+                        "start": start,
+                        "end": end,
+                        "receipt": {
+                            "release": raw_receipt.get("release"),
+                            "receipt_sha256": raw_receipt.get("receipt_sha256"),
+                        },
+                        "gaps_count": len(response.get("gaps", ())),
+                        "data": fresh_rows,
+                    },
+                    len(response["rows"]),
+                )
+            self.daily_read_rows += len(response["rows"])
+
+    def _daily(self, sid, days, *, history=False):
+        if not days:
+            return []
+        self.prefetch_daily([sid], days, history=history)
+        cache = self.history_rows if history else self.rows
+        result = [cache[sid, d] for d in days]
+        if history:
+            self._update_history_window(sid, sorted(set(days)))
         return result
 
     def _row(self, sid, day):
@@ -416,15 +486,64 @@ class DemandInputs:
                 "knowledge_at": at.isoformat(),
                 "fields": list(fields),
                 "dates": [r["date"] for r in selected],
-                "rows_sha256": digest(selected),
             }
         )
         return selected
 
+    def _post_series(self, sid, basis_date):
+        entry = self._post_anchor_cache.get(sid)
+        if entry is None:
+            first = first_observed_date(self.owner.release, sid)
+            if first is None or first > basis_date:
+                rows = []
+            else:
+                response = self.owner.prices([sid], first, basis_date)
+                rows = sorted(response["rows"], key=lambda r: r["date"])
+                self.daily_read_rows += len(rows)
+            self._post_anchor_cache[sid] = {"through": basis_date, "rows": rows}
+        elif basis_date > entry["through"]:
+            extra_days = [
+                d for d in self.calendar if entry["through"] < d <= basis_date
+            ]
+            if extra_days:
+                fetched = self._daily(sid, extra_days, history=True)
+                entry["rows"].extend(r for r in fetched if r is not None)
+            entry["through"] = basis_date
+        self._post_anchor_cache.move_to_end(sid)
+        while len(self._post_anchor_cache) > 512:
+            self._post_anchor_cache.popitem(last=False)
+        return [r for r in self._post_anchor_cache[sid]["rows"] if r["date"] <= basis_date]
+
     def history_prices(self, rows, adjustment, basis_date):
-        receipt = {"release": self.pin, "rows_sha256": digest(rows)}
-        receipt["receipt_sha256"] = digest(receipt)
-        return history_prices(rows, receipt, self.factors, adjustment, basis_date)
+        if adjustment is None:
+            return history_prices(rows, {"release": self.pin}, self.factors, None, basis_date)
+        if self.factors is not None:
+            receipt = {"release": self.pin, "rows_sha256": digest(rows)}
+            receipt["receipt_sha256"] = digest(receipt)
+            return history_prices(rows, receipt, self.factors, adjustment, basis_date)
+        sids = sorted({r["security"] for r in rows})
+        series = {}
+        if adjustment == "pre":
+            for sid in sids:
+                lo = min(r["date"] for r in rows if r["security"] == sid)
+                span = [d for d in self.calendar if lo <= d <= basis_date]
+                self.prefetch_daily([sid], span, history=True)
+                series[sid] = [
+                    self.history_rows[sid, d]
+                    for d in span
+                    if self.history_rows.get((sid, d)) is not None
+                ]
+        else:
+            for sid in sids:
+                series[sid] = self._post_series(sid, basis_date)
+        return history_prices(
+            rows,
+            {"release": self.pin},
+            None,
+            adjustment,
+            basis_date,
+            series_by_security=series,
+        )
 
     def is_paused(self, sid, day, *, row=None):
         current = row if row is not None else self._daily(sid, [day])[0]
@@ -534,9 +653,6 @@ class DemandInputs:
                 "knowledge_at": at.isoformat(),
                 "end": cutoff.isoformat(),
                 "labels": [r["bar_end"] for r in selected],
-                "rows_sha256": digest(
-                    [{k: v for k, v in r.items() if not k.startswith("_")} for r in selected]
-                ),
             }
         )
         return selected
